@@ -1,5 +1,5 @@
 var CPU = function(nes) {
-  this.nes = nes;
+  NES = nes;
 
   // Keep Chrome happy
   this.mem = null;
@@ -141,7 +141,7 @@ CPU.prototype = {
       this.irqRequested = false;
     }
 
-    var opinf = this.opdata[this.nes.mmap.load(this.REG_PC + 1)];
+    var opinf = this.opdata[NES.mmap.load(this.REG_PC + 1)];
     var cycleCount = opinf >> 24;
     var cycleAdd = 0;
 
@@ -262,8 +262,8 @@ CPU.prototype = {
             (this.mem[(addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)] << 8); // Read from address given in op
         } else {
           addr =
-            this.nes.mmap.load(addr) +
-            (this.nes.mmap.load(
+            NES.mmap.load(addr) +
+            (NES.mmap.load(
               (addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)
             ) <<
               8);
@@ -1246,8 +1246,8 @@ CPU.prototype = {
         // * ??? *
         // *******
 
-        this.nes.stop();
-        this.nes.crashMessage =
+        NES.stop();
+        NES.crashMessage =
           "Game crashed, invalid opcode at address $" + opaddr.toString(16);
         break;
       }
@@ -1260,7 +1260,7 @@ CPU.prototype = {
     if (addr < 0x2000) {
       return this.mem[addr & 0x7ff];
     } else {
-      return this.nes.mmap.load(addr);
+      return NES.mmap.load(addr);
     }
   },
 
@@ -1268,7 +1268,7 @@ CPU.prototype = {
     if (addr < 0x1fff) {
       return this.mem[addr & 0x7ff] | (this.mem[(addr + 1) & 0x7ff] << 8);
     } else {
-      return this.nes.mmap.load(addr) | (this.nes.mmap.load(addr + 1) << 8);
+      return NES.mmap.load(addr) | (NES.mmap.load(addr + 1) << 8);
     }
   },
 
@@ -1276,7 +1276,7 @@ CPU.prototype = {
     if (addr < 0x2000) {
       this.mem[addr & 0x7ff] = val;
     } else {
-      this.nes.mmap.write(addr, val);
+      NES.mmap.write(addr, val);
     }
   },
 
@@ -1292,7 +1292,7 @@ CPU.prototype = {
   },
 
   push: function(value) {
-    this.nes.mmap.write(this.REG_SP, value);
+    NES.mmap.write(this.REG_SP, value);
     this.REG_SP--;
     this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
   },
@@ -1304,7 +1304,7 @@ CPU.prototype = {
   pull: function() {
     this.REG_SP++;
     this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
-    return this.nes.mmap.load(this.REG_SP);
+    return NES.mmap.load(this.REG_SP);
   },
 
   pageCrossed: function(addr1, addr2) {
@@ -1316,7 +1316,7 @@ CPU.prototype = {
   },
 
   doNonMaskableInterrupt: function(status) {
-    if ((this.nes.mmap.load(0x2000) & 128) !== 0) {
+    if ((NES.mmap.load(0x2000) & 128) !== 0) {
       // Check whether VBlank Interrupts are enabled
 
       this.REG_PC_NEW++;
@@ -1326,14 +1326,14 @@ CPU.prototype = {
       this.push(status);
 
       this.REG_PC_NEW =
-        this.nes.mmap.load(0xfffa) | (this.nes.mmap.load(0xfffb) << 8);
+        NES.mmap.load(0xfffa) | (NES.mmap.load(0xfffb) << 8);
       this.REG_PC_NEW--;
     }
   },
 
   doResetInterrupt: function() {
     this.REG_PC_NEW =
-      this.nes.mmap.load(0xfffc) | (this.nes.mmap.load(0xfffd) << 8);
+      NES.mmap.load(0xfffc) | (NES.mmap.load(0xfffd) << 8);
     this.REG_PC_NEW--;
   },
 
@@ -1346,7 +1346,7 @@ CPU.prototype = {
     this.F_BRK_NEW = 0;
 
     this.REG_PC_NEW =
-      this.nes.mmap.load(0xfffe) | (this.nes.mmap.load(0xffff) << 8);
+      NES.mmap.load(0xfffe) | (NES.mmap.load(0xffff) << 8);
     this.REG_PC_NEW--;
   },
 
@@ -1401,13 +1401,13 @@ CPU.prototype = {
     "F_BRK_NEW"
   ],
 
-  toJSON: function() {
+  /*toJSON: function() {
     return utils.toJSON(this);
   },
 
   fromJSON: function(s) {
     utils.fromJSON(this, s);
-  }
+  }*/
 };
 
 // Generates and provides an array of details about instructions

@@ -2,7 +2,7 @@ var CPU_FREQ_NTSC = 1789772.5; //1789772.72727272d;
 // var CPU_FREQ_PAL = 1773447.4;
 
 var PAPU = function(nes) {
-  this.nes = nes;
+  NES = nes;
 
   this.square1 = new ChannelSquare(this, true);
   this.square2 = new ChannelSquare(this, false);
@@ -99,14 +99,14 @@ var PAPU = function(nes) {
 
 PAPU.prototype = {
   reset: function() {
-    this.sampleRate = this.nes.opts.sampleRate;
+    this.sampleRate = NES.opts.sampleRate;
     this.sampleTimerMax = Math.floor(
-      (1024.0 * CPU_FREQ_NTSC * this.nes.opts.preferredFrameRate) /
+      (1024.0 * CPU_FREQ_NTSC * NES.opts.preferredFrameRate) /
         (this.sampleRate * 60.0)
     );
 
     this.frameTime = Math.floor(
-      (14915.0 * this.nes.opts.preferredFrameRate) / 60.0
+      (14915.0 * NES.opts.preferredFrameRate) / 60.0
     );
 
     this.sampleTimer = 0;
@@ -375,7 +375,7 @@ PAPU.prototype = {
 
     // Frame IRQ handling:
     if (this.frameIrqEnabled && this.frameIrqActive) {
-      this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+      NES.cpu.requestIrq(NES.cpu.IRQ_NORMAL);
     }
 
     // Clock frame counter at double CPU speed:
@@ -557,8 +557,8 @@ PAPU.prototype = {
       this.minSample = sampleValueL;
     }
 
-    if (this.nes.opts.onAudioSample) {
-      this.nes.opts.onAudioSample(sampleValueL / 32768, sampleValueR / 32768);
+    if (NES.opts.onAudioSample) {
+      NES.opts.onAudioSample(sampleValueL / 32768, sampleValueR / 32768);
     }
 
     // Reset sampled values:

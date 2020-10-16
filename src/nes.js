@@ -111,11 +111,11 @@ var NES = {
     return fps;
   },
 
-  reloadROM: function() {
+  /*reloadROM: function() {
     if (NES.romData !== null) {
       NES.loadROM(NES.romData);
     }
-  },
+  },*/
 
   
 
@@ -125,7 +125,7 @@ var NES = {
     NES.papu.setSampleRate(NES.opts.sampleRate, false);
   },
 
-  toJSON: function() {
+  /*toJSON: function() {
     return {
       romData: NES.romData,
       cpu: NES.cpu.toJSON(),
@@ -139,7 +139,7 @@ var NES = {
     NES.cpu.fromJSON(s.cpu);
     NES.mmap.fromJSON(s.mmap);
     NES.ppu.fromJSON(s.ppu);
-  }
+  }*/
 };
 
 NES.init = opts => {

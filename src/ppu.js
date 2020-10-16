@@ -1,5 +1,5 @@
 var PPU = function(nes) {
-  this.nes = nes;
+  NES = nes;
 
   // Keep Chrome happy
   this.vramMem = null;
@@ -238,7 +238,7 @@ PPU.prototype = {
     this.defineMirrorRegion(0x3000, 0x2000, 0xf00);
     this.defineMirrorRegion(0x4000, 0x0000, 0x4000);
 
-    if (mirroring === this.nes.rom.HORIZONTAL_MIRRORING) {
+    if (mirroring === 1) {
       // Horizontal mirroring.
 
       this.ntable1[0] = 0;
@@ -248,7 +248,7 @@ PPU.prototype = {
 
       this.defineMirrorRegion(0x2400, 0x2000, 0x400);
       this.defineMirrorRegion(0x2c00, 0x2800, 0x400);
-    } else if (mirroring === this.nes.rom.VERTICAL_MIRRORING) {
+    } else if (mirroring === 0) {
       // Vertical mirroring.
 
       this.ntable1[0] = 0;
@@ -258,7 +258,7 @@ PPU.prototype = {
 
       this.defineMirrorRegion(0x2800, 0x2000, 0x400);
       this.defineMirrorRegion(0x2c00, 0x2400, 0x400);
-    } else if (mirroring === this.nes.rom.SINGLESCREEN_MIRRORING) {
+    } /*else if (mirroring === ROM.SINGLESCREEN_MIRRORING) {
       // Single Screen mirroring
 
       this.ntable1[0] = 0;
@@ -269,7 +269,7 @@ PPU.prototype = {
       this.defineMirrorRegion(0x2400, 0x2000, 0x400);
       this.defineMirrorRegion(0x2800, 0x2000, 0x400);
       this.defineMirrorRegion(0x2c00, 0x2000, 0x400);
-    } else if (mirroring === this.nes.rom.SINGLESCREEN_MIRRORING2) {
+    } else if (mirroring === ROM.SINGLESCREEN_MIRRORING2) {
       this.ntable1[0] = 1;
       this.ntable1[1] = 1;
       this.ntable1[2] = 1;
@@ -278,7 +278,8 @@ PPU.prototype = {
       this.defineMirrorRegion(0x2400, 0x2400, 0x400);
       this.defineMirrorRegion(0x2800, 0x2400, 0x400);
       this.defineMirrorRegion(0x2c00, 0x2400, 0x400);
-    } else {
+    } */
+    else {
       // Assume Four-screen mirroring.
 
       this.ntable1[0] = 0;
@@ -299,7 +300,7 @@ PPU.prototype = {
 
   startVBlank: function() {
     // Do NMI:
-    this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NMI);
+    NES.cpu.requestIrq(NES.cpu.IRQ_NMI);
 
     // Make sure everything is rendered:
     if (this.lastRenderedScanline < 239) {
@@ -360,7 +361,7 @@ PPU.prototype = {
 
         if (this.f_bgVisibility === 1 || this.f_spVisibility === 1) {
           // Clock mapper IRQ Counter:
-          this.nes.mmap.clockIrqCounter();
+          NES.mmap.clockIrqCounter();
         }
         break;
 
@@ -406,7 +407,7 @@ PPU.prototype = {
 
           if (this.f_bgVisibility === 1 || this.f_spVisibility === 1) {
             // Clock mapper IRQ Counter:
-            this.nes.mmap.clockIrqCounter();
+            NES.mmap.clockIrqCounter();
           }
         }
     }
@@ -537,7 +538,7 @@ PPU.prototype = {
       }
     }
 
-    this.nes.ui.writeFrame(buffer);
+    NES.ui.writeFrame(buffer);
   },
 
   updateControlReg1: function(value) {
@@ -573,14 +574,14 @@ PPU.prototype = {
 
   setStatusFlag: function(flag, value) {
     var n = 1 << flag;
-    this.nes.cpu.mem[0x2002] =
-      (this.nes.cpu.mem[0x2002] & (255 - n)) | (value ? n : 0);
+    NES.cpu.mem[0x2002] =
+      (NES.cpu.mem[0x2002] & (255 - n)) | (value ? n : 0);
   },
 
   // CPU Register $2002:
   // Read the Status Register.
   readStatusRegister: function() {
-    var tmp = this.nes.cpu.mem[0x2002];
+    var tmp = NES.cpu.mem[0x2002];
 
     // Reset scroll & VRAM Address toggle:
     this.firstWrite = true;
@@ -667,7 +668,7 @@ PPU.prototype = {
     // Invoke mapper latch:
     this.cntsToAddress();
     if (this.vramAddress < 0x2000) {
-      this.nes.mmap.latchAccess(this.vramAddress);
+      NES.mmap.latchAccess(this.vramAddress);
     }
   },
 
@@ -692,7 +693,7 @@ PPU.prototype = {
 
       // Mapper latch access:
       if (this.vramAddress < 0x2000) {
-        this.nes.mmap.latchAccess(this.vramAddress);
+        NES.mmap.latchAccess(this.vramAddress);
       }
 
       // Increment by either 1 or 32, depending on d2 of Control Register 1:
@@ -731,7 +732,7 @@ PPU.prototype = {
       this.writeMem(this.vramAddress, value);
 
       // Invoke mapper latch:
-      this.nes.mmap.latchAccess(this.vramAddress);
+      NES.mmap.latchAccess(this.vramAddress);
     }
 
     // Increment by either 1 or 32, depending on d2 of Control Register 1:
@@ -747,12 +748,12 @@ PPU.prototype = {
     var baseAddress = value * 0x100;
     var data;
     for (var i = this.sramAddress; i < 256; i++) {
-      data = this.nes.cpu.mem[baseAddress + i];
+      data = NES.cpu.mem[baseAddress + i];
       this.spriteMem[i] = data;
       this.spriteRamWriteUpdate(i, data);
     }
 
-    this.nes.cpu.haltCycles(513);
+    NES.cpu.haltCycles(513);
   },
 
   // Updates the scroll registers from a new VRAM address.
@@ -1416,12 +1417,12 @@ PPU.prototype = {
     // Set VBlank flag:
     this.setStatusFlag(this.STATUS_VBLANK, true);
     //nes.getCpu().doNonMaskableInterrupt();
-    this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NMI);
+    NES.cpu.requestIrq(NES.cpu.IRQ_NMI);
   },
 
   isPixelWhite: function(x, y) {
     this.triggerRendering();
-    return this.nes.ppu.buffer[(y << 8) + x] === 0xffffff;
+    return NES.ppu.buffer[(y << 8) + x] === 0xffffff;
   },
 
   JSON_PROPERTIES: [
@@ -1492,7 +1493,7 @@ PPU.prototype = {
     "scanlineAlreadyRendered"
   ],
 
-  toJSON: function() {
+  /*toJSON: function() {
     var i;
     var state = utils.toJSON(this);
 
@@ -1526,7 +1527,7 @@ PPU.prototype = {
     for (i = 0; i < this.spriteMem.length; i++) {
       this.spriteRamWriteUpdate(i, this.spriteMem[i]);
     }
-  }
+  }*/
 };
 
 var NameTable = function(width, height, name) {
@@ -1573,7 +1574,7 @@ NameTable.prototype = {
     }
   },
 
-  toJSON: function() {
+  /*toJSON: function() {
     return {
       tile: this.tile,
       attrib: this.attrib
@@ -1583,7 +1584,7 @@ NameTable.prototype = {
   fromJSON: function(s) {
     this.tile = s.tile;
     this.attrib = s.attrib;
-  }
+  }*/
 };
 
 var PaletteTable = function() {

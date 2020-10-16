@@ -182,7 +182,7 @@ Tile.prototype = {
     return this.pix[(y << 3) + x] === 0;
   },
 
-  toJSON: function() {
+  /*toJSON: function() {
     return {
       opaque: this.opaque,
       pix: this.pix
@@ -192,5 +192,5 @@ Tile.prototype = {
   fromJSON: function(s) {
     this.opaque = s.opaque;
     this.pix = s.pix;
-  }
+  }*/
 };

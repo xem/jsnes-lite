@@ -1,178 +1,120 @@
-// Loads a ROM file into the CPU and PPU.
-// The ROM file is validated first.
+// Load a ROM file
 NES.loadROM = data => { 
-  // Load ROM file:
-  NES.rom = new ROM(NES);
-  NES.rom.load(data);
-
+  ROM.load(data);
   NES.reset();
-  NES.mmap = NES.rom.createMapper();
+  NES.mmap = Mappers[ROM.mapper];
   NES.mmap.loadROM();
-  NES.ppu.setMirroring(NES.rom.getMirroringType());
-  NES.romData = data;
+  NES.ppu.setMirroring(ROM.mirroring);
 };
 
-
-var ROM = function(nes) {
-  this.nes = nes;
-
-  this.mapperName = new Array(92);
-
-  for (var i = 0; i < 92; i++) {
-    this.mapperName[i] = "Unknown Mapper";
-  }
-  this.mapperName[0] = "Direct Access";
+// ROM contents and properties
+var ROM = {
+  header: [],
+  mapper: 0,
+  mirroring: 0,
+  trainer: 0,
+  prg_rom_count: 0,
+  prg_rom: [],
+  chr_rom_count: 0,
+  chr_rom: [],
+  chr_rom_tiles: [],
 };
 
-ROM.prototype = {
-  // Mirroring types:
-  VERTICAL_MIRRORING: 0,
-  HORIZONTAL_MIRRORING: 1,
-  FOURSCREEN_MIRRORING: 2,
-  SINGLESCREEN_MIRRORING: 3,
-  SINGLESCREEN_MIRRORING2: 4,
-  SINGLESCREEN_MIRRORING3: 5,
-  SINGLESCREEN_MIRRORING4: 6,
-  CHRROM_MIRRORING: 7,
-
-  header: null,
-  rom: null,
-  vrom: null,
-  vromTile: null,
-
-  romCount: null,
-  vromCount: null,
-  mirroring: null,
-  batteryRam: null,
-  trainer: null,
-  fourScreen: null,
-  mapperType: null,
-  valid: false,
-
-  load: function(data) {
-    var i, j, v;
-
-    if (data.indexOf("NES\x1a") === -1) {
-      throw new Error("Not a valid NES ROM.");
+// Load a ROM file (iNES format).
+// - Header (16 bytes).
+// - Trainer, if present (0 or 512 bytes).
+// - PRG-ROM data (16384 * x bytes).
+// - CHR-ROM data (8192 * y bytes).
+// - Extra ROM banks, if present (for arcade games only).
+ROM.load = data => {
+  
+  var i, j;
+  
+  // Ensure file starts with chars "NES\x1a".
+  if(!data.indexOf("NES\x1a")){
+  
+    // Parse ROM header (first 16 bytes).
+    for(i = 0; i < 16; i++){
+      ROM.header[i] = data.charCodeAt(i) & 0xff;
     }
-    this.header = new Array(16);
-    for (i = 0; i < 16; i++) {
-      this.header[i] = data.charCodeAt(i) & 0xff;
-    }
-    this.romCount = this.header[4];
-    this.vromCount = this.header[5] * 2; // Get the number of 4kB banks, not 8kB
-    this.mirroring = (this.header[6] & 1) !== 0 ? 1 : 0;
-    this.batteryRam = (this.header[6] & 2) !== 0;
-    this.trainer = (this.header[6] & 4) !== 0;
-    this.fourScreen = (this.header[6] & 8) !== 0;
-    this.mapperType = (this.header[6] >> 4) | (this.header[7] & 0xf0);
-    /* TODO
-        if (this.batteryRam)
-            this.loadBatteryRam();*/
-    // Check whether byte 8-15 are zero's:
-    var foundError = false;
-    for (i = 8; i < 16; i++) {
-      if (this.header[i] !== 0) {
-        foundError = true;
-        break;
-      }
-    }
-    if (foundError) {
-      this.mapperType &= 0xf; // Ignore byte 7
-    }
-    // Load PRG-ROM banks:
-    this.rom = new Array(this.romCount);
+    
+    // Read number of 16kb PRG-ROM banks (byte 4).
+    // The game's program is stored here.
+    ROM.prg_rom_count = ROM.header[4];
+    
+    // Read number of 8kb CHR-ROM banks (byte 5).
+    // The game's graphics are stored here in the form of 8*8px, 4-color bitmaps.
+    ROM.chr_rom_count = ROM.header[5] * 2; // count 4kb pages instead of 8kb banks
+    
+    // If no CHR-ROM banks are found, the game has one CHR-RAM bank.
+    // It's similar to CHR-ROM but readable and writeable by the program.
+    ROM.vramcount = ROM.cprg_rom_count ? 0 : 1;
+    
+    // Check if the game adds 2 extra kb to the PPU's VRAM (byte 6, bit 4).
+    // Otherwise, read mirroring layout (byte 6, bit 0).
+    // 0 => horizontal mirroring (bit 0 on: the game can scroll vertically).
+    // 1 => vertical mirroring (bit 0 off: the game can scroll horizontally).
+    // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically).
+    ROM.mirroring = (ROM.header[6] & 0b00001000) ? 2 : (ROM.header[6] & 0b0000001) ? 0 : 1;
+    
+    // Check if the game has at least one battery-backed PRG-RAM bank (byte 6, bit 2).
+    // This is a persistent save slot that can be used to save the player's progress in a game.
+    // If present, it can be accessed by the CPU at the addresses $6000-$7FFF.
+    ROM.batteryRam = (ROM.header[6] & 0b0000010);
+    
+    // Check if the game contains a 512b trainer (byte 6, bit 3).
+    // This bank contains subroutines executed by some mappers.
+    // If present, it can be accessed by the CPU at the addresses $7000-$71FF.
+    ROM.trainer = (ROM.header[6] & 0b00000100);
+    
+    // Mapper number (byte 6, bits 5-8 >> 4 + byte 7, bits 5-8).
+    // iNes 2.0 ROMs contain more mapper bits on byte 8.
+    // (Mapper number is ignored for now as we only support Mapper 0).
+    ROM.mapper = (ROM.header[6] >> 4) + (ROM.header[7] & 0b11110000);
+    
+    // Skip header.
     var offset = 16;
-    for (i = 0; i < this.romCount; i++) {
-      this.rom[i] = new Array(16384);
-      for (j = 0; j < 16384; j++) {
-        if (offset + j >= data.length) {
-          break;
-        }
-        this.rom[i][j] = data.charCodeAt(offset + j) & 0xff;
-      }
-      offset += 16384;
-    }
-    // Load CHR-ROM banks:
-    this.vrom = new Array(this.vromCount);
-    for (i = 0; i < this.vromCount; i++) {
-      this.vrom[i] = new Array(4096);
-      for (j = 0; j < 4096; j++) {
-        if (offset + j >= data.length) {
-          break;
-        }
-        this.vrom[i][j] = data.charCodeAt(offset + j) & 0xff;
-      }
-      offset += 4096;
-    }
-
-    // Create VROM tiles:
-    this.vromTile = new Array(this.vromCount);
-    for (i = 0; i < this.vromCount; i++) {
-      this.vromTile[i] = new Array(256);
-      for (j = 0; j < 256; j++) {
-        this.vromTile[i][j] = new Tile();
+    
+    // Skip trainer, if it's present.
+    if(ROM.trainer) offset += 512;
+    
+    // Load the PRG-ROM banks.
+    
+    for(i = 0; i < ROM.prg_rom_count; i++){
+      ROM.prg_rom[i] = [];
+      for(j = 0; j < 16 * 1024; j++){
+        ROM.prg_rom[i][j] = data.charCodeAt(offset++) & 0xff;
       }
     }
-
-    // Convert CHR-ROM banks to tiles:
+    
+    // Load the CHR-ROM pages and extrack 256 tiles inside each of them.
     var tileIndex;
     var leftOver;
-    for (v = 0; v < this.vromCount; v++) {
-      for (i = 0; i < 4096; i++) {
-        tileIndex = i >> 4;
-        leftOver = i % 16;
-        if (leftOver < 8) {
-          this.vromTile[v][tileIndex].setScanline(
+    for(i = 0; i < ROM.chr_rom_count; i++){
+      ROM.chr_rom[i] = [];
+      ROM.chr_rom_tiles[i] = [];
+      for(j = 0; j < 256; j++){
+        ROM.chr_rom_tiles[i][j] = new Tile();
+      }
+      for(j = 0; j < 4 * 1024; j++){
+        ROM.chr_rom[i][j] = data.charCodeAt(offset++) & 0xff;
+        tileIndex = j >> 4;
+        leftOver = j % 16;
+        if(leftOver < 8){
+          ROM.chr_rom_tiles[i][tileIndex].setScanline(
             leftOver,
-            this.vrom[v][i],
-            this.vrom[v][i + 8]
+            ROM.chr_rom[i][j],
+            ROM.chr_rom[i][j + 8]
           );
-        } else {
-          this.vromTile[v][tileIndex].setScanline(
+        }
+        else {
+          ROM.chr_rom_tiles[i][tileIndex].setScanline(
             leftOver - 8,
-            this.vrom[v][i - 8],
-            this.vrom[v][i]
+            ROM.chr_rom[i][j - 8],
+            ROM.chr_rom[i][j]
           );
         }
       }
-    }
-
-    this.valid = true;
-  },
-
-  getMirroringType: function() {
-    if (this.fourScreen) {
-      return this.FOURSCREEN_MIRRORING;
-    }
-    if (this.mirroring === 0) {
-      return this.HORIZONTAL_MIRRORING;
-    }
-    return this.VERTICAL_MIRRORING;
-  },
-
-  getMapperName: function() {
-    if (this.mapperType >= 0 && this.mapperType < this.mapperName.length) {
-      return this.mapperName[this.mapperType];
-    }
-    return "Unknown Mapper, " + this.mapperType;
-  },
-
-  mapperSupported: function() {
-    return typeof Mappers[this.mapperType] !== "undefined";
-  },
-
-  createMapper: function() {
-    if (this.mapperSupported()) {
-      return new Mappers[this.mapperType](this.nes);
-    } else {
-      throw new Error(
-        "This ROM uses a mapper not supported by JSNES: " +
-          this.getMapperName() +
-          "(" +
-          this.mapperType +
-          ")"
-      );
     }
   }
 };

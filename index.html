@@ -2,7 +2,7 @@
 <title>JSNES lite</title>
 <canvas id=canvas width=256 height=240 style="background: #000"></canvas>
 <br><b>Controls</b>: arrow keys + X + C + Start + Esc
-<br><button id=dk onclick='play("roms/dk.nes")'>DK</button> <button id=smb onclick='play("roms/smb.nes")'>SMB</button> <input type=file id=fileInput>
+<br><button id=dk onclick='play("roms/dk.nes")'>DK</button> <button id=smb onclick='play("roms/smb.nes")'>SMB</button> <button id=ic onclick='play("roms/ic.nes")'>IC</button> <input type=file id=fileInput>
 <style>
 body { font: 14px Arial }
 canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * 1.067); image-rendering: crisp-edges; image-rendering: pixelated; }
@@ -31,15 +31,15 @@ var frameBuffer32 = new Uint32Array(frameBuffer);
 // =============================================
 
 var audio = new AudioContext();
-var audioprocessor = audio.createScriptProcessor(512, 0, 2);
+var audioprocessor = audio.createScriptProcessor(2048, 0, 2);
 audioprocessor.connect(audio.destination);
 
 // When the Audio processor requests new samples to play
 audioprocessor.onaudioprocess = audioEvent => {
 
   // Ensure that we've buffered enough samples
-  if(leftSamples.length > currentSample + 512){
-    for(var i = 0; i < 512; i++){
+  if(leftSamples.length > currentSample + 2048){
+    for(var i = 0; i < 2048; i++){
     
       // Output (play) the buffers
       audioEvent.outputBuffer.getChannelData(0)[i] = leftSamples[currentSample];
@@ -60,6 +60,7 @@ start = file => {
   fileInput.remove();
   dk.remove();
   smb.remove()
+  ic.remove()
 
   // Initialize JSNES
   NES.init({
@@ -90,6 +91,18 @@ start = file => {
   // Send ROM to emulator
   NES.loadROM(file);
   
+  // First 10 frames are garbage
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+
   // 60 fps loop
   setInterval(NES.frame, 16);
   
