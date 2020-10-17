@@ -1,6 +1,6 @@
-var Controller = function() {
+var Controller = function(){
   this.state = new Array(8);
-  for (var i = 0; i < this.state.length; i++) {
+  for(var i = 0; i < this.state.length; i++){
     this.state[i] = 0x40;
   }
 };
@@ -15,20 +15,20 @@ Controller.BUTTON_LEFT = 6;
 Controller.BUTTON_RIGHT = 7;
 
 Controller.prototype = {
-  buttonDown: function(key) {
+  buttonDown: function(key){
     this.state[key] = 0x41;
   },
 
-  buttonUp: function(key) {
+  buttonUp: function(key){
     this.state[key] = 0x40;
   }
 };
 
 
-joy1Read = function() {
+joy1Read = function(){
   var ret;
 
-  switch (NES.mmap.joy1StrobeState) {
+  switch (Mapper.joy1StrobeState){
     case 0:
     case 1:
     case 2:
@@ -37,7 +37,7 @@ joy1Read = function() {
     case 5:
     case 6:
     case 7:
-      ret = NES.controllers[1].state[NES.mmap.joy1StrobeState];
+      ret = NES.controllers[1].state[Mapper.joy1StrobeState];
       break;
     case 8:
     case 9:
@@ -59,18 +59,18 @@ joy1Read = function() {
       ret = 0;
   }
 
-  NES.mmap.joy1StrobeState++;
-  if (NES.mmap.joy1StrobeState === 24) {
-    NES.mmap.joy1StrobeState = 0;
+  Mapper.joy1StrobeState++;
+  if(Mapper.joy1StrobeState === 24){
+    Mapper.joy1StrobeState = 0;
   }
 
   return ret;
 },
 
-joy2Read = function() {
+joy2Read = function(){
   var ret;
 
-  switch (NES.mmap.joy2StrobeState) {
+  switch (Mapper.joy2StrobeState){
     case 0:
     case 1:
     case 2:
@@ -79,7 +79,7 @@ joy2Read = function() {
     case 5:
     case 6:
     case 7:
-      ret = NES.controllers[2].state[NES.mmap.joy2StrobeState];
+      ret = NES.controllers[2].state[Mapper.joy2StrobeState];
       break;
     case 8:
     case 9:
@@ -101,10 +101,22 @@ joy2Read = function() {
       ret = 0;
   }
 
-  NES.mmap.joy2StrobeState++;
-  if (NES.mmap.joy2StrobeState === 24) {
-    NES.mmap.joy2StrobeState = 0;
+  Mapper.joy2StrobeState++;
+  if(Mapper.joy2StrobeState === 24){
+    Mapper.joy2StrobeState = 0;
   }
 
   return ret;
 }
+
+
+// From Mapper.s.js
+  /*reset: function(){
+    this.joy1StrobeState = 0;
+    this.joy2StrobeState = 0;
+    this.joypadLastWrite = 0;
+
+    this.zapperFired = false;
+    this.zapperX = null;
+    this.zapperY = null;
+  },*/

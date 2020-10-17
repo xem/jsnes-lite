@@ -2,21 +2,28 @@
 <title>JSNES lite</title>
 <canvas id=canvas width=256 height=240 style="background: #000"></canvas>
 <br><b>Controls</b>: arrow keys + X + C + Start + Esc
-<br><button id=dk onclick='play("roms/dk.nes")'>DK</button> <button id=smb onclick='play("roms/smb.nes")'>SMB</button> <button id=ic onclick='play("roms/ic.nes")'>IC</button> <input type=file id=fileInput>
+<p><button id=dk onclick='play("roms/dk.nes")'>DK</button> <button id=smb onclick='play("roms/smb.nes")'>SMB</button> <button id=ic onclick='play("roms/ic.nes")'>IC</button> <input type=file id=fileInput>
 <style>
 body { font: 14px Arial }
 canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * 1.067); image-rendering: crisp-edges; image-rendering: pixelated; }
+#dk, #smb, #ic { display: none; }
+.localhost #dk, .localhost #smb, .localhost #ic { display: inline; }
 </style>
 <script src="src/nes.js"></script>
 <script src="src/rom.js"></script>
+<script src="src/mappers.js"></script>
 <script src="src/controller.js"></script>
 <script src="src/cpu.js"></script>
-<script src="src/mappers.js"></script>
 <script src="src/papu.js"></script>
 <script src="src/ppu.js"></script>
 <script src="src/tile.js"></script>
-<script src="src/utils.js"></script>
 <script>
+
+// Debug mode
+// ==========
+
+// If hostname is localhost, show ROM shortcuts
+document.body.className = location.host;
 
 // Canvas + framebuffer
 // ====================
@@ -54,13 +61,8 @@ var currentSample = 0;
 
 // Load ROM + Start emulator
 // =========================
+var interval;
 start = file => {
-
-  // Clean UI
-  fileInput.remove();
-  dk.remove();
-  smb.remove()
-  ic.remove()
 
   // Initialize JSNES
   NES.init({
@@ -88,6 +90,9 @@ start = file => {
     sampleRate: 44100,
   });
 
+  // Reset emulator
+  NES.reset();
+  
   // Send ROM to emulator
   NES.loadROM(file);
   
@@ -104,7 +109,8 @@ start = file => {
   NES.frame();
 
   // 60 fps loop
-  setInterval(NES.frame, 16);
+  clearInterval(interval);
+  interval = setInterval(NES.frame, 16);
   
   // Controller #1 keys listeners
   onkeydown = e => {

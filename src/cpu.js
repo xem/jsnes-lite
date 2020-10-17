@@ -1,4 +1,4 @@
-var CPU = function(nes) {
+var CPU = function(nes){
   NES = nes;
 
   // Keep Chrome happy
@@ -36,21 +36,21 @@ CPU.prototype = {
   IRQ_NMI: 1,
   IRQ_RESET: 2,
 
-  reset: function() {
+  reset: function(){
     // Main memory
     this.mem = new Array(0x10000);
 
-    for (var i = 0; i < 0x2000; i++) {
+    for(var i = 0; i < 0x2000; i++){
       this.mem[i] = 0xff;
     }
-    for (var p = 0; p < 4; p++) {
+    for(var p = 0; p < 4; p++){
       var j = p * 0x800;
       this.mem[j + 0x008] = 0xf7;
       this.mem[j + 0x009] = 0xef;
       this.mem[j + 0x00a] = 0xdf;
       this.mem[j + 0x00f] = 0xbf;
     }
-    for (var k = 0x2001; k < this.mem.length; k++) {
+    for(var k = 0x2001; k < this.mem.length; k++){
       this.mem[k] = 0;
     }
 
@@ -94,12 +94,12 @@ CPU.prototype = {
   },
 
   // Emulates a single CPU instruction, returns the number of cycles
-  emulate: function() {
+  emulate: function(){
     var temp;
     var add;
 
     // Check interrupts:
-    if (this.irqRequested) {
+    if(this.irqRequested){
       temp =
         this.F_CARRY |
         ((this.F_ZERO === 0 ? 1 : 0) << 1) |
@@ -112,10 +112,10 @@ CPU.prototype = {
 
       this.REG_PC_NEW = this.REG_PC;
       this.F_INTERRUPT_NEW = this.F_INTERRUPT;
-      switch (this.irqType) {
+      switch (this.irqType){
         case 0: {
           // Normal IRQ:
-          if (this.F_INTERRUPT !== 0) {
+          if(this.F_INTERRUPT !== 0){
             // console.log("Interrupt was masked.");
             break;
           }
@@ -141,7 +141,7 @@ CPU.prototype = {
       this.irqRequested = false;
     }
 
-    var opinf = this.opdata[NES.mmap.load(this.REG_PC + 1)];
+    var opinf = this.opdata[CPU.load(this.REG_PC + 1)];
     var cycleCount = opinf >> 24;
     var cycleAdd = 0;
 
@@ -153,7 +153,7 @@ CPU.prototype = {
     this.REG_PC += (opinf >> 16) & 0xff;
 
     var addr = 0;
-    switch (addrMode) {
+    switch (addrMode){
       case 0: {
         // Zero Page mode. Use the address given after the opcode,
         // but without high byte.
@@ -163,7 +163,7 @@ CPU.prototype = {
       case 1: {
         // Relative mode.
         addr = this.load(opaddr + 2);
-        if (addr < 0x80) {
+        if(addr < 0x80){
           addr += this.REG_PC;
         } else {
           addr += this.REG_PC - 256;
@@ -209,7 +209,7 @@ CPU.prototype = {
         // Absolute Indexed Mode, X as index. Same as zero page
         // indexed, but with the high byte.
         addr = this.load16bit(opaddr + 2);
-        if ((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)) {
+        if((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)){
           cycleAdd = 1;
         }
         addr += this.REG_X;
@@ -219,7 +219,7 @@ CPU.prototype = {
         // Absolute Indexed Mode, Y as index. Same as zero page
         // indexed, but with the high byte.
         addr = this.load16bit(opaddr + 2);
-        if ((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)) {
+        if((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)){
           cycleAdd = 1;
         }
         addr += this.REG_Y;
@@ -231,7 +231,7 @@ CPU.prototype = {
         // the current X register. The value is the contents of that
         // address.
         addr = this.load(opaddr + 2);
-        if ((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)) {
+        if((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)){
           cycleAdd = 1;
         }
         addr += this.REG_X;
@@ -246,7 +246,7 @@ CPU.prototype = {
         // of the Y register. Fetch the value
         // stored at that adress.
         addr = this.load16bit(this.load(opaddr + 2));
-        if ((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)) {
+        if((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)){
           cycleAdd = 1;
         }
         addr += this.REG_Y;
@@ -256,14 +256,14 @@ CPU.prototype = {
         // Indirect Absolute mode. Find the 16-bit address contained
         // at the given location.
         addr = this.load16bit(opaddr + 2); // Find op
-        if (addr < 0x1fff) {
+        if(addr < 0x1fff){
           addr =
             this.mem[addr] +
             (this.mem[(addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)] << 8); // Read from address given in op
         } else {
           addr =
-            NES.mmap.load(addr) +
-            (NES.mmap.load(
+            CPU.load(addr) +
+            (CPU.load(
               (addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)
             ) <<
               8);
@@ -279,7 +279,7 @@ CPU.prototype = {
     // ----------------------------------------------------------------------------------------------------
 
     // This should be compiled to a jump table.
-    switch (opinf & 0xff) {
+    switch (opinf & 0xff){
       case 0: {
         // *******
         // * ADC *
@@ -288,10 +288,10 @@ CPU.prototype = {
         // Add with carry.
         temp = this.REG_ACC + this.load(addr) + this.F_CARRY;
 
-        if (
+        if(
           ((this.REG_ACC ^ this.load(addr)) & 0x80) === 0 &&
           ((this.REG_ACC ^ temp) & 0x80) !== 0
-        ) {
+        ){
           this.F_OVERFLOW = 1;
         } else {
           this.F_OVERFLOW = 0;
@@ -312,7 +312,7 @@ CPU.prototype = {
         this.REG_ACC = this.REG_ACC & this.load(addr);
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 2: {
@@ -321,7 +321,7 @@ CPU.prototype = {
         // *******
 
         // Shift left one bit
-        if (addrMode === 4) {
+        if(addrMode === 4){
           // ADDR_ACC = 4
 
           this.F_CARRY = (this.REG_ACC >> 7) & 1;
@@ -344,7 +344,7 @@ CPU.prototype = {
         // *******
 
         // Branch on carry clear
-        if (this.F_CARRY === 0) {
+        if(this.F_CARRY === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -356,7 +356,7 @@ CPU.prototype = {
         // *******
 
         // Branch on carry set
-        if (this.F_CARRY === 1) {
+        if(this.F_CARRY === 1){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -368,7 +368,7 @@ CPU.prototype = {
         // *******
 
         // Branch on zero
-        if (this.F_ZERO === 0) {
+        if(this.F_ZERO === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -392,7 +392,7 @@ CPU.prototype = {
         // *******
 
         // Branch on negative result
-        if (this.F_SIGN === 1) {
+        if(this.F_SIGN === 1){
           cycleCount++;
           this.REG_PC = addr;
         }
@@ -404,7 +404,7 @@ CPU.prototype = {
         // *******
 
         // Branch on not zero
-        if (this.F_ZERO !== 0) {
+        if(this.F_ZERO !== 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -416,7 +416,7 @@ CPU.prototype = {
         // *******
 
         // Branch on positive result
-        if (this.F_SIGN === 0) {
+        if(this.F_SIGN === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -455,7 +455,7 @@ CPU.prototype = {
         // *******
 
         // Branch on overflow clear
-        if (this.F_OVERFLOW === 0) {
+        if(this.F_OVERFLOW === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -467,7 +467,7 @@ CPU.prototype = {
         // *******
 
         // Branch on overflow set
-        if (this.F_OVERFLOW === 1) {
+        if(this.F_OVERFLOW === 1){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           this.REG_PC = addr;
         }
@@ -690,7 +690,7 @@ CPU.prototype = {
         // *******
 
         // Shift right one bit:
-        if (addrMode === 4) {
+        if(addrMode === 4){
           // ADDR_ACC
 
           temp = this.REG_ACC & 0xff;
@@ -726,7 +726,7 @@ CPU.prototype = {
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp;
         this.REG_ACC = temp;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 35: {
@@ -793,7 +793,7 @@ CPU.prototype = {
         // *******
 
         // Rotate one bit left
-        if (addrMode === 4) {
+        if(addrMode === 4){
           // ADDR_ACC = 4
 
           temp = this.REG_ACC;
@@ -818,7 +818,7 @@ CPU.prototype = {
         // *******
 
         // Rotate one bit right
-        if (addrMode === 4) {
+        if(addrMode === 4){
           // ADDR_ACC = 4
 
           add = this.F_CARRY << 7;
@@ -855,7 +855,7 @@ CPU.prototype = {
 
         this.REG_PC = this.pull();
         this.REG_PC += this.pull() << 8;
-        if (this.REG_PC === 0xffff) {
+        if(this.REG_PC === 0xffff){
           return;
         }
         this.REG_PC--;
@@ -872,7 +872,7 @@ CPU.prototype = {
         this.REG_PC = this.pull();
         this.REG_PC += this.pull() << 8;
 
-        if (this.REG_PC === 0xffff) {
+        if(this.REG_PC === 0xffff){
           return; // return from NSF play routine:
         }
         break;
@@ -885,17 +885,17 @@ CPU.prototype = {
         temp = this.REG_ACC - this.load(addr) - (1 - this.F_CARRY);
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
-        if (
+        if(
           ((this.REG_ACC ^ temp) & 0x80) !== 0 &&
           ((this.REG_ACC ^ this.load(addr)) & 0x80) !== 0
-        ) {
+        ){
           this.F_OVERFLOW = 1;
         } else {
           this.F_OVERFLOW = 0;
         }
         this.F_CARRY = temp < 0 ? 0 : 1;
         this.REG_ACC = temp & 0xff;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 44: {
@@ -1061,10 +1061,10 @@ CPU.prototype = {
         temp = (this.REG_X & this.REG_ACC) - this.load(addr);
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
-        if (
+        if(
           ((this.REG_X ^ temp) & 0x80) !== 0 &&
           ((this.REG_X ^ this.load(addr)) & 0x80) !== 0
-        ) {
+        ){
           this.F_OVERFLOW = 1;
         } else {
           this.F_OVERFLOW = 0;
@@ -1107,7 +1107,7 @@ CPU.prototype = {
         this.F_CARRY = temp >= 0 ? 1 : 0;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 63: {
@@ -1123,17 +1123,17 @@ CPU.prototype = {
         temp = this.REG_ACC - temp - (1 - this.F_CARRY);
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
-        if (
+        if(
           ((this.REG_ACC ^ temp) & 0x80) !== 0 &&
           ((this.REG_ACC ^ this.load(addr)) & 0x80) !== 0
-        ) {
+        ){
           this.F_OVERFLOW = 1;
         } else {
           this.F_OVERFLOW = 0;
         }
         this.F_CARRY = temp < 0 ? 0 : 1;
         this.REG_ACC = temp & 0xff;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 64: {
@@ -1152,7 +1152,7 @@ CPU.prototype = {
         this.REG_ACC = this.REG_ACC & temp;
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 65: {
@@ -1170,10 +1170,10 @@ CPU.prototype = {
         // Then add to the accumulator
         temp = this.REG_ACC + this.load(addr) + this.F_CARRY;
 
-        if (
+        if(
           ((this.REG_ACC ^ this.load(addr)) & 0x80) === 0 &&
           ((this.REG_ACC ^ temp) & 0x80) !== 0
-        ) {
+        ){
           this.F_OVERFLOW = 1;
         } else {
           this.F_OVERFLOW = 0;
@@ -1182,7 +1182,7 @@ CPU.prototype = {
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
         this.REG_ACC = temp & 255;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 66: {
@@ -1200,7 +1200,7 @@ CPU.prototype = {
         this.REG_ACC = this.REG_ACC | temp;
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 67: {
@@ -1218,7 +1218,7 @@ CPU.prototype = {
         this.REG_ACC = this.REG_ACC ^ temp;
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 68: {
@@ -1237,7 +1237,7 @@ CPU.prototype = {
         // Do nothing but load.
         // TODO: Properly implement the double-reads.
         this.load(addr);
-        if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
 
@@ -1256,33 +1256,17 @@ CPU.prototype = {
     return cycleCount;
   },
 
-  load: function(addr) {
-    if (addr < 0x2000) {
-      return this.mem[addr & 0x7ff];
-    } else {
-      return NES.mmap.load(addr);
-    }
-  },
-
-  load16bit: function(addr) {
-    if (addr < 0x1fff) {
+  load16bit: function(addr){
+    if(addr < 0x1fff){
       return this.mem[addr & 0x7ff] | (this.mem[(addr + 1) & 0x7ff] << 8);
     } else {
-      return NES.mmap.load(addr) | (NES.mmap.load(addr + 1) << 8);
+      return CPU.load(addr) | (CPU.load(addr + 1) << 8);
     }
   },
 
-  write: function(addr, val) {
-    if (addr < 0x2000) {
-      this.mem[addr & 0x7ff] = val;
-    } else {
-      NES.mmap.write(addr, val);
-    }
-  },
-
-  requestIrq: function(type) {
-    if (this.irqRequested) {
-      if (type === this.IRQ_NORMAL) {
+  requestIrq: function(type){
+    if(this.irqRequested){
+      if(type === this.IRQ_NORMAL){
         return;
       }
       // console.log("too fast irqs. type="+type);
@@ -1291,32 +1275,32 @@ CPU.prototype = {
     this.irqType = type;
   },
 
-  push: function(value) {
-    NES.mmap.write(this.REG_SP, value);
+  push: function(value){
+    CPU.write(this.REG_SP, value);
     this.REG_SP--;
     this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
   },
 
-  stackWrap: function() {
+  stackWrap: function(){
     this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
   },
 
-  pull: function() {
+  pull: function(){
     this.REG_SP++;
     this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
-    return NES.mmap.load(this.REG_SP);
+    return CPU.load(this.REG_SP);
   },
 
-  pageCrossed: function(addr1, addr2) {
+  pageCrossed: function(addr1, addr2){
     return (addr1 & 0xff00) !== (addr2 & 0xff00);
   },
 
-  haltCycles: function(cycles) {
+  haltCycles: function(cycles){
     this.cyclesToHalt += cycles;
   },
 
-  doNonMaskableInterrupt: function(status) {
-    if ((NES.mmap.load(0x2000) & 128) !== 0) {
+  doNonMaskableInterrupt: function(status){
+    if((CPU.load(0x2000) & 128) !== 0){
       // Check whether VBlank Interrupts are enabled
 
       this.REG_PC_NEW++;
@@ -1326,18 +1310,18 @@ CPU.prototype = {
       this.push(status);
 
       this.REG_PC_NEW =
-        NES.mmap.load(0xfffa) | (NES.mmap.load(0xfffb) << 8);
+        CPU.load(0xfffa) | (CPU.load(0xfffb) << 8);
       this.REG_PC_NEW--;
     }
   },
 
-  doResetInterrupt: function() {
+  doResetInterrupt: function(){
     this.REG_PC_NEW =
-      NES.mmap.load(0xfffc) | (NES.mmap.load(0xfffd) << 8);
+      CPU.load(0xfffc) | (CPU.load(0xfffd) << 8);
     this.REG_PC_NEW--;
   },
 
-  doIrq: function(status) {
+  doIrq: function(status){
     this.REG_PC_NEW++;
     this.push((this.REG_PC_NEW >> 8) & 0xff);
     this.push(this.REG_PC_NEW & 0xff);
@@ -1346,11 +1330,11 @@ CPU.prototype = {
     this.F_BRK_NEW = 0;
 
     this.REG_PC_NEW =
-      NES.mmap.load(0xfffe) | (NES.mmap.load(0xffff) << 8);
+      CPU.load(0xfffe) | (CPU.load(0xffff) << 8);
     this.REG_PC_NEW--;
   },
 
-  getStatus: function() {
+  getStatus: function(){
     return (
       this.F_CARRY |
       (this.F_ZERO << 1) |
@@ -1363,7 +1347,7 @@ CPU.prototype = {
     );
   },
 
-  setStatus: function(st) {
+  setStatus: function(st){
     this.F_CARRY = st & 1;
     this.F_ZERO = (st >> 1) & 1;
     this.F_INTERRUPT = (st >> 2) & 1;
@@ -1401,21 +1385,21 @@ CPU.prototype = {
     "F_BRK_NEW"
   ],
 
-  /*toJSON: function() {
+  /*toJSON: function(){
     return utils.toJSON(this);
   },
 
-  fromJSON: function(s) {
+  fromJSON: function(s){
     utils.fromJSON(this, s);
   }*/
 };
 
 // Generates and provides an array of details about instructions
-var OpData = function() {
+var OpData = function(){
   this.opdata = new Array(256);
 
   // Set all to invalid instruction (to detect crashes):
-  for (var i = 0; i < 256; i++) this.opdata[i] = 0xff;
+  for(var i = 0; i < 256; i++) this.opdata[i] = 0xff;
 
   // Now fill in all valid opcodes:
 
@@ -2010,11 +1994,220 @@ OpData.prototype = {
   ADDR_POSTIDXIND: 11,
   ADDR_INDABS: 12,
 
-  setOp: function(inst, op, addr, size, cycles) {
+  setOp: function(inst, op, addr, size, cycles){
     this.opdata[op] =
       (inst & 0xff) |
       ((addr & 0xff) << 8) |
       ((size & 0xff) << 16) |
       ((cycles & 0xff) << 24);
-  }
+  },
 };
+
+
+CPU.regWrite = function(address, value){
+  switch (address){
+    case 0x2000:
+      // PPU Control register 1
+      NES.cpu.mem[address] = value;
+      NES.ppu.updateControlReg1(value);
+      break;
+
+    case 0x2001:
+      // PPU Control register 2
+      NES.cpu.mem[address] = value;
+      NES.ppu.updateControlReg2(value);
+      break;
+
+    case 0x2003:
+      // Set Sprite RAM address:
+      NES.ppu.writeSRAMAddress(value);
+      break;
+
+    case 0x2004:
+      // Write to Sprite RAM:
+      NES.ppu.sramWrite(value);
+      break;
+
+    case 0x2005:
+      // Screen Scroll offsets:
+      NES.ppu.scrollWrite(value);
+      break;
+
+    case 0x2006:
+      // Set VRAM address:
+      NES.ppu.writeVRAMAddress(value);
+      break;
+
+    case 0x2007:
+      // Write to VRAM:
+      NES.ppu.vramWrite(value);
+      break;
+
+    case 0x4014:
+      // Sprite Memory DMA Access
+      NES.ppu.sramDMA(value);
+      break;
+
+    case 0x4015:
+      // Sound Channel Switch, DMC Status
+      NES.papu.writeReg(address, value);
+      break;
+
+    case 0x4016:
+      // Joystick 1 + Strobe
+      if((value & 1) === 0 && (Mapper.joypadLastWrite & 1) === 1){
+        Mapper.joy1StrobeState = 0;
+        Mapper.joy2StrobeState = 0;
+      }
+      Mapper.joypadLastWrite = value;
+      break;
+
+    case 0x4017:
+      // Sound channel frame sequencer:
+      NES.papu.writeReg(address, value);
+      break;
+
+    default:
+      // Sound registers
+      // console.log("write to sound reg");
+      if(address >= 0x4000 && address <= 0x4017){
+        NES.papu.writeReg(address, value);
+      }
+  }
+}
+
+CPU.regLoad = function(address){
+  switch (
+    address >> 12 // use fourth nibble (0xF000)
+  ){
+    case 0:
+      break;
+
+    case 1:
+      break;
+
+    case 2:
+    // Fall through to case 3
+    case 3:
+      // PPU Registers
+      switch (address & 0x7){
+        case 0x0:
+          // 0x2000:
+          // PPU Control Register 1.
+          // (the value is stored both
+          // in main memory and in the
+          // PPU as flags):
+          // (not in the real NES)
+          return NES.cpu.mem[0x2000];
+
+        case 0x1:
+          // 0x2001:
+          // PPU Control Register 2.
+          // (the value is stored both
+          // in main memory and in the
+          // PPU as flags):
+          // (not in the real NES)
+          return NES.cpu.mem[0x2001];
+
+        case 0x2:
+          // 0x2002:
+          // PPU Status Register.
+          // The value is stored in
+          // main memory in addition
+          // to as flags in the PPU.
+          // (not in the real NES)
+          return NES.ppu.readStatusRegister();
+
+        case 0x3:
+          return 0;
+
+        case 0x4:
+          // 0x2004:
+          // Sprite Memory read.
+          return NES.ppu.sramLoad();
+        case 0x5:
+          return 0;
+
+        case 0x6:
+          return 0;
+
+        case 0x7:
+          // 0x2007:
+          // VRAM read:
+          return NES.ppu.vramLoad();
+      }
+      break;
+    case 4:
+      // Sound+Joypad registers
+      switch (address - 0x4015){
+        case 0:
+          // 0x4015:
+          // Sound channel enable, DMC Status
+          return NES.papu.readReg(address);
+
+        case 1:
+          // 0x4016:
+          // Joystick 1 + Strobe
+          return joy1Read();
+
+        case 2:
+          // 0x4017:
+          // Joystick 2 + Strobe
+          // https://wiki.nesdev.com/w/index.php/Zapper
+          var w;
+
+          if(
+            Mapper.zapperX !== null &&
+            Mapper.zapperY !== null &&
+            NES.ppu.isPixelWhite(Mapper.zapperX, Mapper.zapperY)
+          ){
+            w = 0;
+          } else {
+            w = 0x1 << 3;
+          }
+
+          if(Mapper.zapperFired){
+            w |= 0x1 << 4;
+          }
+          return (joy2Read() | w) & 0xffff;
+      }
+      break;
+  }
+  return 0;
+}
+
+// Handle 8-bit writes in CPU memory
+CPU.write = (address, value) => {
+  if(address < 0x2000){
+    // Mirroring of RAM:
+    NES.cpu.mem[address & 0x7ff] = value;
+  } else if(address > 0x4017){
+    NES.cpu.mem[address] = value;
+    if(address >= 0x6000 && address < 0x8000){
+      // Write to persistent RAM
+      NES.opts.onBatteryRamWrite(address, value);
+    }
+  } else if(address > 0x2007 && address < 0x4000){
+    CPU.regWrite(0x2000 + (address & 0x7), value);
+  } else {
+    CPU.regWrite(address, value);
+  }
+},
+
+// Handle 8-bit reads from CPU memory
+CPU.load = address => {
+  // Wrap around:
+  address &= 0xffff;
+
+  // Check address range:
+  if(address > 0x4017){
+    // ROM:
+    return NES.cpu.mem[address];
+  } else if(address >= 0x2000){
+    // I/O Ports.
+    return CPU.regLoad(address);
+  } else {
+    // RAM (mirrored)
+    return NES.cpu.mem[address & 0x7ff];
+  }
+}
