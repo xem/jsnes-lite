@@ -157,12 +157,12 @@ CPU.prototype = {
       case 0: {
         // Zero Page mode. Use the address given after the opcode,
         // but without high byte.
-        addr = this.load(opaddr + 2);
+        addr = CPU.load(opaddr + 2);
         break;
       }
       case 1: {
         // Relative mode.
-        addr = this.load(opaddr + 2);
+        addr = CPU.load(opaddr + 2);
         if(addr < 0x80){
           addr += this.REG_PC;
         } else {
@@ -195,14 +195,14 @@ CPU.prototype = {
         // Zero Page Indexed mode, X as index. Use the address given
         // after the opcode, then add the
         // X register to it to get the final address.
-        addr = (this.load(opaddr + 2) + this.REG_X) & 0xff;
+        addr = (CPU.load(opaddr + 2) + this.REG_X) & 0xff;
         break;
       }
       case 7: {
         // Zero Page Indexed mode, Y as index. Use the address given
         // after the opcode, then add the
         // Y register to it to get the final address.
-        addr = (this.load(opaddr + 2) + this.REG_Y) & 0xff;
+        addr = (CPU.load(opaddr + 2) + this.REG_Y) & 0xff;
         break;
       }
       case 8: {
@@ -230,7 +230,7 @@ CPU.prototype = {
         // starting at the given location plus
         // the current X register. The value is the contents of that
         // address.
-        addr = this.load(opaddr + 2);
+        addr = CPU.load(opaddr + 2);
         if((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)){
           cycleAdd = 1;
         }
@@ -245,7 +245,7 @@ CPU.prototype = {
         // (and the one following). Add to that address the contents
         // of the Y register. Fetch the value
         // stored at that adress.
-        addr = this.load16bit(this.load(opaddr + 2));
+        addr = this.load16bit(CPU.load(opaddr + 2));
         if((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)){
           cycleAdd = 1;
         }
@@ -286,10 +286,10 @@ CPU.prototype = {
         // *******
 
         // Add with carry.
-        temp = this.REG_ACC + this.load(addr) + this.F_CARRY;
+        temp = this.REG_ACC + CPU.load(addr) + this.F_CARRY;
 
         if(
-          ((this.REG_ACC ^ this.load(addr)) & 0x80) === 0 &&
+          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
           ((this.REG_ACC ^ temp) & 0x80) !== 0
         ){
           this.F_OVERFLOW = 1;
@@ -309,7 +309,7 @@ CPU.prototype = {
         // *******
 
         // AND memory with accumulator.
-        this.REG_ACC = this.REG_ACC & this.load(addr);
+        this.REG_ACC = this.REG_ACC & CPU.load(addr);
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
@@ -329,12 +329,12 @@ CPU.prototype = {
           this.F_SIGN = (this.REG_ACC >> 7) & 1;
           this.F_ZERO = this.REG_ACC;
         } else {
-          temp = this.load(addr);
+          temp = CPU.load(addr);
           this.F_CARRY = (temp >> 7) & 1;
           temp = (temp << 1) & 255;
           this.F_SIGN = (temp >> 7) & 1;
           this.F_ZERO = temp;
-          this.write(addr, temp);
+          CPU.write(addr, temp);
         }
         break;
       }
@@ -379,7 +379,7 @@ CPU.prototype = {
         // * BIT *
         // *******
 
-        temp = this.load(addr);
+        temp = CPU.load(addr);
         this.F_SIGN = (temp >> 7) & 1;
         this.F_OVERFLOW = (temp >> 6) & 1;
         temp &= this.REG_ACC;
@@ -515,7 +515,7 @@ CPU.prototype = {
         // *******
 
         // Compare memory and accumulator:
-        temp = this.REG_ACC - this.load(addr);
+        temp = this.REG_ACC - CPU.load(addr);
         this.F_CARRY = temp >= 0 ? 1 : 0;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
@@ -528,7 +528,7 @@ CPU.prototype = {
         // *******
 
         // Compare memory and index X:
-        temp = this.REG_X - this.load(addr);
+        temp = this.REG_X - CPU.load(addr);
         this.F_CARRY = temp >= 0 ? 1 : 0;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
@@ -540,7 +540,7 @@ CPU.prototype = {
         // *******
 
         // Compare memory and index Y:
-        temp = this.REG_Y - this.load(addr);
+        temp = this.REG_Y - CPU.load(addr);
         this.F_CARRY = temp >= 0 ? 1 : 0;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
@@ -552,10 +552,10 @@ CPU.prototype = {
         // *******
 
         // Decrement memory by one:
-        temp = (this.load(addr) - 1) & 0xff;
+        temp = (CPU.load(addr) - 1) & 0xff;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp;
-        this.write(addr, temp);
+        CPU.write(addr, temp);
         break;
       }
       case 21: {
@@ -586,7 +586,7 @@ CPU.prototype = {
         // *******
 
         // XOR Memory with accumulator, store in accumulator:
-        this.REG_ACC = (this.load(addr) ^ this.REG_ACC) & 0xff;
+        this.REG_ACC = (CPU.load(addr) ^ this.REG_ACC) & 0xff;
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
         cycleCount += cycleAdd;
@@ -598,10 +598,10 @@ CPU.prototype = {
         // *******
 
         // Increment memory by one:
-        temp = (this.load(addr) + 1) & 0xff;
+        temp = (CPU.load(addr) + 1) & 0xff;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp;
-        this.write(addr, temp & 0xff);
+        CPU.write(addr, temp & 0xff);
         break;
       }
       case 25: {
@@ -654,7 +654,7 @@ CPU.prototype = {
         // *******
 
         // Load accumulator with memory:
-        this.REG_ACC = this.load(addr);
+        this.REG_ACC = CPU.load(addr);
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         this.F_ZERO = this.REG_ACC;
         cycleCount += cycleAdd;
@@ -666,7 +666,7 @@ CPU.prototype = {
         // *******
 
         // Load index X with memory:
-        this.REG_X = this.load(addr);
+        this.REG_X = CPU.load(addr);
         this.F_SIGN = (this.REG_X >> 7) & 1;
         this.F_ZERO = this.REG_X;
         cycleCount += cycleAdd;
@@ -678,7 +678,7 @@ CPU.prototype = {
         // *******
 
         // Load index Y with memory:
-        this.REG_Y = this.load(addr);
+        this.REG_Y = CPU.load(addr);
         this.F_SIGN = (this.REG_Y >> 7) & 1;
         this.F_ZERO = this.REG_Y;
         cycleCount += cycleAdd;
@@ -698,10 +698,10 @@ CPU.prototype = {
           temp >>= 1;
           this.REG_ACC = temp;
         } else {
-          temp = this.load(addr) & 0xff;
+          temp = CPU.load(addr) & 0xff;
           this.F_CARRY = temp & 1;
           temp >>= 1;
-          this.write(addr, temp);
+          CPU.write(addr, temp);
         }
         this.F_SIGN = 0;
         this.F_ZERO = temp;
@@ -722,7 +722,7 @@ CPU.prototype = {
         // *******
 
         // OR memory with accumulator, store in accumulator.
-        temp = (this.load(addr) | this.REG_ACC) & 255;
+        temp = (CPU.load(addr) | this.REG_ACC) & 255;
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp;
         this.REG_ACC = temp;
@@ -802,11 +802,11 @@ CPU.prototype = {
           temp = ((temp << 1) & 0xff) + add;
           this.REG_ACC = temp;
         } else {
-          temp = this.load(addr);
+          temp = CPU.load(addr);
           add = this.F_CARRY;
           this.F_CARRY = (temp >> 7) & 1;
           temp = ((temp << 1) & 0xff) + add;
-          this.write(addr, temp);
+          CPU.write(addr, temp);
         }
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp;
@@ -826,11 +826,11 @@ CPU.prototype = {
           temp = (this.REG_ACC >> 1) + add;
           this.REG_ACC = temp;
         } else {
-          temp = this.load(addr);
+          temp = CPU.load(addr);
           add = this.F_CARRY << 7;
           this.F_CARRY = temp & 1;
           temp = (temp >> 1) + add;
-          this.write(addr, temp);
+          CPU.write(addr, temp);
         }
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp;
@@ -882,12 +882,12 @@ CPU.prototype = {
         // * SBC *
         // *******
 
-        temp = this.REG_ACC - this.load(addr) - (1 - this.F_CARRY);
+        temp = this.REG_ACC - CPU.load(addr) - (1 - this.F_CARRY);
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
         if(
           ((this.REG_ACC ^ temp) & 0x80) !== 0 &&
-          ((this.REG_ACC ^ this.load(addr)) & 0x80) !== 0
+          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
         ){
           this.F_OVERFLOW = 1;
         } else {
@@ -931,7 +931,7 @@ CPU.prototype = {
         // *******
 
         // Store accumulator in memory
-        this.write(addr, this.REG_ACC);
+        CPU.write(addr, this.REG_ACC);
         break;
       }
       case 48: {
@@ -940,7 +940,7 @@ CPU.prototype = {
         // *******
 
         // Store index X in memory
-        this.write(addr, this.REG_X);
+        CPU.write(addr, this.REG_X);
         break;
       }
       case 49: {
@@ -949,7 +949,7 @@ CPU.prototype = {
         // *******
 
         // Store index Y in memory:
-        this.write(addr, this.REG_Y);
+        CPU.write(addr, this.REG_Y);
         break;
       }
       case 50: {
@@ -1023,7 +1023,7 @@ CPU.prototype = {
         // *******
 
         // Shift right one bit after ANDing:
-        temp = this.REG_ACC & this.load(addr);
+        temp = this.REG_ACC & CPU.load(addr);
         this.F_CARRY = temp & 1;
         this.REG_ACC = this.F_ZERO = temp >> 1;
         this.F_SIGN = 0;
@@ -1035,7 +1035,7 @@ CPU.prototype = {
         // *******
 
         // AND accumulator, setting carry to bit 7 result.
-        this.REG_ACC = this.F_ZERO = this.REG_ACC & this.load(addr);
+        this.REG_ACC = this.F_ZERO = this.REG_ACC & CPU.load(addr);
         this.F_CARRY = this.F_SIGN = (this.REG_ACC >> 7) & 1;
         break;
       }
@@ -1045,7 +1045,7 @@ CPU.prototype = {
         // *******
 
         // Rotate right one bit after ANDing:
-        temp = this.REG_ACC & this.load(addr);
+        temp = this.REG_ACC & CPU.load(addr);
         this.REG_ACC = this.F_ZERO = (temp >> 1) + (this.F_CARRY << 7);
         this.F_SIGN = this.F_CARRY;
         this.F_CARRY = (temp >> 7) & 1;
@@ -1058,12 +1058,12 @@ CPU.prototype = {
         // *******
 
         // Set X to (X AND A) - value.
-        temp = (this.REG_X & this.REG_ACC) - this.load(addr);
+        temp = (this.REG_X & this.REG_ACC) - CPU.load(addr);
         this.F_SIGN = (temp >> 7) & 1;
         this.F_ZERO = temp & 0xff;
         if(
           ((this.REG_X ^ temp) & 0x80) !== 0 &&
-          ((this.REG_X ^ this.load(addr)) & 0x80) !== 0
+          ((this.REG_X ^ CPU.load(addr)) & 0x80) !== 0
         ){
           this.F_OVERFLOW = 1;
         } else {
@@ -1079,7 +1079,7 @@ CPU.prototype = {
         // *******
 
         // Load A and X with memory:
-        this.REG_ACC = this.REG_X = this.F_ZERO = this.load(addr);
+        this.REG_ACC = this.REG_X = this.F_ZERO = CPU.load(addr);
         this.F_SIGN = (this.REG_ACC >> 7) & 1;
         cycleCount += cycleAdd;
         break;
@@ -1090,7 +1090,7 @@ CPU.prototype = {
         // *******
 
         // Store A AND X in memory:
-        this.write(addr, this.REG_ACC & this.REG_X);
+        CPU.write(addr, this.REG_ACC & this.REG_X);
         break;
       }
       case 62: {
@@ -1099,8 +1099,8 @@ CPU.prototype = {
         // *******
 
         // Decrement memory by one:
-        temp = (this.load(addr) - 1) & 0xff;
-        this.write(addr, temp);
+        temp = (CPU.load(addr) - 1) & 0xff;
+        CPU.write(addr, temp);
 
         // Then compare with the accumulator:
         temp = this.REG_ACC - temp;
@@ -1116,8 +1116,8 @@ CPU.prototype = {
         // *******
 
         // Increment memory by one:
-        temp = (this.load(addr) + 1) & 0xff;
-        this.write(addr, temp);
+        temp = (CPU.load(addr) + 1) & 0xff;
+        CPU.write(addr, temp);
 
         // Then subtract from the accumulator:
         temp = this.REG_ACC - temp - (1 - this.F_CARRY);
@@ -1125,7 +1125,7 @@ CPU.prototype = {
         this.F_ZERO = temp & 0xff;
         if(
           ((this.REG_ACC ^ temp) & 0x80) !== 0 &&
-          ((this.REG_ACC ^ this.load(addr)) & 0x80) !== 0
+          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
         ){
           this.F_OVERFLOW = 1;
         } else {
@@ -1142,11 +1142,11 @@ CPU.prototype = {
         // *******
 
         // Rotate one bit left
-        temp = this.load(addr);
+        temp = CPU.load(addr);
         add = this.F_CARRY;
         this.F_CARRY = (temp >> 7) & 1;
         temp = ((temp << 1) & 0xff) + add;
-        this.write(addr, temp);
+        CPU.write(addr, temp);
 
         // Then AND with the accumulator.
         this.REG_ACC = this.REG_ACC & temp;
@@ -1161,17 +1161,17 @@ CPU.prototype = {
         // *******
 
         // Rotate one bit right
-        temp = this.load(addr);
+        temp = CPU.load(addr);
         add = this.F_CARRY << 7;
         this.F_CARRY = temp & 1;
         temp = (temp >> 1) + add;
-        this.write(addr, temp);
+        CPU.write(addr, temp);
 
         // Then add to the accumulator
-        temp = this.REG_ACC + this.load(addr) + this.F_CARRY;
+        temp = this.REG_ACC + CPU.load(addr) + this.F_CARRY;
 
         if(
-          ((this.REG_ACC ^ this.load(addr)) & 0x80) === 0 &&
+          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
           ((this.REG_ACC ^ temp) & 0x80) !== 0
         ){
           this.F_OVERFLOW = 1;
@@ -1191,10 +1191,10 @@ CPU.prototype = {
         // *******
 
         // Shift one bit left
-        temp = this.load(addr);
+        temp = CPU.load(addr);
         this.F_CARRY = (temp >> 7) & 1;
         temp = (temp << 1) & 255;
-        this.write(addr, temp);
+        CPU.write(addr, temp);
 
         // Then OR with the accumulator.
         this.REG_ACC = this.REG_ACC | temp;
@@ -1209,10 +1209,10 @@ CPU.prototype = {
         // *******
 
         // Shift one bit right
-        temp = this.load(addr) & 0xff;
+        temp = CPU.load(addr) & 0xff;
         this.F_CARRY = temp & 1;
         temp >>= 1;
-        this.write(addr, temp);
+        CPU.write(addr, temp);
 
         // Then XOR with the accumulator.
         this.REG_ACC = this.REG_ACC ^ temp;
@@ -1236,7 +1236,7 @@ CPU.prototype = {
 
         // Do nothing but load.
         // TODO: Properly implement the double-reads.
-        this.load(addr);
+        CPU.load(addr);
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
