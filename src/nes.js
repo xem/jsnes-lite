@@ -114,35 +114,11 @@ var NES = {
     return fps;
   },
 
-  /*reloadROM: function(){
-    if(NES.romData !== null){
-      NES.loadROM(NES.romData);
-    }
-  },*/
-
-  
-
   setFramerate: function(rate){
     NES.opts.preferredFrameRate = rate;
     NES.frameTime = 1000 / rate;
     NES.papu.setSampleRate(NES.opts.sampleRate, false);
   },
-
-  /*toJSON: function(){
-    return {
-      romData: NES.romData,
-      cpu: NES.cpu.toJSON(),
-      mmap: Mapper.toJSON(),
-      ppu: NES.ppu.toJSON()
-    };
-  },
-
-  fromJSON: function(s){
-    NES.loadROM(s.romData);
-    NES.cpu.fromJSON(s.cpu);
-    Mapper.fromJSON(s.mmap);
-    NES.ppu.fromJSON(s.ppu);
-  }*/
 };
 
 NES.init = opts => {

@@ -3,16 +3,15 @@
 
 // Only Mapper 0 is handled for now:
 // - 8, 16 or 32kb PRG-ROM
+// - up to 8kb PRG-RAM (enabled by default on most emulators)
 // - 0, 4 or 8kb CHR-ROM
-// - 0, 2 or 4kb PRG-RAM
 // - Horizontal or vertical nametable mirroring
 var Mapper = {
   
   // Load ROM's content in memory
-  loadROM: () =>{
+  loadROM: () => {
     Mapper.load_prg_rom();
     Mapper.load_chr_rom();
-    //CPU.loadBatteryRam();
   },
   
   // Load PRG-ROM banks in CPU memory

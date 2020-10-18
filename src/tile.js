@@ -3,7 +3,6 @@ var Tile = function(){
   this.pix = new Array(64);
 
   this.fbIndex = null;
-  this.tIndex = null;
   this.x = null;
   this.y = null;
   this.w = null;
@@ -13,28 +12,9 @@ var Tile = function(){
   this.palIndex = null;
   this.tpri = null;
   this.c = null;
-  this.initialized = false;
-  this.opaque = new Array(8);
 };
 
 Tile.prototype = {
-  setBuffer: function(scanline){
-    for(this.y = 0; this.y < 8; this.y++){
-      this.setScanline(this.y, scanline[this.y], scanline[this.y + 8]);
-    }
-  },
-
-  setScanline: function(sline, b1, b2){
-    this.initialized = true;
-    this.tIndex = sline << 3;
-    for(this.x = 0; this.x < 8; this.x++){
-      this.pix[this.tIndex + this.x] =
-        ((b1 >> (7 - this.x)) & 1) + (((b2 >> (7 - this.x)) & 1) << 1);
-      if(this.pix[this.tIndex + this.x] === 0){
-        this.opaque[sline] = false;
-      }
-    }
-  },
 
   render: function(
     buffer,
@@ -178,19 +158,4 @@ Tile.prototype = {
     }
   },
 
-  isTransparent: function(x, y){
-    return this.pix[(y << 3) + x] === 0;
-  },
-
-  /*toJSON: function(){
-    return {
-      opaque: this.opaque,
-      pix: this.pix
-    };
-  },
-
-  fromJSON: function(s){
-    this.opaque = s.opaque;
-    this.pix = s.pix;
-  }*/
 };

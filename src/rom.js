@@ -2,7 +2,7 @@
 // ====
 
 // Load a ROM file
-// @param data: ROM file read as binary string
+// data: ROM file read as binary string
 NES.loadROM = data => { 
   ROM.loadROM(data);
   Mapper.loadROM();
@@ -29,7 +29,7 @@ var ROM = {
 // - Extra ROM banks, if present (arcade games only)
 ROM.loadROM = data => {
   
-  var i, j;
+  var i, j, k, l;
   
   // Ensure file starts with chars "NES\x1a"
   if(!data.indexOf("NES\x1a")){
@@ -46,10 +46,6 @@ ROM.loadROM = data => {
     // Read number of 8kb CHR-ROM banks (byte 5)
     // The game's graphics are stored here in the form of 8*8px, 4-color bitmaps
     ROM.chr_rom_count = ROM.header[5] * 2; // count 4kb pages instead of 8kb banks
-    
-    // If no CHR-ROM banks are found, the game has one CHR-RAM bank
-    // It's similar to CHR-ROM but readable and writeable by the program
-    ROM.vramcount = ROM.cprg_rom_count ? 0 : 1;
     
     // Check if the game adds 2 extra kb to the PPU's VRAM (byte 6, bit 4)
     // Otherwise, read mirroring layout (byte 6, bit 0)
@@ -88,32 +84,44 @@ ROM.loadROM = data => {
       }
     }
     
-    // Load the CHR-ROM pages and extrack 256 tiles inside each of them
-    var tileIndex;
-    var leftOver;
+    // Load the CHR-ROM pages and make 256 tiles from each of them
+    var byte1;
+    var byte2;
+    var color;
+    
     for(i = 0; i < ROM.chr_rom_count; i++){
       ROM.chr_rom[i] = [];
       ROM.chr_rom_tiles[i] = [];
+      for(j = 0; j < 4 * 1024; j++){
+        ROM.chr_rom[i][j] = data.charCodeAt(offset++) & 0xff;
+      }
+
       for(j = 0; j < 256; j++){
         ROM.chr_rom_tiles[i][j] = new Tile();
       }
-      for(j = 0; j < 4 * 1024; j++){
-        ROM.chr_rom[i][j] = data.charCodeAt(offset++) & 0xff;
-        tileIndex = j >> 4;
-        leftOver = j % 16;
-        if(leftOver < 8){
-          ROM.chr_rom_tiles[i][tileIndex].setScanline(
-            leftOver,
-            ROM.chr_rom[i][j],
-            ROM.chr_rom[i][j + 8]
-          );
-        }
-        else {
-          ROM.chr_rom_tiles[i][tileIndex].setScanline(
-            leftOver - 8,
-            ROM.chr_rom[i][j - 8],
-            ROM.chr_rom[i][j]
-          );
+    
+      // Tile decoding:
+      // A tile is encoded on 16 bytes
+      // The 64 pixels of each tile are encoded on 2 bits
+      // The first 8 bytes encode the low bit of every pixel
+      // The last 8 bytes encode the high bit of every pixel
+      
+      // For each tile j
+      for(j = 0; j < 256; j++){
+        
+        // For each line k
+        for(k = 0; k < 8; k++){
+          
+          // Read two bytes
+          byte1 = ROM.chr_rom[i][j * 16 + k];
+          byte2 = ROM.chr_rom[i][j * 16 + k + 8];
+          
+          // For each pixel l
+          for(l = 0; l < 8; l++){
+            
+            // Set its color
+            ROM.chr_rom_tiles[i][j].pix[k * 8 + l] = ((byte2 >> (7 - l)) & 1) * 2 + ((byte1 >> (7 - l)) & 1);
+          }
         }
       }
     }

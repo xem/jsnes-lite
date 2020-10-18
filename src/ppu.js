@@ -963,14 +963,14 @@ PPU.prototype = {
               destIndex -= x;
               sx = -x;
             }
-            if(t.opaque[this.cntFV]){
+            /*if(t.opaque[this.cntFV]){
               for(; sx < 8; sx++){
                 targetBuffer[destIndex] =
                   imgPalette[tpix[tscanoffset + sx] + att];
                 pixrendered[destIndex] |= 256;
                 destIndex++;
               }
-            } else {
+            } else {*/
               for(; sx < 8; sx++){
                 col = tpix[tscanoffset + sx];
                 if(col !== 0){
@@ -979,7 +979,7 @@ PPU.prototype = {
                 }
                 destIndex++;
               }
-            }
+            //}
           }
         }
 
@@ -1424,110 +1424,6 @@ PPU.prototype = {
     this.triggerRendering();
     return NES.ppu.buffer[(y << 8) + x] === 0xffffff;
   },
-
-  JSON_PROPERTIES: [
-    // Memory
-    "vramMem",
-    "spriteMem",
-    // Counters
-    "cntFV",
-    "cntV",
-    "cntH",
-    "cntVT",
-    "cntHT",
-    // Registers
-    "regFV",
-    "regV",
-    "regH",
-    "regVT",
-    "regHT",
-    "regFH",
-    "regS",
-    // VRAM addr
-    "vramAddress",
-    "vramTmpAddress",
-    // Control/Status registers
-    "f_nmiOnVblank",
-    "f_spriteSize",
-    "f_bgPatternTable",
-    "f_spPatternTable",
-    "f_addrInc",
-    "f_nTblAddress",
-    "f_color",
-    "f_spVisibility",
-    "f_bgVisibility",
-    "f_spClipping",
-    "f_bgClipping",
-    "f_dispType",
-    // VRAM I/O
-    "vramBufferedReadValue",
-    "firstWrite",
-    // Mirroring
-    "currentMirroring",
-    "vramMirrorTable",
-    "ntable1",
-    // SPR-RAM I/O
-    "sramAddress",
-    // Sprites. Most sprite data is rebuilt from spriteMem
-    "hitSpr0",
-    // Palettes
-    "sprPalette",
-    "imgPalette",
-    // Rendering progression
-    "curX",
-    "scanline",
-    "lastRenderedScanline",
-    "curNt",
-    "scantile",
-    // Used during rendering
-    "attrib",
-    "buffer",
-    "bgbuffer",
-    "pixrendered",
-    // Misc
-    "requestEndFrame",
-    "nmiOk",
-    "dummyCycleToggle",
-    "nmiCounter",
-    "validTileData",
-    "scanlineAlreadyRendered"
-  ],
-
-  /*toJSON: function(){
-    var i;
-    var state = utils.toJSON(this);
-
-    state.nameTable = [];
-    for(i = 0; i < this.nameTable.length; i++){
-      state.nameTable[i] = this.nameTable[i].toJSON();
-    }
-
-    state.ptTile = [];
-    for(i = 0; i < this.ptTile.length; i++){
-      state.ptTile[i] = this.ptTile[i].toJSON();
-    }
-
-    return state;
-  },
-
-  fromJSON: function(state){
-    var i;
-
-    utils.fromJSON(this, state);
-
-    for(i = 0; i < this.nameTable.length; i++){
-      this.nameTable[i].fromJSON(state.nameTable[i]);
-    }
-
-    for(i = 0; i < this.ptTile.length; i++){
-      this.ptTile[i].fromJSON(state.ptTile[i]);
-    }
-
-    // Sprite data:
-    for(i = 0; i < this.spriteMem.length; i++){
-      this.spriteRamWriteUpdate(i, this.spriteMem[i]);
-    }
-  }*/
 };
 
 var NameTable = function(width, height, name){
@@ -1573,18 +1469,6 @@ NameTable.prototype = {
       }
     }
   },
-
-  /*toJSON: function(){
-    return {
-      tile: this.tile,
-      attrib: this.attrib
-    };
-  },
-
-  fromJSON: function(s){
-    this.tile = s.tile;
-    this.attrib = s.attrib;
-  }*/
 };
 
 var PaletteTable = function(){
