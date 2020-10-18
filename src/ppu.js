@@ -185,7 +185,7 @@ PPU.prototype = {
     // Create pattern table tile buffers:
     this.ptTile = new Array(512);
     for(i = 0; i < 512; i++){
-      this.ptTile[i] = new Tile();
+      this.ptTile[i] = { pixels: [] };
     }
 
     // Create nametable buffers:
@@ -936,7 +936,7 @@ PPU.prototype = {
             if(typeof t === "undefined"){
               continue;
             }
-            tpix = t.pix;
+            tpix = t.pixels;
             att = attrib[tile];
           } else {
             // Fetch data:
@@ -948,7 +948,7 @@ PPU.prototype = {
             if(typeof t === "undefined"){
               continue;
             }
-            tpix = t.pix;
+            tpix = t.pixels;
             att = nameTable[this.curNt].getAttrib(this.cntHT, this.cntVT);
             scantile[tile] = t;
             attrib[tile] = att;
@@ -1041,39 +1041,20 @@ PPU.prototype = {
               this.srcy2 = startscan + scancount - this.sprY[i] + 1;
             }
 
-            if(this.f_spPatternTable === 0){
-              this.ptTile[this.sprTile[i]].render(
-                this.buffer,
-                0,
-                this.srcy1,
-                8,
-                this.srcy2,
-                this.sprX[i],
-                this.sprY[i] + 1,
-                this.sprCol[i],
-                this.sprPalette,
-                this.horiFlip[i],
-                this.vertFlip[i],
-                i,
-                this.pixrendered
-              );
-            } else {
-              this.ptTile[this.sprTile[i] + 256].render(
-                this.buffer,
-                0,
-                this.srcy1,
-                8,
-                this.srcy2,
-                this.sprX[i],
-                this.sprY[i] + 1,
-                this.sprCol[i],
-                this.sprPalette,
-                this.horiFlip[i],
-                this.vertFlip[i],
-                i,
-                this.pixrendered
-              );
-            }
+            Tile.render(
+              this.ptTile[this.f_spPatternTable === 0 ? this.sprTile[i] : this.sprTile[i] + 256],
+              this.buffer,
+              this.srcy1,
+              this.srcy2,
+              this.sprX[i],
+              this.sprY[i] + 1,
+              this.sprPalette,
+              this.sprCol[i],
+              this.horiFlip[i],
+              this.vertFlip[i],
+              i,
+              this.pixrendered
+            );
           } else {
             // 8x16 sprites
             var top = this.sprTile[i];
@@ -1092,16 +1073,15 @@ PPU.prototype = {
               srcy2 = startscan + scancount - this.sprY[i];
             }
 
-            this.ptTile[top + (this.vertFlip[i] ? 1 : 0)].render(
+            Tile.render(
+              this.ptTile[top + (this.vertFlip[i] ? 1 : 0)],
               this.buffer,
-              0,
               srcy1,
-              8,
               srcy2,
               this.sprX[i],
               this.sprY[i] + 1,
-              this.sprCol[i],
               this.sprPalette,
+              this.sprCol[i],
               this.horiFlip[i],
               this.vertFlip[i],
               i,
@@ -1119,16 +1099,15 @@ PPU.prototype = {
               srcy2 = startscan + scancount - (this.sprY[i] + 8);
             }
 
-            this.ptTile[top + (this.vertFlip[i] ? 0 : 1)].render(
+            Tile.render(
+              this.ptTile[top + (this.vertFlip[i] ? 0 : 1)],
               this.buffer,
-              0,
               srcy1,
-              8,
               srcy2,
               this.sprX[i],
               this.sprY[i] + 1 + 8,
-              this.sprCol[i],
               this.sprPalette,
+              this.sprCol[i],
               this.horiFlip[i],
               this.vertFlip[i],
               i,
@@ -1177,7 +1156,7 @@ PPU.prototype = {
                 bufferIndex < 61440 &&
                 this.pixrendered[bufferIndex] !== 0
               ){
-                if(t.pix[toffset + i] !== 0){
+                if(t.pixels[toffset + i] !== 0){
                   this.spr0HitX = bufferIndex % 256;
                   this.spr0HitY = scan;
                   return true;
@@ -1195,7 +1174,7 @@ PPU.prototype = {
                 bufferIndex < 61440 &&
                 this.pixrendered[bufferIndex] !== 0
               ){
-                if(t.pix[toffset + i] !== 0){
+                if(t.pixels[toffset + i] !== 0){
                   this.spr0HitX = bufferIndex % 256;
                   this.spr0HitY = scan;
                   return true;
@@ -1252,7 +1231,7 @@ PPU.prototype = {
                 bufferIndex < 61440 &&
                 this.pixrendered[bufferIndex] !== 0
               ){
-                if(t.pix[toffset + i] !== 0){
+                if(t.pixels[toffset + i] !== 0){
                   this.spr0HitX = bufferIndex % 256;
                   this.spr0HitY = scan;
                   return true;
@@ -1270,7 +1249,7 @@ PPU.prototype = {
                 bufferIndex < 61440 &&
                 this.pixrendered[bufferIndex] !== 0
               ){
-                if(t.pix[toffset + i] !== 0){
+                if(t.pixels[toffset + i] !== 0){
                   this.spr0HitX = bufferIndex % 256;
                   this.spr0HitY = scan;
                   return true;
@@ -1351,21 +1330,11 @@ PPU.prototype = {
   // table buffers with this new byte.
   // In vNES, there is a version of this with 4 arguments which isn't used.
   patternWrite: function(address, value){
+    var bank = address > 0x1000 ? 1 : 0;
     var tileIndex = Math.floor(address / 16);
-    var leftOver = address % 16;
-    if(leftOver < 8){
-      this.ptTile[tileIndex].setScanline(
-        leftOver,
-        value,
-        this.vramMem[address + 8]
-      );
-    } else {
-      this.ptTile[tileIndex].setScanline(
-        leftOver - 8,
-        this.vramMem[address - 8],
-        value
-      );
-    }
+    ROM.chr_rom[bank][address % 0x1000] = value;
+    ROM.chr_rom_tiles[bank][tileIndex] = { pixels: [] };
+    Tile.decode(ROM.chr_rom_tiles[bank][tileIndex], ROM.chr_rom[bank], tileIndex);
   },
 
   // Updates the internal name table buffers
