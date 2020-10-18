@@ -75,8 +75,8 @@ start = file => {
     // Display each new frame on the canvas
     onFrame: function(frameBuffer){
       var i = 0;
-      for(var y = 0; y < 256; ++y){
-        for(var x = 0; x < 240; ++x){
+      for(var x = 0; x < 256; ++x){
+        for(var y = 0; y < 240; ++y){
           i = y * 256 + x;
           frameBuffer32[i] = 0xff000000 | frameBuffer[i];
         }

@@ -1041,7 +1041,7 @@ PPU.prototype = {
               this.srcy2 = startscan + scancount - this.sprY[i] + 1;
             }
 
-            Tile.render(
+            Tile.draw_sprite(
               this.ptTile[this.f_spPatternTable === 0 ? this.sprTile[i] : this.sprTile[i] + 256],
               this.buffer,
               this.srcy1,
@@ -1073,7 +1073,7 @@ PPU.prototype = {
               srcy2 = startscan + scancount - this.sprY[i];
             }
 
-            Tile.render(
+            Tile.draw_sprite(
               this.ptTile[top + (this.vertFlip[i] ? 1 : 0)],
               this.buffer,
               srcy1,
@@ -1099,7 +1099,7 @@ PPU.prototype = {
               srcy2 = startscan + scancount - (this.sprY[i] + 8);
             }
 
-            Tile.render(
+            Tile.draw_sprite(
               this.ptTile[top + (this.vertFlip[i] ? 0 : 1)],
               this.buffer,
               srcy1,
