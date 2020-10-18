@@ -1,13 +1,6 @@
 // ROM
 // ====
 
-// Load a ROM file
-// data: ROM file read as binary string
-NES.loadROM = data => { 
-  ROM.loadROM(data);
-  Mapper.loadROM();
-};
-
 // ROM contents and properties
 var ROM = {
   header: [],
@@ -27,7 +20,7 @@ var ROM = {
   // - PRG-ROM data (16384 * x bytes)
   // - CHR-ROM data (8192 * y bytes)
   // - Extra ROM banks, if present (arcade games only)
-  loadROM: data => {
+  load_rom: data => {
     
     var i, j, k, l;
     

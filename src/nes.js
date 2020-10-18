@@ -1,9 +1,15 @@
+// NES
 var NES = {
-  fpsFrameCount: 0,
-  romData: null,
+  
+  // Load a ROM file
+  // data: ROM file read as binary string
+  load_rom: data => { 
+    ROM.load_rom(data);
+    Mapper.load_rom();
+  },
 
   // Resets the system
-  reset: function(){
+  reset: () => {
     if(NES.mmap !== null){
       Mapper.reset();
     }
@@ -13,13 +19,12 @@ var NES = {
     NES.papu.reset();
 
     NES.lastFpsTime = null;
-    NES.fpsFrameCount = 0;
     
     // Send reset (IRQ) interrupt
     NES.cpu.requestIrq(NES.cpu.IRQ_RESET);
   },
 
-  frame: function(){
+  frame: () => {
     NES.ppu.startFrame();
     var cycles = 0;
     var emulateSound = NES.opts.emulateSound;
@@ -76,94 +81,43 @@ var NES = {
         }
       }
     }
-    NES.fpsFrameCount++;
   },
+  
+  init: opts => {
+    NES.opts = {
+      onFrame: function(){},
+      onAudioSample: null,
+      onStatusUpdate: function(){},
+      onBatteryRamWrite: function(){},
 
-  buttonDown: function(controller, button){
-    NES.controllers[controller].buttonDown(button);
-  },
+      // FIXME: not actually used except for in PAPU
+      preferredFrameRate: 60,
 
-  buttonUp: function(controller, button){
-    NES.controllers[controller].buttonUp(button);
-  },
-
-  zapperMove: function(x, y){
-    if(!NES.mmap) return;
-    Mapper.zapperX = x;
-    Mapper.zapperY = y;
-  },
-
-  zapperFireDown: function(){
-    if(!NES.mmap) return;
-    Mapper.zapperFired = true;
-  },
-
-  zapperFireUp: function(){
-    if(!NES.mmap) return;
-    Mapper.zapperFired = false;
-  },
-
-  getFPS: function(){
-    var now = +new Date();
-    var fps = null;
-    if(NES.lastFpsTime){
-      fps = NES.fpsFrameCount / ((now - NES.lastFpsTime) / 1000);
-    }
-    NES.fpsFrameCount = 0;
-    NES.lastFpsTime = now;
-    return fps;
-  },
-
-  setFramerate: function(rate){
-    NES.opts.preferredFrameRate = rate;
-    NES.frameTime = 1000 / rate;
-    NES.papu.setSampleRate(NES.opts.sampleRate, false);
-  },
-};
-
-NES.init = opts => {
-  NES.opts = {
-    onFrame: function(){},
-    onAudioSample: null,
-    onStatusUpdate: function(){},
-    onBatteryRamWrite: function(){},
-
-    // FIXME: not actually used except for in PAPU
-    preferredFrameRate: 60,
-
-    emulateSound: true,
-    sampleRate: 44100 // Sound sample rate in hz
-  };
-  if(typeof opts !== "undefined"){
-    var key;
-    for(key in NES.opts){
-      if(typeof opts[key] !== "undefined"){
-        NES.opts[key] = opts[key];
+      emulateSound: true,
+      sampleRate: 44100 // Sound sample rate in hz
+    };
+    if(typeof opts !== "undefined"){
+      var key;
+      for(key in NES.opts){
+        if(typeof opts[key] !== "undefined"){
+          NES.opts[key] = opts[key];
+        }
       }
     }
+
+    NES.frameTime = 1000 / NES.opts.preferredFrameRate;
+
+    NES.ui = {
+      writeFrame: NES.opts.onFrame,
+      updateStatus: NES.opts.onStatusUpdate
+    };
+    NES.cpu = new CPU(NES);
+    NES.ppu = new PPU(NES);
+    NES.papu = new PAPU(NES);
+    NES.mmap = null; // set in load_rom()
+    NES.controllers = {
+      1: new Controller(),
+      2: new Controller()
+    };
   }
-
-  NES.frameTime = 1000 / NES.opts.preferredFrameRate;
-
-  NES.ui = {
-    writeFrame: NES.opts.onFrame,
-    updateStatus: NES.opts.onStatusUpdate
-  };
-  NES.cpu = new CPU(NES);
-  NES.ppu = new PPU(NES);
-  NES.papu = new PAPU(NES);
-  NES.mmap = null; // set in loadROM()
-  NES.controllers = {
-    1: new Controller(),
-    2: new Controller()
-  };
-
-  NES.ui.updateStatus("Ready to load a ROM.");
-
-  NES.frame = NES.frame.bind(NES);
-  NES.buttonDown = NES.buttonDown.bind(NES);
-  NES.buttonUp = NES.buttonUp.bind(NES);
-  NES.zapperMove = NES.zapperMove.bind(NES);
-  NES.zapperFireDown = NES.zapperFireDown.bind(NES);
-  NES.zapperFireUp = NES.zapperFireUp.bind(NES);
-};
+}

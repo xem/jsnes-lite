@@ -9,7 +9,7 @@
 var Mapper = {
   
   // Load ROM's content in memory
-  loadROM: () => {
+  load_rom: () => {
     Mapper.load_prg_rom();
     Mapper.load_chr_rom();
   },

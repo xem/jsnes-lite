@@ -120,3 +120,28 @@ joy2Read = function(){
     this.zapperX = null;
     this.zapperY = null;
   },*/
+  
+  
+/*NES.zapperMove: function(x, y){
+  if(!NES.mmap) return;
+  Mapper.zapperX = x;
+  Mapper.zapperY = y;
+},
+
+NES.zapperFireDown: function(){
+  if(!NES.mmap) return;
+  Mapper.zapperFired = true;
+},
+
+NES.zapperFireUp: function(){
+  if(!NES.mmap) return;
+  Mapper.zapperFired = false;
+},*/
+
+NES.buttonDown = (controller, button) => {
+  NES.controllers[controller].buttonDown(button);
+};
+
+NES.buttonUp = (controller, button) => {
+  NES.controllers[controller].buttonUp(button);
+};
