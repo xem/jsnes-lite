@@ -1,147 +1,154 @@
-var CPU = function(nes){
-  NES = nes;
+// CPU
+// ===
 
-  // Keep Chrome happy
-  this.mem = null;
-  this.REG_ACC = null;
-  this.REG_X = null;
-  this.REG_Y = null;
-  this.REG_SP = null;
-  this.REG_PC = null;
-  this.REG_PC_NEW = null;
-  this.REG_STATUS = null;
-  this.F_CARRY = null;
-  this.F_DECIMAL = null;
-  this.F_INTERRUPT = null;
-  this.F_INTERRUPT_NEW = null;
-  this.F_OVERFLOW = null;
-  this.F_SIGN = null;
-  this.F_ZERO = null;
-  this.F_NOTUSED = null;
-  this.F_NOTUSED_NEW = null;
-  this.F_BRK = null;
-  this.F_BRK_NEW = null;
-  this.opdata = null;
-  this.cyclesToHalt = null;
-  this.crash = null;
-  this.irqRequested = null;
-  this.irqType = null;
+var CPU = {
+  
+  // Memory
+  mem: null,
+  
+  // Registers
+  REG_ACC: null,
+  REG_X: null,
+  REG_Y: null,
+  REG_SP: null,
+  REG_PC: null,
+  REG_PC_NEW: null,
+  REG_STATUS: null,
+  
+  // Flags
+  F_CARRY: null,
+  F_DECIMAL: null,
+  F_INTERRUPT: null,
+  F_INTERRUPT_NEW: null,
+  F_OVERFLOW: null,
+  F_SIGN: null,
+  F_ZERO: null,
+  F_NOTUSED: null,
+  F_NOTUSED_NEW: null,
+  F_BRK: null,
+  F_BRK_NEW: null,
+  
+  // ?
+  opdata: null,
+  cyclesToHalt: null,
+  crash: null,
+  
+  // IRQ
+  irqRequested: null,
+  irqType: null,
 
-  this.reset();
-};
-
-CPU.prototype = {
   // IRQ Types
   IRQ_NORMAL: 0,
   IRQ_NMI: 1,
   IRQ_RESET: 2,
 
-  reset: function(){
+  reset: () => {
     // Main memory
-    this.mem = new Array(0x10000);
+    CPU.mem = new Array(0x10000);
 
     for(var i = 0; i < 0x2000; i++){
-      this.mem[i] = 0xff;
+      CPU.mem[i] = 0xff;
     }
     for(var p = 0; p < 4; p++){
       var j = p * 0x800;
-      this.mem[j + 0x008] = 0xf7;
-      this.mem[j + 0x009] = 0xef;
-      this.mem[j + 0x00a] = 0xdf;
-      this.mem[j + 0x00f] = 0xbf;
+      CPU.mem[j + 0x008] = 0xf7;
+      CPU.mem[j + 0x009] = 0xef;
+      CPU.mem[j + 0x00a] = 0xdf;
+      CPU.mem[j + 0x00f] = 0xbf;
     }
-    for(var k = 0x2001; k < this.mem.length; k++){
-      this.mem[k] = 0;
+    for(var k = 0x2001; k < CPU.mem.length; k++){
+      CPU.mem[k] = 0;
     }
 
     // CPU Registers:
-    this.REG_ACC = 0;
-    this.REG_X = 0;
-    this.REG_Y = 0;
+    CPU.REG_ACC = 0;
+    CPU.REG_X = 0;
+    CPU.REG_Y = 0;
     // Reset Stack pointer:
-    this.REG_SP = 0x01ff;
+    CPU.REG_SP = 0x01ff;
     // Reset Program counter:
-    this.REG_PC = 0x8000 - 1;
-    this.REG_PC_NEW = 0x8000 - 1;
+    CPU.REG_PC = 0x8000 - 1;
+    CPU.REG_PC_NEW = 0x8000 - 1;
     // Reset Status register:
-    this.REG_STATUS = 0x28;
+    CPU.REG_STATUS = 0x28;
 
-    this.setStatus(0x28);
+    CPU.setStatus(0x28);
 
     // Set flags:
-    this.F_CARRY = 0;
-    this.F_DECIMAL = 0;
-    this.F_INTERRUPT = 1;
-    this.F_INTERRUPT_NEW = 1;
-    this.F_OVERFLOW = 0;
-    this.F_SIGN = 0;
-    this.F_ZERO = 1;
+    CPU.F_CARRY = 0;
+    CPU.F_DECIMAL = 0;
+    CPU.F_INTERRUPT = 1;
+    CPU.F_INTERRUPT_NEW = 1;
+    CPU.F_OVERFLOW = 0;
+    CPU.F_SIGN = 0;
+    CPU.F_ZERO = 1;
 
-    this.F_NOTUSED = 1;
-    this.F_NOTUSED_NEW = 1;
-    this.F_BRK = 1;
-    this.F_BRK_NEW = 1;
+    CPU.F_NOTUSED = 1;
+    CPU.F_NOTUSED_NEW = 1;
+    CPU.F_BRK = 1;
+    CPU.F_BRK_NEW = 1;
 
-    this.opdata = new OpData().opdata;
-    this.cyclesToHalt = 0;
+    OpData.init();
+    CPU.opdata = OpData.opdata;
+    CPU.cyclesToHalt = 0;
 
     // Reset crash flag:
-    this.crash = false;
+    CPU.crash = false;
 
     // Interrupt notification:
-    this.irqRequested = false;
-    this.irqType = null;
+    CPU.irqRequested = false;
+    CPU.irqType = null;
   },
 
   // Emulates a single CPU instruction, returns the number of cycles
-  emulate: function(){
+  emulate: () => {
     var temp;
     var add;
 
     // Check interrupts:
-    if(this.irqRequested){
+    if(CPU.irqRequested){
       temp =
-        this.F_CARRY |
-        ((this.F_ZERO === 0 ? 1 : 0) << 1) |
-        (this.F_INTERRUPT << 2) |
-        (this.F_DECIMAL << 3) |
-        (this.F_BRK << 4) |
-        (this.F_NOTUSED << 5) |
-        (this.F_OVERFLOW << 6) |
-        (this.F_SIGN << 7);
+        CPU.F_CARRY |
+        ((CPU.F_ZERO === 0 ? 1 : 0) << 1) |
+        (CPU.F_INTERRUPT << 2) |
+        (CPU.F_DECIMAL << 3) |
+        (CPU.F_BRK << 4) |
+        (CPU.F_NOTUSED << 5) |
+        (CPU.F_OVERFLOW << 6) |
+        (CPU.F_SIGN << 7);
 
-      this.REG_PC_NEW = this.REG_PC;
-      this.F_INTERRUPT_NEW = this.F_INTERRUPT;
-      switch (this.irqType){
+      CPU.REG_PC_NEW = CPU.REG_PC;
+      CPU.F_INTERRUPT_NEW = CPU.F_INTERRUPT;
+      switch (CPU.irqType){
         case 0: {
           // Normal IRQ:
-          if(this.F_INTERRUPT !== 0){
+          if(CPU.F_INTERRUPT !== 0){
             // console.log("Interrupt was masked.");
             break;
           }
-          this.doIrq(temp);
-          // console.log("Did normal IRQ. I="+this.F_INTERRUPT);
+          CPU.doIrq(temp);
+          // console.log("Did normal IRQ. I="+CPU.F_INTERRUPT);
           break;
         }
         case 1: {
           // NMI:
-          this.doNonMaskableInterrupt(temp);
+          CPU.doNonMaskableInterrupt(temp);
           break;
         }
         case 2: {
           // Reset:
-          this.doResetInterrupt();
+          CPU.doResetInterrupt();
           break;
         }
       }
 
-      this.REG_PC = this.REG_PC_NEW;
-      this.F_INTERRUPT = this.F_INTERRUPT_NEW;
-      this.F_BRK = this.F_BRK_NEW;
-      this.irqRequested = false;
+      CPU.REG_PC = CPU.REG_PC_NEW;
+      CPU.F_INTERRUPT = CPU.F_INTERRUPT_NEW;
+      CPU.F_BRK = CPU.F_BRK_NEW;
+      CPU.irqRequested = false;
     }
 
-    var opinf = this.opdata[CPU.load(this.REG_PC + 1)];
+    var opinf = CPU.opdata[CPU.load(CPU.REG_PC + 1)];
     var cycleCount = opinf >> 24;
     var cycleAdd = 0;
 
@@ -149,8 +156,8 @@ CPU.prototype = {
     var addrMode = (opinf >> 8) & 0xff;
 
     // Increment PC by number of op bytes:
-    var opaddr = this.REG_PC;
-    this.REG_PC += (opinf >> 16) & 0xff;
+    var opaddr = CPU.REG_PC;
+    CPU.REG_PC += (opinf >> 16) & 0xff;
 
     var addr = 0;
     switch (addrMode){
@@ -164,9 +171,9 @@ CPU.prototype = {
         // Relative mode.
         addr = CPU.load(opaddr + 2);
         if(addr < 0x80){
-          addr += this.REG_PC;
+          addr += CPU.REG_PC;
         } else {
-          addr += this.REG_PC - 256;
+          addr += CPU.REG_PC - 256;
         }
         break;
       }
@@ -177,52 +184,52 @@ CPU.prototype = {
       case 3: {
         // Absolute mode. Use the two bytes following the opcode as
         // an address.
-        addr = this.load16bit(opaddr + 2);
+        addr = CPU.load16bit(opaddr + 2);
         break;
       }
       case 4: {
         // Accumulator mode. The address is in the accumulator
         // register.
-        addr = this.REG_ACC;
+        addr = CPU.REG_ACC;
         break;
       }
       case 5: {
         // Immediate mode. The value is given after the opcode.
-        addr = this.REG_PC;
+        addr = CPU.REG_PC;
         break;
       }
       case 6: {
         // Zero Page Indexed mode, X as index. Use the address given
         // after the opcode, then add the
         // X register to it to get the final address.
-        addr = (CPU.load(opaddr + 2) + this.REG_X) & 0xff;
+        addr = (CPU.load(opaddr + 2) + CPU.REG_X) & 0xff;
         break;
       }
       case 7: {
         // Zero Page Indexed mode, Y as index. Use the address given
         // after the opcode, then add the
         // Y register to it to get the final address.
-        addr = (CPU.load(opaddr + 2) + this.REG_Y) & 0xff;
+        addr = (CPU.load(opaddr + 2) + CPU.REG_Y) & 0xff;
         break;
       }
       case 8: {
         // Absolute Indexed Mode, X as index. Same as zero page
         // indexed, but with the high byte.
-        addr = this.load16bit(opaddr + 2);
-        if((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)){
+        addr = CPU.load16bit(opaddr + 2);
+        if((addr & 0xff00) !== ((addr + CPU.REG_X) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += this.REG_X;
+        addr += CPU.REG_X;
         break;
       }
       case 9: {
         // Absolute Indexed Mode, Y as index. Same as zero page
         // indexed, but with the high byte.
-        addr = this.load16bit(opaddr + 2);
-        if((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)){
+        addr = CPU.load16bit(opaddr + 2);
+        if((addr & 0xff00) !== ((addr + CPU.REG_Y) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += this.REG_Y;
+        addr += CPU.REG_Y;
         break;
       }
       case 10: {
@@ -231,12 +238,12 @@ CPU.prototype = {
         // the current X register. The value is the contents of that
         // address.
         addr = CPU.load(opaddr + 2);
-        if((addr & 0xff00) !== ((addr + this.REG_X) & 0xff00)){
+        if((addr & 0xff00) !== ((addr + CPU.REG_X) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += this.REG_X;
+        addr += CPU.REG_X;
         addr &= 0xff;
-        addr = this.load16bit(addr);
+        addr = CPU.load16bit(addr);
         break;
       }
       case 11: {
@@ -245,21 +252,21 @@ CPU.prototype = {
         // (and the one following). Add to that address the contents
         // of the Y register. Fetch the value
         // stored at that adress.
-        addr = this.load16bit(CPU.load(opaddr + 2));
-        if((addr & 0xff00) !== ((addr + this.REG_Y) & 0xff00)){
+        addr = CPU.load16bit(CPU.load(opaddr + 2));
+        if((addr & 0xff00) !== ((addr + CPU.REG_Y) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += this.REG_Y;
+        addr += CPU.REG_Y;
         break;
       }
       case 12: {
         // Indirect Absolute mode. Find the 16-bit address contained
         // at the given location.
-        addr = this.load16bit(opaddr + 2); // Find op
+        addr = CPU.load16bit(opaddr + 2); // Find op
         if(addr < 0x1fff){
           addr =
-            this.mem[addr] +
-            (this.mem[(addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)] << 8); // Read from address given in op
+            CPU.mem[addr] +
+            (CPU.mem[(addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)] << 8); // Read from address given in op
         } else {
           addr =
             CPU.load(addr) +
@@ -286,20 +293,20 @@ CPU.prototype = {
         // *******
 
         // Add with carry.
-        temp = this.REG_ACC + CPU.load(addr) + this.F_CARRY;
+        temp = CPU.REG_ACC + CPU.load(addr) + CPU.F_CARRY;
 
         if(
-          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
-          ((this.REG_ACC ^ temp) & 0x80) !== 0
+          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
+          ((CPU.REG_ACC ^ temp) & 0x80) !== 0
         ){
-          this.F_OVERFLOW = 1;
+          CPU.F_OVERFLOW = 1;
         } else {
-          this.F_OVERFLOW = 0;
+          CPU.F_OVERFLOW = 0;
         }
-        this.F_CARRY = temp > 255 ? 1 : 0;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
-        this.REG_ACC = temp & 255;
+        CPU.F_CARRY = temp > 255 ? 1 : 0;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
+        CPU.REG_ACC = temp & 255;
         cycleCount += cycleAdd;
         break;
       }
@@ -309,9 +316,9 @@ CPU.prototype = {
         // *******
 
         // AND memory with accumulator.
-        this.REG_ACC = this.REG_ACC & CPU.load(addr);
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = CPU.REG_ACC & CPU.load(addr);
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -324,16 +331,16 @@ CPU.prototype = {
         if(addrMode === 4){
           // ADDR_ACC = 4
 
-          this.F_CARRY = (this.REG_ACC >> 7) & 1;
-          this.REG_ACC = (this.REG_ACC << 1) & 255;
-          this.F_SIGN = (this.REG_ACC >> 7) & 1;
-          this.F_ZERO = this.REG_ACC;
+          CPU.F_CARRY = (CPU.REG_ACC >> 7) & 1;
+          CPU.REG_ACC = (CPU.REG_ACC << 1) & 255;
+          CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+          CPU.F_ZERO = CPU.REG_ACC;
         } else {
           temp = CPU.load(addr);
-          this.F_CARRY = (temp >> 7) & 1;
+          CPU.F_CARRY = (temp >> 7) & 1;
           temp = (temp << 1) & 255;
-          this.F_SIGN = (temp >> 7) & 1;
-          this.F_ZERO = temp;
+          CPU.F_SIGN = (temp >> 7) & 1;
+          CPU.F_ZERO = temp;
           CPU.write(addr, temp);
         }
         break;
@@ -344,9 +351,9 @@ CPU.prototype = {
         // *******
 
         // Branch on carry clear
-        if(this.F_CARRY === 0){
+        if(CPU.F_CARRY === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -356,9 +363,9 @@ CPU.prototype = {
         // *******
 
         // Branch on carry set
-        if(this.F_CARRY === 1){
+        if(CPU.F_CARRY === 1){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -368,9 +375,9 @@ CPU.prototype = {
         // *******
 
         // Branch on zero
-        if(this.F_ZERO === 0){
+        if(CPU.F_ZERO === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -380,10 +387,10 @@ CPU.prototype = {
         // *******
 
         temp = CPU.load(addr);
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_OVERFLOW = (temp >> 6) & 1;
-        temp &= this.REG_ACC;
-        this.F_ZERO = temp;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_OVERFLOW = (temp >> 6) & 1;
+        temp &= CPU.REG_ACC;
+        CPU.F_ZERO = temp;
         break;
       }
       case 7: {
@@ -392,9 +399,9 @@ CPU.prototype = {
         // *******
 
         // Branch on negative result
-        if(this.F_SIGN === 1){
+        if(CPU.F_SIGN === 1){
           cycleCount++;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -404,9 +411,9 @@ CPU.prototype = {
         // *******
 
         // Branch on not zero
-        if(this.F_ZERO !== 0){
+        if(CPU.F_ZERO !== 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -416,9 +423,9 @@ CPU.prototype = {
         // *******
 
         // Branch on positive result
-        if(this.F_SIGN === 0){
+        if(CPU.F_SIGN === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -427,26 +434,26 @@ CPU.prototype = {
         // * BRK *
         // *******
 
-        this.REG_PC += 2;
-        this.push((this.REG_PC >> 8) & 255);
-        this.push(this.REG_PC & 255);
-        this.F_BRK = 1;
+        CPU.REG_PC += 2;
+        CPU.push((CPU.REG_PC >> 8) & 255);
+        CPU.push(CPU.REG_PC & 255);
+        CPU.F_BRK = 1;
 
-        this.push(
-          this.F_CARRY |
-            ((this.F_ZERO === 0 ? 1 : 0) << 1) |
-            (this.F_INTERRUPT << 2) |
-            (this.F_DECIMAL << 3) |
-            (this.F_BRK << 4) |
-            (this.F_NOTUSED << 5) |
-            (this.F_OVERFLOW << 6) |
-            (this.F_SIGN << 7)
+        CPU.push(
+          CPU.F_CARRY |
+            ((CPU.F_ZERO === 0 ? 1 : 0) << 1) |
+            (CPU.F_INTERRUPT << 2) |
+            (CPU.F_DECIMAL << 3) |
+            (CPU.F_BRK << 4) |
+            (CPU.F_NOTUSED << 5) |
+            (CPU.F_OVERFLOW << 6) |
+            (CPU.F_SIGN << 7)
         );
 
-        this.F_INTERRUPT = 1;
-        //this.REG_PC = load(0xFFFE) | (load(0xFFFF) << 8);
-        this.REG_PC = this.load16bit(0xfffe);
-        this.REG_PC--;
+        CPU.F_INTERRUPT = 1;
+        //CPU.REG_PC = load(0xFFFE) | (load(0xFFFF) << 8);
+        CPU.REG_PC = CPU.load16bit(0xfffe);
+        CPU.REG_PC--;
         break;
       }
       case 11: {
@@ -455,9 +462,9 @@ CPU.prototype = {
         // *******
 
         // Branch on overflow clear
-        if(this.F_OVERFLOW === 0){
+        if(CPU.F_OVERFLOW === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -467,9 +474,9 @@ CPU.prototype = {
         // *******
 
         // Branch on overflow set
-        if(this.F_OVERFLOW === 1){
+        if(CPU.F_OVERFLOW === 1){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          this.REG_PC = addr;
+          CPU.REG_PC = addr;
         }
         break;
       }
@@ -479,7 +486,7 @@ CPU.prototype = {
         // *******
 
         // Clear carry flag
-        this.F_CARRY = 0;
+        CPU.F_CARRY = 0;
         break;
       }
       case 14: {
@@ -488,7 +495,7 @@ CPU.prototype = {
         // *******
 
         // Clear decimal flag
-        this.F_DECIMAL = 0;
+        CPU.F_DECIMAL = 0;
         break;
       }
       case 15: {
@@ -497,7 +504,7 @@ CPU.prototype = {
         // *******
 
         // Clear interrupt flag
-        this.F_INTERRUPT = 0;
+        CPU.F_INTERRUPT = 0;
         break;
       }
       case 16: {
@@ -506,7 +513,7 @@ CPU.prototype = {
         // *******
 
         // Clear overflow flag
-        this.F_OVERFLOW = 0;
+        CPU.F_OVERFLOW = 0;
         break;
       }
       case 17: {
@@ -515,10 +522,10 @@ CPU.prototype = {
         // *******
 
         // Compare memory and accumulator:
-        temp = this.REG_ACC - CPU.load(addr);
-        this.F_CARRY = temp >= 0 ? 1 : 0;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = CPU.REG_ACC - CPU.load(addr);
+        CPU.F_CARRY = temp >= 0 ? 1 : 0;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         cycleCount += cycleAdd;
         break;
       }
@@ -528,10 +535,10 @@ CPU.prototype = {
         // *******
 
         // Compare memory and index X:
-        temp = this.REG_X - CPU.load(addr);
-        this.F_CARRY = temp >= 0 ? 1 : 0;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = CPU.REG_X - CPU.load(addr);
+        CPU.F_CARRY = temp >= 0 ? 1 : 0;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         break;
       }
       case 19: {
@@ -540,10 +547,10 @@ CPU.prototype = {
         // *******
 
         // Compare memory and index Y:
-        temp = this.REG_Y - CPU.load(addr);
-        this.F_CARRY = temp >= 0 ? 1 : 0;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = CPU.REG_Y - CPU.load(addr);
+        CPU.F_CARRY = temp >= 0 ? 1 : 0;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         break;
       }
       case 20: {
@@ -553,8 +560,8 @@ CPU.prototype = {
 
         // Decrement memory by one:
         temp = (CPU.load(addr) - 1) & 0xff;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp;
         CPU.write(addr, temp);
         break;
       }
@@ -564,9 +571,9 @@ CPU.prototype = {
         // *******
 
         // Decrement index X by one:
-        this.REG_X = (this.REG_X - 1) & 0xff;
-        this.F_SIGN = (this.REG_X >> 7) & 1;
-        this.F_ZERO = this.REG_X;
+        CPU.REG_X = (CPU.REG_X - 1) & 0xff;
+        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_X;
         break;
       }
       case 22: {
@@ -575,9 +582,9 @@ CPU.prototype = {
         // *******
 
         // Decrement index Y by one:
-        this.REG_Y = (this.REG_Y - 1) & 0xff;
-        this.F_SIGN = (this.REG_Y >> 7) & 1;
-        this.F_ZERO = this.REG_Y;
+        CPU.REG_Y = (CPU.REG_Y - 1) & 0xff;
+        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_Y;
         break;
       }
       case 23: {
@@ -586,9 +593,9 @@ CPU.prototype = {
         // *******
 
         // XOR Memory with accumulator, store in accumulator:
-        this.REG_ACC = (CPU.load(addr) ^ this.REG_ACC) & 0xff;
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = (CPU.load(addr) ^ CPU.REG_ACC) & 0xff;
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         cycleCount += cycleAdd;
         break;
       }
@@ -599,8 +606,8 @@ CPU.prototype = {
 
         // Increment memory by one:
         temp = (CPU.load(addr) + 1) & 0xff;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp;
         CPU.write(addr, temp & 0xff);
         break;
       }
@@ -610,9 +617,9 @@ CPU.prototype = {
         // *******
 
         // Increment index X by one:
-        this.REG_X = (this.REG_X + 1) & 0xff;
-        this.F_SIGN = (this.REG_X >> 7) & 1;
-        this.F_ZERO = this.REG_X;
+        CPU.REG_X = (CPU.REG_X + 1) & 0xff;
+        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_X;
         break;
       }
       case 26: {
@@ -621,10 +628,10 @@ CPU.prototype = {
         // *******
 
         // Increment index Y by one:
-        this.REG_Y++;
-        this.REG_Y &= 0xff;
-        this.F_SIGN = (this.REG_Y >> 7) & 1;
-        this.F_ZERO = this.REG_Y;
+        CPU.REG_Y++;
+        CPU.REG_Y &= 0xff;
+        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_Y;
         break;
       }
       case 27: {
@@ -633,7 +640,7 @@ CPU.prototype = {
         // *******
 
         // Jump to new location:
-        this.REG_PC = addr - 1;
+        CPU.REG_PC = addr - 1;
         break;
       }
       case 28: {
@@ -643,9 +650,9 @@ CPU.prototype = {
 
         // Jump to new location, saving return address.
         // Push return address on stack:
-        this.push((this.REG_PC >> 8) & 255);
-        this.push(this.REG_PC & 255);
-        this.REG_PC = addr - 1;
+        CPU.push((CPU.REG_PC >> 8) & 255);
+        CPU.push(CPU.REG_PC & 255);
+        CPU.REG_PC = addr - 1;
         break;
       }
       case 29: {
@@ -654,9 +661,9 @@ CPU.prototype = {
         // *******
 
         // Load accumulator with memory:
-        this.REG_ACC = CPU.load(addr);
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = CPU.load(addr);
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         cycleCount += cycleAdd;
         break;
       }
@@ -666,9 +673,9 @@ CPU.prototype = {
         // *******
 
         // Load index X with memory:
-        this.REG_X = CPU.load(addr);
-        this.F_SIGN = (this.REG_X >> 7) & 1;
-        this.F_ZERO = this.REG_X;
+        CPU.REG_X = CPU.load(addr);
+        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_X;
         cycleCount += cycleAdd;
         break;
       }
@@ -678,9 +685,9 @@ CPU.prototype = {
         // *******
 
         // Load index Y with memory:
-        this.REG_Y = CPU.load(addr);
-        this.F_SIGN = (this.REG_Y >> 7) & 1;
-        this.F_ZERO = this.REG_Y;
+        CPU.REG_Y = CPU.load(addr);
+        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_Y;
         cycleCount += cycleAdd;
         break;
       }
@@ -693,18 +700,18 @@ CPU.prototype = {
         if(addrMode === 4){
           // ADDR_ACC
 
-          temp = this.REG_ACC & 0xff;
-          this.F_CARRY = temp & 1;
+          temp = CPU.REG_ACC & 0xff;
+          CPU.F_CARRY = temp & 1;
           temp >>= 1;
-          this.REG_ACC = temp;
+          CPU.REG_ACC = temp;
         } else {
           temp = CPU.load(addr) & 0xff;
-          this.F_CARRY = temp & 1;
+          CPU.F_CARRY = temp & 1;
           temp >>= 1;
           CPU.write(addr, temp);
         }
-        this.F_SIGN = 0;
-        this.F_ZERO = temp;
+        CPU.F_SIGN = 0;
+        CPU.F_ZERO = temp;
         break;
       }
       case 33: {
@@ -722,10 +729,10 @@ CPU.prototype = {
         // *******
 
         // OR memory with accumulator, store in accumulator.
-        temp = (CPU.load(addr) | this.REG_ACC) & 255;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp;
-        this.REG_ACC = temp;
+        temp = (CPU.load(addr) | CPU.REG_ACC) & 255;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp;
+        CPU.REG_ACC = temp;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -735,7 +742,7 @@ CPU.prototype = {
         // *******
 
         // Push accumulator on stack
-        this.push(this.REG_ACC);
+        CPU.push(CPU.REG_ACC);
         break;
       }
       case 36: {
@@ -744,16 +751,16 @@ CPU.prototype = {
         // *******
 
         // Push processor status on stack
-        this.F_BRK = 1;
-        this.push(
-          this.F_CARRY |
-            ((this.F_ZERO === 0 ? 1 : 0) << 1) |
-            (this.F_INTERRUPT << 2) |
-            (this.F_DECIMAL << 3) |
-            (this.F_BRK << 4) |
-            (this.F_NOTUSED << 5) |
-            (this.F_OVERFLOW << 6) |
-            (this.F_SIGN << 7)
+        CPU.F_BRK = 1;
+        CPU.push(
+          CPU.F_CARRY |
+            ((CPU.F_ZERO === 0 ? 1 : 0) << 1) |
+            (CPU.F_INTERRUPT << 2) |
+            (CPU.F_DECIMAL << 3) |
+            (CPU.F_BRK << 4) |
+            (CPU.F_NOTUSED << 5) |
+            (CPU.F_OVERFLOW << 6) |
+            (CPU.F_SIGN << 7)
         );
         break;
       }
@@ -763,9 +770,9 @@ CPU.prototype = {
         // *******
 
         // Pull accumulator from stack
-        this.REG_ACC = this.pull();
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = CPU.pull();
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         break;
       }
       case 38: {
@@ -774,17 +781,17 @@ CPU.prototype = {
         // *******
 
         // Pull processor status from stack
-        temp = this.pull();
-        this.F_CARRY = temp & 1;
-        this.F_ZERO = ((temp >> 1) & 1) === 1 ? 0 : 1;
-        this.F_INTERRUPT = (temp >> 2) & 1;
-        this.F_DECIMAL = (temp >> 3) & 1;
-        this.F_BRK = (temp >> 4) & 1;
-        this.F_NOTUSED = (temp >> 5) & 1;
-        this.F_OVERFLOW = (temp >> 6) & 1;
-        this.F_SIGN = (temp >> 7) & 1;
+        temp = CPU.pull();
+        CPU.F_CARRY = temp & 1;
+        CPU.F_ZERO = ((temp >> 1) & 1) === 1 ? 0 : 1;
+        CPU.F_INTERRUPT = (temp >> 2) & 1;
+        CPU.F_DECIMAL = (temp >> 3) & 1;
+        CPU.F_BRK = (temp >> 4) & 1;
+        CPU.F_NOTUSED = (temp >> 5) & 1;
+        CPU.F_OVERFLOW = (temp >> 6) & 1;
+        CPU.F_SIGN = (temp >> 7) & 1;
 
-        this.F_NOTUSED = 1;
+        CPU.F_NOTUSED = 1;
         break;
       }
       case 39: {
@@ -796,20 +803,20 @@ CPU.prototype = {
         if(addrMode === 4){
           // ADDR_ACC = 4
 
-          temp = this.REG_ACC;
-          add = this.F_CARRY;
-          this.F_CARRY = (temp >> 7) & 1;
+          temp = CPU.REG_ACC;
+          add = CPU.F_CARRY;
+          CPU.F_CARRY = (temp >> 7) & 1;
           temp = ((temp << 1) & 0xff) + add;
-          this.REG_ACC = temp;
+          CPU.REG_ACC = temp;
         } else {
           temp = CPU.load(addr);
-          add = this.F_CARRY;
-          this.F_CARRY = (temp >> 7) & 1;
+          add = CPU.F_CARRY;
+          CPU.F_CARRY = (temp >> 7) & 1;
           temp = ((temp << 1) & 0xff) + add;
           CPU.write(addr, temp);
         }
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp;
         break;
       }
       case 40: {
@@ -821,19 +828,19 @@ CPU.prototype = {
         if(addrMode === 4){
           // ADDR_ACC = 4
 
-          add = this.F_CARRY << 7;
-          this.F_CARRY = this.REG_ACC & 1;
-          temp = (this.REG_ACC >> 1) + add;
-          this.REG_ACC = temp;
+          add = CPU.F_CARRY << 7;
+          CPU.F_CARRY = CPU.REG_ACC & 1;
+          temp = (CPU.REG_ACC >> 1) + add;
+          CPU.REG_ACC = temp;
         } else {
           temp = CPU.load(addr);
-          add = this.F_CARRY << 7;
-          this.F_CARRY = temp & 1;
+          add = CPU.F_CARRY << 7;
+          CPU.F_CARRY = temp & 1;
           temp = (temp >> 1) + add;
           CPU.write(addr, temp);
         }
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp;
         break;
       }
       case 41: {
@@ -843,23 +850,23 @@ CPU.prototype = {
 
         // Return from interrupt. Pull status and PC from stack.
 
-        temp = this.pull();
-        this.F_CARRY = temp & 1;
-        this.F_ZERO = ((temp >> 1) & 1) === 0 ? 1 : 0;
-        this.F_INTERRUPT = (temp >> 2) & 1;
-        this.F_DECIMAL = (temp >> 3) & 1;
-        this.F_BRK = (temp >> 4) & 1;
-        this.F_NOTUSED = (temp >> 5) & 1;
-        this.F_OVERFLOW = (temp >> 6) & 1;
-        this.F_SIGN = (temp >> 7) & 1;
+        temp = CPU.pull();
+        CPU.F_CARRY = temp & 1;
+        CPU.F_ZERO = ((temp >> 1) & 1) === 0 ? 1 : 0;
+        CPU.F_INTERRUPT = (temp >> 2) & 1;
+        CPU.F_DECIMAL = (temp >> 3) & 1;
+        CPU.F_BRK = (temp >> 4) & 1;
+        CPU.F_NOTUSED = (temp >> 5) & 1;
+        CPU.F_OVERFLOW = (temp >> 6) & 1;
+        CPU.F_SIGN = (temp >> 7) & 1;
 
-        this.REG_PC = this.pull();
-        this.REG_PC += this.pull() << 8;
-        if(this.REG_PC === 0xffff){
+        CPU.REG_PC = CPU.pull();
+        CPU.REG_PC += CPU.pull() << 8;
+        if(CPU.REG_PC === 0xffff){
           return;
         }
-        this.REG_PC--;
-        this.F_NOTUSED = 1;
+        CPU.REG_PC--;
+        CPU.F_NOTUSED = 1;
         break;
       }
       case 42: {
@@ -869,10 +876,10 @@ CPU.prototype = {
 
         // Return from subroutine. Pull PC from stack.
 
-        this.REG_PC = this.pull();
-        this.REG_PC += this.pull() << 8;
+        CPU.REG_PC = CPU.pull();
+        CPU.REG_PC += CPU.pull() << 8;
 
-        if(this.REG_PC === 0xffff){
+        if(CPU.REG_PC === 0xffff){
           return; // return from NSF play routine:
         }
         break;
@@ -882,19 +889,19 @@ CPU.prototype = {
         // * SBC *
         // *******
 
-        temp = this.REG_ACC - CPU.load(addr) - (1 - this.F_CARRY);
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = CPU.REG_ACC - CPU.load(addr) - (1 - CPU.F_CARRY);
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         if(
-          ((this.REG_ACC ^ temp) & 0x80) !== 0 &&
-          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
+          ((CPU.REG_ACC ^ temp) & 0x80) !== 0 &&
+          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
         ){
-          this.F_OVERFLOW = 1;
+          CPU.F_OVERFLOW = 1;
         } else {
-          this.F_OVERFLOW = 0;
+          CPU.F_OVERFLOW = 0;
         }
-        this.F_CARRY = temp < 0 ? 0 : 1;
-        this.REG_ACC = temp & 0xff;
+        CPU.F_CARRY = temp < 0 ? 0 : 1;
+        CPU.REG_ACC = temp & 0xff;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -904,7 +911,7 @@ CPU.prototype = {
         // *******
 
         // Set carry flag
-        this.F_CARRY = 1;
+        CPU.F_CARRY = 1;
         break;
       }
       case 45: {
@@ -913,7 +920,7 @@ CPU.prototype = {
         // *******
 
         // Set decimal mode
-        this.F_DECIMAL = 1;
+        CPU.F_DECIMAL = 1;
         break;
       }
       case 46: {
@@ -922,7 +929,7 @@ CPU.prototype = {
         // *******
 
         // Set interrupt disable status
-        this.F_INTERRUPT = 1;
+        CPU.F_INTERRUPT = 1;
         break;
       }
       case 47: {
@@ -931,7 +938,7 @@ CPU.prototype = {
         // *******
 
         // Store accumulator in memory
-        CPU.write(addr, this.REG_ACC);
+        CPU.write(addr, CPU.REG_ACC);
         break;
       }
       case 48: {
@@ -940,7 +947,7 @@ CPU.prototype = {
         // *******
 
         // Store index X in memory
-        CPU.write(addr, this.REG_X);
+        CPU.write(addr, CPU.REG_X);
         break;
       }
       case 49: {
@@ -949,7 +956,7 @@ CPU.prototype = {
         // *******
 
         // Store index Y in memory:
-        CPU.write(addr, this.REG_Y);
+        CPU.write(addr, CPU.REG_Y);
         break;
       }
       case 50: {
@@ -958,9 +965,9 @@ CPU.prototype = {
         // *******
 
         // Transfer accumulator to index X:
-        this.REG_X = this.REG_ACC;
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_X = CPU.REG_ACC;
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         break;
       }
       case 51: {
@@ -969,9 +976,9 @@ CPU.prototype = {
         // *******
 
         // Transfer accumulator to index Y:
-        this.REG_Y = this.REG_ACC;
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_Y = CPU.REG_ACC;
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         break;
       }
       case 52: {
@@ -980,9 +987,9 @@ CPU.prototype = {
         // *******
 
         // Transfer stack pointer to index X:
-        this.REG_X = this.REG_SP - 0x0100;
-        this.F_SIGN = (this.REG_SP >> 7) & 1;
-        this.F_ZERO = this.REG_X;
+        CPU.REG_X = CPU.REG_SP - 0x0100;
+        CPU.F_SIGN = (CPU.REG_SP >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_X;
         break;
       }
       case 53: {
@@ -991,9 +998,9 @@ CPU.prototype = {
         // *******
 
         // Transfer index X to accumulator:
-        this.REG_ACC = this.REG_X;
-        this.F_SIGN = (this.REG_X >> 7) & 1;
-        this.F_ZERO = this.REG_X;
+        CPU.REG_ACC = CPU.REG_X;
+        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_X;
         break;
       }
       case 54: {
@@ -1002,8 +1009,8 @@ CPU.prototype = {
         // *******
 
         // Transfer index X to stack pointer:
-        this.REG_SP = this.REG_X + 0x0100;
-        this.stackWrap();
+        CPU.REG_SP = CPU.REG_X + 0x0100;
+        CPU.stackWrap();
         break;
       }
       case 55: {
@@ -1012,9 +1019,9 @@ CPU.prototype = {
         // *******
 
         // Transfer index Y to accumulator:
-        this.REG_ACC = this.REG_Y;
-        this.F_SIGN = (this.REG_Y >> 7) & 1;
-        this.F_ZERO = this.REG_Y;
+        CPU.REG_ACC = CPU.REG_Y;
+        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_Y;
         break;
       }
       case 56: {
@@ -1023,10 +1030,10 @@ CPU.prototype = {
         // *******
 
         // Shift right one bit after ANDing:
-        temp = this.REG_ACC & CPU.load(addr);
-        this.F_CARRY = temp & 1;
-        this.REG_ACC = this.F_ZERO = temp >> 1;
-        this.F_SIGN = 0;
+        temp = CPU.REG_ACC & CPU.load(addr);
+        CPU.F_CARRY = temp & 1;
+        CPU.REG_ACC = CPU.F_ZERO = temp >> 1;
+        CPU.F_SIGN = 0;
         break;
       }
       case 57: {
@@ -1035,8 +1042,8 @@ CPU.prototype = {
         // *******
 
         // AND accumulator, setting carry to bit 7 result.
-        this.REG_ACC = this.F_ZERO = this.REG_ACC & CPU.load(addr);
-        this.F_CARRY = this.F_SIGN = (this.REG_ACC >> 7) & 1;
+        CPU.REG_ACC = CPU.F_ZERO = CPU.REG_ACC & CPU.load(addr);
+        CPU.F_CARRY = CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
         break;
       }
       case 58: {
@@ -1045,11 +1052,11 @@ CPU.prototype = {
         // *******
 
         // Rotate right one bit after ANDing:
-        temp = this.REG_ACC & CPU.load(addr);
-        this.REG_ACC = this.F_ZERO = (temp >> 1) + (this.F_CARRY << 7);
-        this.F_SIGN = this.F_CARRY;
-        this.F_CARRY = (temp >> 7) & 1;
-        this.F_OVERFLOW = ((temp >> 7) ^ (temp >> 6)) & 1;
+        temp = CPU.REG_ACC & CPU.load(addr);
+        CPU.REG_ACC = CPU.F_ZERO = (temp >> 1) + (CPU.F_CARRY << 7);
+        CPU.F_SIGN = CPU.F_CARRY;
+        CPU.F_CARRY = (temp >> 7) & 1;
+        CPU.F_OVERFLOW = ((temp >> 7) ^ (temp >> 6)) & 1;
         break;
       }
       case 59: {
@@ -1058,19 +1065,19 @@ CPU.prototype = {
         // *******
 
         // Set X to (X AND A) - value.
-        temp = (this.REG_X & this.REG_ACC) - CPU.load(addr);
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = (CPU.REG_X & CPU.REG_ACC) - CPU.load(addr);
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         if(
-          ((this.REG_X ^ temp) & 0x80) !== 0 &&
-          ((this.REG_X ^ CPU.load(addr)) & 0x80) !== 0
+          ((CPU.REG_X ^ temp) & 0x80) !== 0 &&
+          ((CPU.REG_X ^ CPU.load(addr)) & 0x80) !== 0
         ){
-          this.F_OVERFLOW = 1;
+          CPU.F_OVERFLOW = 1;
         } else {
-          this.F_OVERFLOW = 0;
+          CPU.F_OVERFLOW = 0;
         }
-        this.F_CARRY = temp < 0 ? 0 : 1;
-        this.REG_X = temp & 0xff;
+        CPU.F_CARRY = temp < 0 ? 0 : 1;
+        CPU.REG_X = temp & 0xff;
         break;
       }
       case 60: {
@@ -1079,8 +1086,8 @@ CPU.prototype = {
         // *******
 
         // Load A and X with memory:
-        this.REG_ACC = this.REG_X = this.F_ZERO = CPU.load(addr);
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
+        CPU.REG_ACC = CPU.REG_X = CPU.F_ZERO = CPU.load(addr);
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
         cycleCount += cycleAdd;
         break;
       }
@@ -1090,7 +1097,7 @@ CPU.prototype = {
         // *******
 
         // Store A AND X in memory:
-        CPU.write(addr, this.REG_ACC & this.REG_X);
+        CPU.write(addr, CPU.REG_ACC & CPU.REG_X);
         break;
       }
       case 62: {
@@ -1103,10 +1110,10 @@ CPU.prototype = {
         CPU.write(addr, temp);
 
         // Then compare with the accumulator:
-        temp = this.REG_ACC - temp;
-        this.F_CARRY = temp >= 0 ? 1 : 0;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = CPU.REG_ACC - temp;
+        CPU.F_CARRY = temp >= 0 ? 1 : 0;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1120,19 +1127,19 @@ CPU.prototype = {
         CPU.write(addr, temp);
 
         // Then subtract from the accumulator:
-        temp = this.REG_ACC - temp - (1 - this.F_CARRY);
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
+        temp = CPU.REG_ACC - temp - (1 - CPU.F_CARRY);
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
         if(
-          ((this.REG_ACC ^ temp) & 0x80) !== 0 &&
-          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
+          ((CPU.REG_ACC ^ temp) & 0x80) !== 0 &&
+          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
         ){
-          this.F_OVERFLOW = 1;
+          CPU.F_OVERFLOW = 1;
         } else {
-          this.F_OVERFLOW = 0;
+          CPU.F_OVERFLOW = 0;
         }
-        this.F_CARRY = temp < 0 ? 0 : 1;
-        this.REG_ACC = temp & 0xff;
+        CPU.F_CARRY = temp < 0 ? 0 : 1;
+        CPU.REG_ACC = temp & 0xff;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1143,15 +1150,15 @@ CPU.prototype = {
 
         // Rotate one bit left
         temp = CPU.load(addr);
-        add = this.F_CARRY;
-        this.F_CARRY = (temp >> 7) & 1;
+        add = CPU.F_CARRY;
+        CPU.F_CARRY = (temp >> 7) & 1;
         temp = ((temp << 1) & 0xff) + add;
         CPU.write(addr, temp);
 
         // Then AND with the accumulator.
-        this.REG_ACC = this.REG_ACC & temp;
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = CPU.REG_ACC & temp;
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1162,26 +1169,26 @@ CPU.prototype = {
 
         // Rotate one bit right
         temp = CPU.load(addr);
-        add = this.F_CARRY << 7;
-        this.F_CARRY = temp & 1;
+        add = CPU.F_CARRY << 7;
+        CPU.F_CARRY = temp & 1;
         temp = (temp >> 1) + add;
         CPU.write(addr, temp);
 
         // Then add to the accumulator
-        temp = this.REG_ACC + CPU.load(addr) + this.F_CARRY;
+        temp = CPU.REG_ACC + CPU.load(addr) + CPU.F_CARRY;
 
         if(
-          ((this.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
-          ((this.REG_ACC ^ temp) & 0x80) !== 0
+          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
+          ((CPU.REG_ACC ^ temp) & 0x80) !== 0
         ){
-          this.F_OVERFLOW = 1;
+          CPU.F_OVERFLOW = 1;
         } else {
-          this.F_OVERFLOW = 0;
+          CPU.F_OVERFLOW = 0;
         }
-        this.F_CARRY = temp > 255 ? 1 : 0;
-        this.F_SIGN = (temp >> 7) & 1;
-        this.F_ZERO = temp & 0xff;
-        this.REG_ACC = temp & 255;
+        CPU.F_CARRY = temp > 255 ? 1 : 0;
+        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.F_ZERO = temp & 0xff;
+        CPU.REG_ACC = temp & 255;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1192,14 +1199,14 @@ CPU.prototype = {
 
         // Shift one bit left
         temp = CPU.load(addr);
-        this.F_CARRY = (temp >> 7) & 1;
+        CPU.F_CARRY = (temp >> 7) & 1;
         temp = (temp << 1) & 255;
         CPU.write(addr, temp);
 
         // Then OR with the accumulator.
-        this.REG_ACC = this.REG_ACC | temp;
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = CPU.REG_ACC | temp;
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1210,14 +1217,14 @@ CPU.prototype = {
 
         // Shift one bit right
         temp = CPU.load(addr) & 0xff;
-        this.F_CARRY = temp & 1;
+        CPU.F_CARRY = temp & 1;
         temp >>= 1;
         CPU.write(addr, temp);
 
         // Then XOR with the accumulator.
-        this.REG_ACC = this.REG_ACC ^ temp;
-        this.F_SIGN = (this.REG_ACC >> 7) & 1;
-        this.F_ZERO = this.REG_ACC;
+        CPU.REG_ACC = CPU.REG_ACC ^ temp;
+        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.F_ZERO = CPU.REG_ACC;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1256,605 +1263,605 @@ CPU.prototype = {
     return cycleCount;
   },
 
-  load16bit: function(addr){
+  load16bit: addr => {
     if(addr < 0x1fff){
-      return this.mem[addr & 0x7ff] | (this.mem[(addr + 1) & 0x7ff] << 8);
+      return CPU.mem[addr & 0x7ff] | (CPU.mem[(addr + 1) & 0x7ff] << 8);
     } else {
       return CPU.load(addr) | (CPU.load(addr + 1) << 8);
     }
   },
 
-  requestIrq: function(type){
-    if(this.irqRequested){
-      if(type === this.IRQ_NORMAL){
+  requestIrq: type => {
+    if(CPU.irqRequested){
+      if(type === CPU.IRQ_NORMAL){
         return;
       }
       // console.log("too fast irqs. type="+type);
     }
-    this.irqRequested = true;
-    this.irqType = type;
+    CPU.irqRequested = true;
+    CPU.irqType = type;
   },
 
-  push: function(value){
-    CPU.write(this.REG_SP, value);
-    this.REG_SP--;
-    this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
+  push: value => {
+    CPU.write(CPU.REG_SP, value);
+    CPU.REG_SP--;
+    CPU.REG_SP = 0x0100 | (CPU.REG_SP & 0xff);
   },
 
-  stackWrap: function(){
-    this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
+  stackWrap: () => {
+    CPU.REG_SP = 0x0100 | (CPU.REG_SP & 0xff);
   },
 
-  pull: function(){
-    this.REG_SP++;
-    this.REG_SP = 0x0100 | (this.REG_SP & 0xff);
-    return CPU.load(this.REG_SP);
+  pull: () => {
+    CPU.REG_SP++;
+    CPU.REG_SP = 0x0100 | (CPU.REG_SP & 0xff);
+    return CPU.load(CPU.REG_SP);
   },
 
-  pageCrossed: function(addr1, addr2){
+  pageCrossed: (addr1, addr2) => {
     return (addr1 & 0xff00) !== (addr2 & 0xff00);
   },
 
-  haltCycles: function(cycles){
-    this.cyclesToHalt += cycles;
+  haltCycles: cycles => {
+    CPU.cyclesToHalt += cycles;
   },
 
-  doNonMaskableInterrupt: function(status){
+  doNonMaskableInterrupt: status => {
     if((CPU.load(0x2000) & 128) !== 0){
       // Check whether VBlank Interrupts are enabled
 
-      this.REG_PC_NEW++;
-      this.push((this.REG_PC_NEW >> 8) & 0xff);
-      this.push(this.REG_PC_NEW & 0xff);
-      //this.F_INTERRUPT_NEW = 1;
-      this.push(status);
+      CPU.REG_PC_NEW++;
+      CPU.push((CPU.REG_PC_NEW >> 8) & 0xff);
+      CPU.push(CPU.REG_PC_NEW & 0xff);
+      //CPU.F_INTERRUPT_NEW = 1;
+      CPU.push(status);
 
-      this.REG_PC_NEW =
+      CPU.REG_PC_NEW =
         CPU.load(0xfffa) | (CPU.load(0xfffb) << 8);
-      this.REG_PC_NEW--;
+      CPU.REG_PC_NEW--;
     }
   },
 
-  doResetInterrupt: function(){
-    this.REG_PC_NEW =
+  doResetInterrupt: () => {
+    CPU.REG_PC_NEW =
       CPU.load(0xfffc) | (CPU.load(0xfffd) << 8);
-    this.REG_PC_NEW--;
+    CPU.REG_PC_NEW--;
   },
 
-  doIrq: function(status){
-    this.REG_PC_NEW++;
-    this.push((this.REG_PC_NEW >> 8) & 0xff);
-    this.push(this.REG_PC_NEW & 0xff);
-    this.push(status);
-    this.F_INTERRUPT_NEW = 1;
-    this.F_BRK_NEW = 0;
+  doIrq: status => {
+    CPU.REG_PC_NEW++;
+    CPU.push((CPU.REG_PC_NEW >> 8) & 0xff);
+    CPU.push(CPU.REG_PC_NEW & 0xff);
+    CPU.push(status);
+    CPU.F_INTERRUPT_NEW = 1;
+    CPU.F_BRK_NEW = 0;
 
-    this.REG_PC_NEW =
+    CPU.REG_PC_NEW =
       CPU.load(0xfffe) | (CPU.load(0xffff) << 8);
-    this.REG_PC_NEW--;
+    CPU.REG_PC_NEW--;
   },
 
-  getStatus: function(){
+  getStatus: () => {
     return (
-      this.F_CARRY |
-      (this.F_ZERO << 1) |
-      (this.F_INTERRUPT << 2) |
-      (this.F_DECIMAL << 3) |
-      (this.F_BRK << 4) |
-      (this.F_NOTUSED << 5) |
-      (this.F_OVERFLOW << 6) |
-      (this.F_SIGN << 7)
+      CPU.F_CARRY |
+      (CPU.F_ZERO << 1) |
+      (CPU.F_INTERRUPT << 2) |
+      (CPU.F_DECIMAL << 3) |
+      (CPU.F_BRK << 4) |
+      (CPU.F_NOTUSED << 5) |
+      (CPU.F_OVERFLOW << 6) |
+      (CPU.F_SIGN << 7)
     );
   },
 
-  setStatus: function(st){
-    this.F_CARRY = st & 1;
-    this.F_ZERO = (st >> 1) & 1;
-    this.F_INTERRUPT = (st >> 2) & 1;
-    this.F_DECIMAL = (st >> 3) & 1;
-    this.F_BRK = (st >> 4) & 1;
-    this.F_NOTUSED = (st >> 5) & 1;
-    this.F_OVERFLOW = (st >> 6) & 1;
-    this.F_SIGN = (st >> 7) & 1;
-  },
+  setStatus: st => {
+    CPU.F_CARRY = st & 1;
+    CPU.F_ZERO = (st >> 1) & 1;
+    CPU.F_INTERRUPT = (st >> 2) & 1;
+    CPU.F_DECIMAL = (st >> 3) & 1;
+    CPU.F_BRK = (st >> 4) & 1;
+    CPU.F_NOTUSED = (st >> 5) & 1;
+    CPU.F_OVERFLOW = (st >> 6) & 1;
+    CPU.F_SIGN = (st >> 7) & 1;
+  }
 };
 
 // Generates and provides an array of details about instructions
-var OpData = function(){
-  this.opdata = new Array(256);
-
-  // Set all to invalid instruction (to detect crashes):
-  for(var i = 0; i < 256; i++) this.opdata[i] = 0xff;
-
-  // Now fill in all valid opcodes:
-
-  // ADC:
-  this.setOp(this.INS_ADC, 0x69, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_ADC, 0x65, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_ADC, 0x75, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_ADC, 0x6d, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_ADC, 0x7d, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_ADC, 0x79, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_ADC, 0x61, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_ADC, 0x71, this.ADDR_POSTIDXIND, 2, 5);
-
-  // AND:
-  this.setOp(this.INS_AND, 0x29, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_AND, 0x25, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_AND, 0x35, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_AND, 0x2d, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_AND, 0x3d, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_AND, 0x39, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_AND, 0x21, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_AND, 0x31, this.ADDR_POSTIDXIND, 2, 5);
-
-  // ASL:
-  this.setOp(this.INS_ASL, 0x0a, this.ADDR_ACC, 1, 2);
-  this.setOp(this.INS_ASL, 0x06, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_ASL, 0x16, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_ASL, 0x0e, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_ASL, 0x1e, this.ADDR_ABSX, 3, 7);
-
-  // BCC:
-  this.setOp(this.INS_BCC, 0x90, this.ADDR_REL, 2, 2);
-
-  // BCS:
-  this.setOp(this.INS_BCS, 0xb0, this.ADDR_REL, 2, 2);
-
-  // BEQ:
-  this.setOp(this.INS_BEQ, 0xf0, this.ADDR_REL, 2, 2);
-
-  // BIT:
-  this.setOp(this.INS_BIT, 0x24, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_BIT, 0x2c, this.ADDR_ABS, 3, 4);
-
-  // BMI:
-  this.setOp(this.INS_BMI, 0x30, this.ADDR_REL, 2, 2);
-
-  // BNE:
-  this.setOp(this.INS_BNE, 0xd0, this.ADDR_REL, 2, 2);
-
-  // BPL:
-  this.setOp(this.INS_BPL, 0x10, this.ADDR_REL, 2, 2);
-
-  // BRK:
-  this.setOp(this.INS_BRK, 0x00, this.ADDR_IMP, 1, 7);
-
-  // BVC:
-  this.setOp(this.INS_BVC, 0x50, this.ADDR_REL, 2, 2);
-
-  // BVS:
-  this.setOp(this.INS_BVS, 0x70, this.ADDR_REL, 2, 2);
-
-  // CLC:
-  this.setOp(this.INS_CLC, 0x18, this.ADDR_IMP, 1, 2);
-
-  // CLD:
-  this.setOp(this.INS_CLD, 0xd8, this.ADDR_IMP, 1, 2);
-
-  // CLI:
-  this.setOp(this.INS_CLI, 0x58, this.ADDR_IMP, 1, 2);
-
-  // CLV:
-  this.setOp(this.INS_CLV, 0xb8, this.ADDR_IMP, 1, 2);
-
-  // CMP:
-  this.setOp(this.INS_CMP, 0xc9, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_CMP, 0xc5, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_CMP, 0xd5, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_CMP, 0xcd, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_CMP, 0xdd, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_CMP, 0xd9, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_CMP, 0xc1, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_CMP, 0xd1, this.ADDR_POSTIDXIND, 2, 5);
-
-  // CPX:
-  this.setOp(this.INS_CPX, 0xe0, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_CPX, 0xe4, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_CPX, 0xec, this.ADDR_ABS, 3, 4);
-
-  // CPY:
-  this.setOp(this.INS_CPY, 0xc0, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_CPY, 0xc4, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_CPY, 0xcc, this.ADDR_ABS, 3, 4);
-
-  // DEC:
-  this.setOp(this.INS_DEC, 0xc6, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_DEC, 0xd6, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_DEC, 0xce, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_DEC, 0xde, this.ADDR_ABSX, 3, 7);
-
-  // DEX:
-  this.setOp(this.INS_DEX, 0xca, this.ADDR_IMP, 1, 2);
-
-  // DEY:
-  this.setOp(this.INS_DEY, 0x88, this.ADDR_IMP, 1, 2);
-
-  // EOR:
-  this.setOp(this.INS_EOR, 0x49, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_EOR, 0x45, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_EOR, 0x55, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_EOR, 0x4d, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_EOR, 0x5d, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_EOR, 0x59, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_EOR, 0x41, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_EOR, 0x51, this.ADDR_POSTIDXIND, 2, 5);
-
-  // INC:
-  this.setOp(this.INS_INC, 0xe6, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_INC, 0xf6, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_INC, 0xee, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_INC, 0xfe, this.ADDR_ABSX, 3, 7);
-
-  // INX:
-  this.setOp(this.INS_INX, 0xe8, this.ADDR_IMP, 1, 2);
-
-  // INY:
-  this.setOp(this.INS_INY, 0xc8, this.ADDR_IMP, 1, 2);
-
-  // JMP:
-  this.setOp(this.INS_JMP, 0x4c, this.ADDR_ABS, 3, 3);
-  this.setOp(this.INS_JMP, 0x6c, this.ADDR_INDABS, 3, 5);
-
-  // JSR:
-  this.setOp(this.INS_JSR, 0x20, this.ADDR_ABS, 3, 6);
-
-  // LDA:
-  this.setOp(this.INS_LDA, 0xa9, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_LDA, 0xa5, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_LDA, 0xb5, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_LDA, 0xad, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_LDA, 0xbd, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_LDA, 0xb9, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_LDA, 0xa1, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_LDA, 0xb1, this.ADDR_POSTIDXIND, 2, 5);
-
-  // LDX:
-  this.setOp(this.INS_LDX, 0xa2, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_LDX, 0xa6, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_LDX, 0xb6, this.ADDR_ZPY, 2, 4);
-  this.setOp(this.INS_LDX, 0xae, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_LDX, 0xbe, this.ADDR_ABSY, 3, 4);
-
-  // LDY:
-  this.setOp(this.INS_LDY, 0xa0, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_LDY, 0xa4, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_LDY, 0xb4, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_LDY, 0xac, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_LDY, 0xbc, this.ADDR_ABSX, 3, 4);
-
-  // LSR:
-  this.setOp(this.INS_LSR, 0x4a, this.ADDR_ACC, 1, 2);
-  this.setOp(this.INS_LSR, 0x46, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_LSR, 0x56, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_LSR, 0x4e, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_LSR, 0x5e, this.ADDR_ABSX, 3, 7);
-
-  // NOP:
-  this.setOp(this.INS_NOP, 0x1a, this.ADDR_IMP, 1, 2);
-  this.setOp(this.INS_NOP, 0x3a, this.ADDR_IMP, 1, 2);
-  this.setOp(this.INS_NOP, 0x5a, this.ADDR_IMP, 1, 2);
-  this.setOp(this.INS_NOP, 0x7a, this.ADDR_IMP, 1, 2);
-  this.setOp(this.INS_NOP, 0xda, this.ADDR_IMP, 1, 2);
-  this.setOp(this.INS_NOP, 0xea, this.ADDR_IMP, 1, 2);
-  this.setOp(this.INS_NOP, 0xfa, this.ADDR_IMP, 1, 2);
-
-  // ORA:
-  this.setOp(this.INS_ORA, 0x09, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_ORA, 0x05, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_ORA, 0x15, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_ORA, 0x0d, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_ORA, 0x1d, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_ORA, 0x19, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_ORA, 0x01, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_ORA, 0x11, this.ADDR_POSTIDXIND, 2, 5);
-
-  // PHA:
-  this.setOp(this.INS_PHA, 0x48, this.ADDR_IMP, 1, 3);
-
-  // PHP:
-  this.setOp(this.INS_PHP, 0x08, this.ADDR_IMP, 1, 3);
-
-  // PLA:
-  this.setOp(this.INS_PLA, 0x68, this.ADDR_IMP, 1, 4);
-
-  // PLP:
-  this.setOp(this.INS_PLP, 0x28, this.ADDR_IMP, 1, 4);
-
-  // ROL:
-  this.setOp(this.INS_ROL, 0x2a, this.ADDR_ACC, 1, 2);
-  this.setOp(this.INS_ROL, 0x26, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_ROL, 0x36, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_ROL, 0x2e, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_ROL, 0x3e, this.ADDR_ABSX, 3, 7);
-
-  // ROR:
-  this.setOp(this.INS_ROR, 0x6a, this.ADDR_ACC, 1, 2);
-  this.setOp(this.INS_ROR, 0x66, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_ROR, 0x76, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_ROR, 0x6e, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_ROR, 0x7e, this.ADDR_ABSX, 3, 7);
-
-  // RTI:
-  this.setOp(this.INS_RTI, 0x40, this.ADDR_IMP, 1, 6);
-
-  // RTS:
-  this.setOp(this.INS_RTS, 0x60, this.ADDR_IMP, 1, 6);
-
-  // SBC:
-  this.setOp(this.INS_SBC, 0xe9, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_SBC, 0xe5, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_SBC, 0xf5, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_SBC, 0xed, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_SBC, 0xfd, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_SBC, 0xf9, this.ADDR_ABSY, 3, 4);
-  this.setOp(this.INS_SBC, 0xe1, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_SBC, 0xf1, this.ADDR_POSTIDXIND, 2, 5);
-
-  // SEC:
-  this.setOp(this.INS_SEC, 0x38, this.ADDR_IMP, 1, 2);
-
-  // SED:
-  this.setOp(this.INS_SED, 0xf8, this.ADDR_IMP, 1, 2);
-
-  // SEI:
-  this.setOp(this.INS_SEI, 0x78, this.ADDR_IMP, 1, 2);
-
-  // STA:
-  this.setOp(this.INS_STA, 0x85, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_STA, 0x95, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_STA, 0x8d, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_STA, 0x9d, this.ADDR_ABSX, 3, 5);
-  this.setOp(this.INS_STA, 0x99, this.ADDR_ABSY, 3, 5);
-  this.setOp(this.INS_STA, 0x81, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_STA, 0x91, this.ADDR_POSTIDXIND, 2, 6);
-
-  // STX:
-  this.setOp(this.INS_STX, 0x86, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_STX, 0x96, this.ADDR_ZPY, 2, 4);
-  this.setOp(this.INS_STX, 0x8e, this.ADDR_ABS, 3, 4);
-
-  // STY:
-  this.setOp(this.INS_STY, 0x84, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_STY, 0x94, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_STY, 0x8c, this.ADDR_ABS, 3, 4);
-
-  // TAX:
-  this.setOp(this.INS_TAX, 0xaa, this.ADDR_IMP, 1, 2);
-
-  // TAY:
-  this.setOp(this.INS_TAY, 0xa8, this.ADDR_IMP, 1, 2);
-
-  // TSX:
-  this.setOp(this.INS_TSX, 0xba, this.ADDR_IMP, 1, 2);
-
-  // TXA:
-  this.setOp(this.INS_TXA, 0x8a, this.ADDR_IMP, 1, 2);
-
-  // TXS:
-  this.setOp(this.INS_TXS, 0x9a, this.ADDR_IMP, 1, 2);
-
-  // TYA:
-  this.setOp(this.INS_TYA, 0x98, this.ADDR_IMP, 1, 2);
-
-  // ALR:
-  this.setOp(this.INS_ALR, 0x4b, this.ADDR_IMM, 2, 2);
-
-  // ANC:
-  this.setOp(this.INS_ANC, 0x0b, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_ANC, 0x2b, this.ADDR_IMM, 2, 2);
-
-  // ARR:
-  this.setOp(this.INS_ARR, 0x6b, this.ADDR_IMM, 2, 2);
-
-  // AXS:
-  this.setOp(this.INS_AXS, 0xcb, this.ADDR_IMM, 2, 2);
-
-  // LAX:
-  this.setOp(this.INS_LAX, 0xa3, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_LAX, 0xa7, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_LAX, 0xaf, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_LAX, 0xb3, this.ADDR_POSTIDXIND, 2, 5);
-  this.setOp(this.INS_LAX, 0xb7, this.ADDR_ZPY, 2, 4);
-  this.setOp(this.INS_LAX, 0xbf, this.ADDR_ABSY, 3, 4);
-
-  // SAX:
-  this.setOp(this.INS_SAX, 0x83, this.ADDR_PREIDXIND, 2, 6);
-  this.setOp(this.INS_SAX, 0x87, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_SAX, 0x8f, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_SAX, 0x97, this.ADDR_ZPY, 2, 4);
-
-  // DCP:
-  this.setOp(this.INS_DCP, 0xc3, this.ADDR_PREIDXIND, 2, 8);
-  this.setOp(this.INS_DCP, 0xc7, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_DCP, 0xcf, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_DCP, 0xd3, this.ADDR_POSTIDXIND, 2, 8);
-  this.setOp(this.INS_DCP, 0xd7, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_DCP, 0xdb, this.ADDR_ABSY, 3, 7);
-  this.setOp(this.INS_DCP, 0xdf, this.ADDR_ABSX, 3, 7);
-
-  // ISC:
-  this.setOp(this.INS_ISC, 0xe3, this.ADDR_PREIDXIND, 2, 8);
-  this.setOp(this.INS_ISC, 0xe7, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_ISC, 0xef, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_ISC, 0xf3, this.ADDR_POSTIDXIND, 2, 8);
-  this.setOp(this.INS_ISC, 0xf7, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_ISC, 0xfb, this.ADDR_ABSY, 3, 7);
-  this.setOp(this.INS_ISC, 0xff, this.ADDR_ABSX, 3, 7);
-
-  // RLA:
-  this.setOp(this.INS_RLA, 0x23, this.ADDR_PREIDXIND, 2, 8);
-  this.setOp(this.INS_RLA, 0x27, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_RLA, 0x2f, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_RLA, 0x33, this.ADDR_POSTIDXIND, 2, 8);
-  this.setOp(this.INS_RLA, 0x37, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_RLA, 0x3b, this.ADDR_ABSY, 3, 7);
-  this.setOp(this.INS_RLA, 0x3f, this.ADDR_ABSX, 3, 7);
-
-  // RRA:
-  this.setOp(this.INS_RRA, 0x63, this.ADDR_PREIDXIND, 2, 8);
-  this.setOp(this.INS_RRA, 0x67, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_RRA, 0x6f, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_RRA, 0x73, this.ADDR_POSTIDXIND, 2, 8);
-  this.setOp(this.INS_RRA, 0x77, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_RRA, 0x7b, this.ADDR_ABSY, 3, 7);
-  this.setOp(this.INS_RRA, 0x7f, this.ADDR_ABSX, 3, 7);
-
-  // SLO:
-  this.setOp(this.INS_SLO, 0x03, this.ADDR_PREIDXIND, 2, 8);
-  this.setOp(this.INS_SLO, 0x07, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_SLO, 0x0f, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_SLO, 0x13, this.ADDR_POSTIDXIND, 2, 8);
-  this.setOp(this.INS_SLO, 0x17, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_SLO, 0x1b, this.ADDR_ABSY, 3, 7);
-  this.setOp(this.INS_SLO, 0x1f, this.ADDR_ABSX, 3, 7);
-
-  // SRE:
-  this.setOp(this.INS_SRE, 0x43, this.ADDR_PREIDXIND, 2, 8);
-  this.setOp(this.INS_SRE, 0x47, this.ADDR_ZP, 2, 5);
-  this.setOp(this.INS_SRE, 0x4f, this.ADDR_ABS, 3, 6);
-  this.setOp(this.INS_SRE, 0x53, this.ADDR_POSTIDXIND, 2, 8);
-  this.setOp(this.INS_SRE, 0x57, this.ADDR_ZPX, 2, 6);
-  this.setOp(this.INS_SRE, 0x5b, this.ADDR_ABSY, 3, 7);
-  this.setOp(this.INS_SRE, 0x5f, this.ADDR_ABSX, 3, 7);
-
-  // SKB:
-  this.setOp(this.INS_SKB, 0x80, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_SKB, 0x82, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_SKB, 0x89, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_SKB, 0xc2, this.ADDR_IMM, 2, 2);
-  this.setOp(this.INS_SKB, 0xe2, this.ADDR_IMM, 2, 2);
-
-  // SKB:
-  this.setOp(this.INS_IGN, 0x0c, this.ADDR_ABS, 3, 4);
-  this.setOp(this.INS_IGN, 0x1c, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_IGN, 0x3c, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_IGN, 0x5c, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_IGN, 0x7c, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_IGN, 0xdc, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_IGN, 0xfc, this.ADDR_ABSX, 3, 4);
-  this.setOp(this.INS_IGN, 0x04, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_IGN, 0x44, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_IGN, 0x64, this.ADDR_ZP, 2, 3);
-  this.setOp(this.INS_IGN, 0x14, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_IGN, 0x34, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_IGN, 0x54, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_IGN, 0x74, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_IGN, 0xd4, this.ADDR_ZPX, 2, 4);
-  this.setOp(this.INS_IGN, 0xf4, this.ADDR_ZPX, 2, 4);
-
-  // prettier-ignore
-  this.cycTable = new Array(
-    /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
-    /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
-    /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
-    /*0x30*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
-    /*0x40*/ 6,6,2,8,3,3,5,5,3,2,2,2,3,4,6,6,
-    /*0x50*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
-    /*0x60*/ 6,6,2,8,3,3,5,5,4,2,2,2,5,4,6,6,
-    /*0x70*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
-    /*0x80*/ 2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
-    /*0x90*/ 2,6,2,6,4,4,4,4,2,5,2,5,5,5,5,5,
-    /*0xA0*/ 2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
-    /*0xB0*/ 2,5,2,5,4,4,4,4,2,4,2,4,4,4,4,4,
-    /*0xC0*/ 2,6,2,8,3,3,5,5,2,2,2,2,4,4,6,6,
-    /*0xD0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
-    /*0xE0*/ 2,6,3,8,3,3,5,5,2,2,2,2,4,4,6,6,
-    /*0xF0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7
-  );
-
-  this.instname = new Array(70);
-
-  // Instruction Names:
-  this.instname[0] = "ADC";
-  this.instname[1] = "AND";
-  this.instname[2] = "ASL";
-  this.instname[3] = "BCC";
-  this.instname[4] = "BCS";
-  this.instname[5] = "BEQ";
-  this.instname[6] = "BIT";
-  this.instname[7] = "BMI";
-  this.instname[8] = "BNE";
-  this.instname[9] = "BPL";
-  this.instname[10] = "BRK";
-  this.instname[11] = "BVC";
-  this.instname[12] = "BVS";
-  this.instname[13] = "CLC";
-  this.instname[14] = "CLD";
-  this.instname[15] = "CLI";
-  this.instname[16] = "CLV";
-  this.instname[17] = "CMP";
-  this.instname[18] = "CPX";
-  this.instname[19] = "CPY";
-  this.instname[20] = "DEC";
-  this.instname[21] = "DEX";
-  this.instname[22] = "DEY";
-  this.instname[23] = "EOR";
-  this.instname[24] = "INC";
-  this.instname[25] = "INX";
-  this.instname[26] = "INY";
-  this.instname[27] = "JMP";
-  this.instname[28] = "JSR";
-  this.instname[29] = "LDA";
-  this.instname[30] = "LDX";
-  this.instname[31] = "LDY";
-  this.instname[32] = "LSR";
-  this.instname[33] = "NOP";
-  this.instname[34] = "ORA";
-  this.instname[35] = "PHA";
-  this.instname[36] = "PHP";
-  this.instname[37] = "PLA";
-  this.instname[38] = "PLP";
-  this.instname[39] = "ROL";
-  this.instname[40] = "ROR";
-  this.instname[41] = "RTI";
-  this.instname[42] = "RTS";
-  this.instname[43] = "SBC";
-  this.instname[44] = "SEC";
-  this.instname[45] = "SED";
-  this.instname[46] = "SEI";
-  this.instname[47] = "STA";
-  this.instname[48] = "STX";
-  this.instname[49] = "STY";
-  this.instname[50] = "TAX";
-  this.instname[51] = "TAY";
-  this.instname[52] = "TSX";
-  this.instname[53] = "TXA";
-  this.instname[54] = "TXS";
-  this.instname[55] = "TYA";
-  this.instname[56] = "ALR";
-  this.instname[57] = "ANC";
-  this.instname[58] = "ARR";
-  this.instname[59] = "AXS";
-  this.instname[60] = "LAX";
-  this.instname[61] = "SAX";
-  this.instname[62] = "DCP";
-  this.instname[63] = "ISC";
-  this.instname[64] = "RLA";
-  this.instname[65] = "RRA";
-  this.instname[66] = "SLO";
-  this.instname[67] = "SRE";
-  this.instname[68] = "SKB";
-  this.instname[69] = "IGN";
-
-  this.addrDesc = new Array(
-    "Zero Page           ",
-    "Relative            ",
-    "Implied             ",
-    "Absolute            ",
-    "Accumulator         ",
-    "Immediate           ",
-    "Zero Page,X         ",
-    "Zero Page,Y         ",
-    "Absolute,X          ",
-    "Absolute,Y          ",
-    "Preindexed Indirect ",
-    "Postindexed Indirect",
-    "Indirect Absolute   "
-  );
-};
-
-OpData.prototype = {
+var OpData = {
+  opdata: new Array(256),
+  
+  init: () => {
+    // Set all to invalid instruction (to detect crashes):
+    for(var i = 0; i < 256; i++) OpData.opdata[i] = 0xff;
+
+    // Now fill in all valid opcodes:
+
+    // ADC:
+    OpData.setOp(OpData.INS_ADC, 0x69, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_ADC, 0x65, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_ADC, 0x75, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_ADC, 0x6d, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_ADC, 0x7d, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_ADC, 0x79, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_ADC, 0x61, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_ADC, 0x71, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // AND:
+    OpData.setOp(OpData.INS_AND, 0x29, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_AND, 0x25, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_AND, 0x35, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_AND, 0x2d, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_AND, 0x3d, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_AND, 0x39, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_AND, 0x21, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_AND, 0x31, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // ASL:
+    OpData.setOp(OpData.INS_ASL, 0x0a, OpData.ADDR_ACC, 1, 2);
+    OpData.setOp(OpData.INS_ASL, 0x06, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_ASL, 0x16, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_ASL, 0x0e, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_ASL, 0x1e, OpData.ADDR_ABSX, 3, 7);
+
+    // BCC:
+    OpData.setOp(OpData.INS_BCC, 0x90, OpData.ADDR_REL, 2, 2);
+
+    // BCS:
+    OpData.setOp(OpData.INS_BCS, 0xb0, OpData.ADDR_REL, 2, 2);
+
+    // BEQ:
+    OpData.setOp(OpData.INS_BEQ, 0xf0, OpData.ADDR_REL, 2, 2);
+
+    // BIT:
+    OpData.setOp(OpData.INS_BIT, 0x24, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_BIT, 0x2c, OpData.ADDR_ABS, 3, 4);
+
+    // BMI:
+    OpData.setOp(OpData.INS_BMI, 0x30, OpData.ADDR_REL, 2, 2);
+
+    // BNE:
+    OpData.setOp(OpData.INS_BNE, 0xd0, OpData.ADDR_REL, 2, 2);
+
+    // BPL:
+    OpData.setOp(OpData.INS_BPL, 0x10, OpData.ADDR_REL, 2, 2);
+
+    // BRK:
+    OpData.setOp(OpData.INS_BRK, 0x00, OpData.ADDR_IMP, 1, 7);
+
+    // BVC:
+    OpData.setOp(OpData.INS_BVC, 0x50, OpData.ADDR_REL, 2, 2);
+
+    // BVS:
+    OpData.setOp(OpData.INS_BVS, 0x70, OpData.ADDR_REL, 2, 2);
+
+    // CLC:
+    OpData.setOp(OpData.INS_CLC, 0x18, OpData.ADDR_IMP, 1, 2);
+
+    // CLD:
+    OpData.setOp(OpData.INS_CLD, 0xd8, OpData.ADDR_IMP, 1, 2);
+
+    // CLI:
+    OpData.setOp(OpData.INS_CLI, 0x58, OpData.ADDR_IMP, 1, 2);
+
+    // CLV:
+    OpData.setOp(OpData.INS_CLV, 0xb8, OpData.ADDR_IMP, 1, 2);
+
+    // CMP:
+    OpData.setOp(OpData.INS_CMP, 0xc9, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_CMP, 0xc5, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_CMP, 0xd5, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_CMP, 0xcd, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_CMP, 0xdd, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_CMP, 0xd9, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_CMP, 0xc1, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_CMP, 0xd1, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // CPX:
+    OpData.setOp(OpData.INS_CPX, 0xe0, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_CPX, 0xe4, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_CPX, 0xec, OpData.ADDR_ABS, 3, 4);
+
+    // CPY:
+    OpData.setOp(OpData.INS_CPY, 0xc0, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_CPY, 0xc4, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_CPY, 0xcc, OpData.ADDR_ABS, 3, 4);
+
+    // DEC:
+    OpData.setOp(OpData.INS_DEC, 0xc6, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_DEC, 0xd6, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_DEC, 0xce, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_DEC, 0xde, OpData.ADDR_ABSX, 3, 7);
+
+    // DEX:
+    OpData.setOp(OpData.INS_DEX, 0xca, OpData.ADDR_IMP, 1, 2);
+
+    // DEY:
+    OpData.setOp(OpData.INS_DEY, 0x88, OpData.ADDR_IMP, 1, 2);
+
+    // EOR:
+    OpData.setOp(OpData.INS_EOR, 0x49, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_EOR, 0x45, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_EOR, 0x55, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_EOR, 0x4d, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_EOR, 0x5d, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_EOR, 0x59, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_EOR, 0x41, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_EOR, 0x51, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // INC:
+    OpData.setOp(OpData.INS_INC, 0xe6, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_INC, 0xf6, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_INC, 0xee, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_INC, 0xfe, OpData.ADDR_ABSX, 3, 7);
+
+    // INX:
+    OpData.setOp(OpData.INS_INX, 0xe8, OpData.ADDR_IMP, 1, 2);
+
+    // INY:
+    OpData.setOp(OpData.INS_INY, 0xc8, OpData.ADDR_IMP, 1, 2);
+
+    // JMP:
+    OpData.setOp(OpData.INS_JMP, 0x4c, OpData.ADDR_ABS, 3, 3);
+    OpData.setOp(OpData.INS_JMP, 0x6c, OpData.ADDR_INDABS, 3, 5);
+
+    // JSR:
+    OpData.setOp(OpData.INS_JSR, 0x20, OpData.ADDR_ABS, 3, 6);
+
+    // LDA:
+    OpData.setOp(OpData.INS_LDA, 0xa9, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_LDA, 0xa5, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_LDA, 0xb5, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_LDA, 0xad, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_LDA, 0xbd, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_LDA, 0xb9, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_LDA, 0xa1, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_LDA, 0xb1, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // LDX:
+    OpData.setOp(OpData.INS_LDX, 0xa2, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_LDX, 0xa6, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_LDX, 0xb6, OpData.ADDR_ZPY, 2, 4);
+    OpData.setOp(OpData.INS_LDX, 0xae, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_LDX, 0xbe, OpData.ADDR_ABSY, 3, 4);
+
+    // LDY:
+    OpData.setOp(OpData.INS_LDY, 0xa0, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_LDY, 0xa4, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_LDY, 0xb4, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_LDY, 0xac, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_LDY, 0xbc, OpData.ADDR_ABSX, 3, 4);
+
+    // LSR:
+    OpData.setOp(OpData.INS_LSR, 0x4a, OpData.ADDR_ACC, 1, 2);
+    OpData.setOp(OpData.INS_LSR, 0x46, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_LSR, 0x56, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_LSR, 0x4e, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_LSR, 0x5e, OpData.ADDR_ABSX, 3, 7);
+
+    // NOP:
+    OpData.setOp(OpData.INS_NOP, 0x1a, OpData.ADDR_IMP, 1, 2);
+    OpData.setOp(OpData.INS_NOP, 0x3a, OpData.ADDR_IMP, 1, 2);
+    OpData.setOp(OpData.INS_NOP, 0x5a, OpData.ADDR_IMP, 1, 2);
+    OpData.setOp(OpData.INS_NOP, 0x7a, OpData.ADDR_IMP, 1, 2);
+    OpData.setOp(OpData.INS_NOP, 0xda, OpData.ADDR_IMP, 1, 2);
+    OpData.setOp(OpData.INS_NOP, 0xea, OpData.ADDR_IMP, 1, 2);
+    OpData.setOp(OpData.INS_NOP, 0xfa, OpData.ADDR_IMP, 1, 2);
+
+    // ORA:
+    OpData.setOp(OpData.INS_ORA, 0x09, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_ORA, 0x05, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_ORA, 0x15, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_ORA, 0x0d, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_ORA, 0x1d, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_ORA, 0x19, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_ORA, 0x01, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_ORA, 0x11, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // PHA:
+    OpData.setOp(OpData.INS_PHA, 0x48, OpData.ADDR_IMP, 1, 3);
+
+    // PHP:
+    OpData.setOp(OpData.INS_PHP, 0x08, OpData.ADDR_IMP, 1, 3);
+
+    // PLA:
+    OpData.setOp(OpData.INS_PLA, 0x68, OpData.ADDR_IMP, 1, 4);
+
+    // PLP:
+    OpData.setOp(OpData.INS_PLP, 0x28, OpData.ADDR_IMP, 1, 4);
+
+    // ROL:
+    OpData.setOp(OpData.INS_ROL, 0x2a, OpData.ADDR_ACC, 1, 2);
+    OpData.setOp(OpData.INS_ROL, 0x26, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_ROL, 0x36, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_ROL, 0x2e, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_ROL, 0x3e, OpData.ADDR_ABSX, 3, 7);
+
+    // ROR:
+    OpData.setOp(OpData.INS_ROR, 0x6a, OpData.ADDR_ACC, 1, 2);
+    OpData.setOp(OpData.INS_ROR, 0x66, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_ROR, 0x76, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_ROR, 0x6e, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_ROR, 0x7e, OpData.ADDR_ABSX, 3, 7);
+
+    // RTI:
+    OpData.setOp(OpData.INS_RTI, 0x40, OpData.ADDR_IMP, 1, 6);
+
+    // RTS:
+    OpData.setOp(OpData.INS_RTS, 0x60, OpData.ADDR_IMP, 1, 6);
+
+    // SBC:
+    OpData.setOp(OpData.INS_SBC, 0xe9, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_SBC, 0xe5, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_SBC, 0xf5, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_SBC, 0xed, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_SBC, 0xfd, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_SBC, 0xf9, OpData.ADDR_ABSY, 3, 4);
+    OpData.setOp(OpData.INS_SBC, 0xe1, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_SBC, 0xf1, OpData.ADDR_POSTIDXIND, 2, 5);
+
+    // SEC:
+    OpData.setOp(OpData.INS_SEC, 0x38, OpData.ADDR_IMP, 1, 2);
+
+    // SED:
+    OpData.setOp(OpData.INS_SED, 0xf8, OpData.ADDR_IMP, 1, 2);
+
+    // SEI:
+    OpData.setOp(OpData.INS_SEI, 0x78, OpData.ADDR_IMP, 1, 2);
+
+    // STA:
+    OpData.setOp(OpData.INS_STA, 0x85, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_STA, 0x95, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_STA, 0x8d, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_STA, 0x9d, OpData.ADDR_ABSX, 3, 5);
+    OpData.setOp(OpData.INS_STA, 0x99, OpData.ADDR_ABSY, 3, 5);
+    OpData.setOp(OpData.INS_STA, 0x81, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_STA, 0x91, OpData.ADDR_POSTIDXIND, 2, 6);
+
+    // STX:
+    OpData.setOp(OpData.INS_STX, 0x86, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_STX, 0x96, OpData.ADDR_ZPY, 2, 4);
+    OpData.setOp(OpData.INS_STX, 0x8e, OpData.ADDR_ABS, 3, 4);
+
+    // STY:
+    OpData.setOp(OpData.INS_STY, 0x84, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_STY, 0x94, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_STY, 0x8c, OpData.ADDR_ABS, 3, 4);
+
+    // TAX:
+    OpData.setOp(OpData.INS_TAX, 0xaa, OpData.ADDR_IMP, 1, 2);
+
+    // TAY:
+    OpData.setOp(OpData.INS_TAY, 0xa8, OpData.ADDR_IMP, 1, 2);
+
+    // TSX:
+    OpData.setOp(OpData.INS_TSX, 0xba, OpData.ADDR_IMP, 1, 2);
+
+    // TXA:
+    OpData.setOp(OpData.INS_TXA, 0x8a, OpData.ADDR_IMP, 1, 2);
+
+    // TXS:
+    OpData.setOp(OpData.INS_TXS, 0x9a, OpData.ADDR_IMP, 1, 2);
+
+    // TYA:
+    OpData.setOp(OpData.INS_TYA, 0x98, OpData.ADDR_IMP, 1, 2);
+
+    // ALR:
+    OpData.setOp(OpData.INS_ALR, 0x4b, OpData.ADDR_IMM, 2, 2);
+
+    // ANC:
+    OpData.setOp(OpData.INS_ANC, 0x0b, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_ANC, 0x2b, OpData.ADDR_IMM, 2, 2);
+
+    // ARR:
+    OpData.setOp(OpData.INS_ARR, 0x6b, OpData.ADDR_IMM, 2, 2);
+
+    // AXS:
+    OpData.setOp(OpData.INS_AXS, 0xcb, OpData.ADDR_IMM, 2, 2);
+
+    // LAX:
+    OpData.setOp(OpData.INS_LAX, 0xa3, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_LAX, 0xa7, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_LAX, 0xaf, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_LAX, 0xb3, OpData.ADDR_POSTIDXIND, 2, 5);
+    OpData.setOp(OpData.INS_LAX, 0xb7, OpData.ADDR_ZPY, 2, 4);
+    OpData.setOp(OpData.INS_LAX, 0xbf, OpData.ADDR_ABSY, 3, 4);
+
+    // SAX:
+    OpData.setOp(OpData.INS_SAX, 0x83, OpData.ADDR_PREIDXIND, 2, 6);
+    OpData.setOp(OpData.INS_SAX, 0x87, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_SAX, 0x8f, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_SAX, 0x97, OpData.ADDR_ZPY, 2, 4);
+
+    // DCP:
+    OpData.setOp(OpData.INS_DCP, 0xc3, OpData.ADDR_PREIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_DCP, 0xc7, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_DCP, 0xcf, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_DCP, 0xd3, OpData.ADDR_POSTIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_DCP, 0xd7, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_DCP, 0xdb, OpData.ADDR_ABSY, 3, 7);
+    OpData.setOp(OpData.INS_DCP, 0xdf, OpData.ADDR_ABSX, 3, 7);
+
+    // ISC:
+    OpData.setOp(OpData.INS_ISC, 0xe3, OpData.ADDR_PREIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_ISC, 0xe7, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_ISC, 0xef, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_ISC, 0xf3, OpData.ADDR_POSTIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_ISC, 0xf7, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_ISC, 0xfb, OpData.ADDR_ABSY, 3, 7);
+    OpData.setOp(OpData.INS_ISC, 0xff, OpData.ADDR_ABSX, 3, 7);
+
+    // RLA:
+    OpData.setOp(OpData.INS_RLA, 0x23, OpData.ADDR_PREIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_RLA, 0x27, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_RLA, 0x2f, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_RLA, 0x33, OpData.ADDR_POSTIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_RLA, 0x37, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_RLA, 0x3b, OpData.ADDR_ABSY, 3, 7);
+    OpData.setOp(OpData.INS_RLA, 0x3f, OpData.ADDR_ABSX, 3, 7);
+
+    // RRA:
+    OpData.setOp(OpData.INS_RRA, 0x63, OpData.ADDR_PREIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_RRA, 0x67, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_RRA, 0x6f, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_RRA, 0x73, OpData.ADDR_POSTIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_RRA, 0x77, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_RRA, 0x7b, OpData.ADDR_ABSY, 3, 7);
+    OpData.setOp(OpData.INS_RRA, 0x7f, OpData.ADDR_ABSX, 3, 7);
+
+    // SLO:
+    OpData.setOp(OpData.INS_SLO, 0x03, OpData.ADDR_PREIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_SLO, 0x07, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_SLO, 0x0f, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_SLO, 0x13, OpData.ADDR_POSTIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_SLO, 0x17, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_SLO, 0x1b, OpData.ADDR_ABSY, 3, 7);
+    OpData.setOp(OpData.INS_SLO, 0x1f, OpData.ADDR_ABSX, 3, 7);
+
+    // SRE:
+    OpData.setOp(OpData.INS_SRE, 0x43, OpData.ADDR_PREIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_SRE, 0x47, OpData.ADDR_ZP, 2, 5);
+    OpData.setOp(OpData.INS_SRE, 0x4f, OpData.ADDR_ABS, 3, 6);
+    OpData.setOp(OpData.INS_SRE, 0x53, OpData.ADDR_POSTIDXIND, 2, 8);
+    OpData.setOp(OpData.INS_SRE, 0x57, OpData.ADDR_ZPX, 2, 6);
+    OpData.setOp(OpData.INS_SRE, 0x5b, OpData.ADDR_ABSY, 3, 7);
+    OpData.setOp(OpData.INS_SRE, 0x5f, OpData.ADDR_ABSX, 3, 7);
+
+    // SKB:
+    OpData.setOp(OpData.INS_SKB, 0x80, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_SKB, 0x82, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_SKB, 0x89, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_SKB, 0xc2, OpData.ADDR_IMM, 2, 2);
+    OpData.setOp(OpData.INS_SKB, 0xe2, OpData.ADDR_IMM, 2, 2);
+
+    // SKB:
+    OpData.setOp(OpData.INS_IGN, 0x0c, OpData.ADDR_ABS, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0x1c, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0x3c, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0x5c, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0x7c, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0xdc, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0xfc, OpData.ADDR_ABSX, 3, 4);
+    OpData.setOp(OpData.INS_IGN, 0x04, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_IGN, 0x44, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_IGN, 0x64, OpData.ADDR_ZP, 2, 3);
+    OpData.setOp(OpData.INS_IGN, 0x14, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_IGN, 0x34, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_IGN, 0x54, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_IGN, 0x74, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_IGN, 0xd4, OpData.ADDR_ZPX, 2, 4);
+    OpData.setOp(OpData.INS_IGN, 0xf4, OpData.ADDR_ZPX, 2, 4);
+
+    // prettier-ignore
+    OpData.cycTable = new Array(
+      /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
+      /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+      /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
+      /*0x30*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+      /*0x40*/ 6,6,2,8,3,3,5,5,3,2,2,2,3,4,6,6,
+      /*0x50*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+      /*0x60*/ 6,6,2,8,3,3,5,5,4,2,2,2,5,4,6,6,
+      /*0x70*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+      /*0x80*/ 2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
+      /*0x90*/ 2,6,2,6,4,4,4,4,2,5,2,5,5,5,5,5,
+      /*0xA0*/ 2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
+      /*0xB0*/ 2,5,2,5,4,4,4,4,2,4,2,4,4,4,4,4,
+      /*0xC0*/ 2,6,2,8,3,3,5,5,2,2,2,2,4,4,6,6,
+      /*0xD0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+      /*0xE0*/ 2,6,3,8,3,3,5,5,2,2,2,2,4,4,6,6,
+      /*0xF0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7
+    );
+
+    OpData.instname = new Array(70);
+
+    // Instruction Names:
+    OpData.instname[0] = "ADC";
+    OpData.instname[1] = "AND";
+    OpData.instname[2] = "ASL";
+    OpData.instname[3] = "BCC";
+    OpData.instname[4] = "BCS";
+    OpData.instname[5] = "BEQ";
+    OpData.instname[6] = "BIT";
+    OpData.instname[7] = "BMI";
+    OpData.instname[8] = "BNE";
+    OpData.instname[9] = "BPL";
+    OpData.instname[10] = "BRK";
+    OpData.instname[11] = "BVC";
+    OpData.instname[12] = "BVS";
+    OpData.instname[13] = "CLC";
+    OpData.instname[14] = "CLD";
+    OpData.instname[15] = "CLI";
+    OpData.instname[16] = "CLV";
+    OpData.instname[17] = "CMP";
+    OpData.instname[18] = "CPX";
+    OpData.instname[19] = "CPY";
+    OpData.instname[20] = "DEC";
+    OpData.instname[21] = "DEX";
+    OpData.instname[22] = "DEY";
+    OpData.instname[23] = "EOR";
+    OpData.instname[24] = "INC";
+    OpData.instname[25] = "INX";
+    OpData.instname[26] = "INY";
+    OpData.instname[27] = "JMP";
+    OpData.instname[28] = "JSR";
+    OpData.instname[29] = "LDA";
+    OpData.instname[30] = "LDX";
+    OpData.instname[31] = "LDY";
+    OpData.instname[32] = "LSR";
+    OpData.instname[33] = "NOP";
+    OpData.instname[34] = "ORA";
+    OpData.instname[35] = "PHA";
+    OpData.instname[36] = "PHP";
+    OpData.instname[37] = "PLA";
+    OpData.instname[38] = "PLP";
+    OpData.instname[39] = "ROL";
+    OpData.instname[40] = "ROR";
+    OpData.instname[41] = "RTI";
+    OpData.instname[42] = "RTS";
+    OpData.instname[43] = "SBC";
+    OpData.instname[44] = "SEC";
+    OpData.instname[45] = "SED";
+    OpData.instname[46] = "SEI";
+    OpData.instname[47] = "STA";
+    OpData.instname[48] = "STX";
+    OpData.instname[49] = "STY";
+    OpData.instname[50] = "TAX";
+    OpData.instname[51] = "TAY";
+    OpData.instname[52] = "TSX";
+    OpData.instname[53] = "TXA";
+    OpData.instname[54] = "TXS";
+    OpData.instname[55] = "TYA";
+    OpData.instname[56] = "ALR";
+    OpData.instname[57] = "ANC";
+    OpData.instname[58] = "ARR";
+    OpData.instname[59] = "AXS";
+    OpData.instname[60] = "LAX";
+    OpData.instname[61] = "SAX";
+    OpData.instname[62] = "DCP";
+    OpData.instname[63] = "ISC";
+    OpData.instname[64] = "RLA";
+    OpData.instname[65] = "RRA";
+    OpData.instname[66] = "SLO";
+    OpData.instname[67] = "SRE";
+    OpData.instname[68] = "SKB";
+    OpData.instname[69] = "IGN";
+
+    OpData.addrDesc = new Array(
+      "Zero Page           ",
+      "Relative            ",
+      "Implied             ",
+      "Absolute            ",
+      "Accumulator         ",
+      "Immediate           ",
+      "Zero Page,X         ",
+      "Zero Page,Y         ",
+      "Absolute,X          ",
+      "Absolute,Y          ",
+      "Preindexed Indirect ",
+      "Postindexed Indirect",
+      "Indirect Absolute   "
+    );
+  },
+
   INS_ADC: 0,
   INS_AND: 1,
   INS_ASL: 2,
@@ -1959,8 +1966,8 @@ OpData.prototype = {
   ADDR_POSTIDXIND: 11,
   ADDR_INDABS: 12,
 
-  setOp: function(inst, op, addr, size, cycles){
-    this.opdata[op] =
+  setOp: (inst, op, addr, size, cycles) => {
+    OpData.opdata[op] =
       (inst & 0xff) |
       ((addr & 0xff) << 8) |
       ((size & 0xff) << 16) |
@@ -1969,53 +1976,53 @@ OpData.prototype = {
 };
 
 
-CPU.regWrite = function(address, value){
+CPU.regWrite = (address, value) => {
   switch (address){
     case 0x2000:
       // PPU Control register 1
-      NES.cpu.mem[address] = value;
-      NES.ppu.updateControlReg1(value);
+      CPU.mem[address] = value;
+      PPU.updateControlReg1(value);
       break;
 
     case 0x2001:
       // PPU Control register 2
-      NES.cpu.mem[address] = value;
-      NES.ppu.updateControlReg2(value);
+      CPU.mem[address] = value;
+      PPU.updateControlReg2(value);
       break;
 
     case 0x2003:
       // Set Sprite RAM address:
-      NES.ppu.writeSRAMAddress(value);
+      PPU.writeSRAMAddress(value);
       break;
 
     case 0x2004:
       // Write to Sprite RAM:
-      NES.ppu.sramWrite(value);
+      PPU.sramWrite(value);
       break;
 
     case 0x2005:
       // Screen Scroll offsets:
-      NES.ppu.scrollWrite(value);
+      PPU.scrollWrite(value);
       break;
 
     case 0x2006:
       // Set VRAM address:
-      NES.ppu.writeVRAMAddress(value);
+      PPU.writeVRAMAddress(value);
       break;
 
     case 0x2007:
       // Write to VRAM:
-      NES.ppu.vramWrite(value);
+      PPU.vramWrite(value);
       break;
 
     case 0x4014:
       // Sprite Memory DMA Access
-      NES.ppu.sramDMA(value);
+      PPU.sramDMA(value);
       break;
 
     case 0x4015:
       // Sound Channel Switch, DMC Status
-      NES.papu.writeReg(address, value);
+      APU.writeReg(address, value);
       break;
 
     case 0x4016:
@@ -2029,19 +2036,19 @@ CPU.regWrite = function(address, value){
 
     case 0x4017:
       // Sound channel frame sequencer:
-      NES.papu.writeReg(address, value);
+      APU.writeReg(address, value);
       break;
 
     default:
       // Sound registers
       // console.log("write to sound reg");
       if(address >= 0x4000 && address <= 0x4017){
-        NES.papu.writeReg(address, value);
+        APU.writeReg(address, value);
       }
   }
 }
 
-CPU.regLoad = function(address){
+CPU.regLoad = address => {
   switch (
     address >> 12 // use fourth nibble (0xF000)
   ){
@@ -2063,7 +2070,7 @@ CPU.regLoad = function(address){
           // in main memory and in the
           // PPU as flags):
           // (not in the real NES)
-          return NES.cpu.mem[0x2000];
+          return CPU.mem[0x2000];
 
         case 0x1:
           // 0x2001:
@@ -2072,7 +2079,7 @@ CPU.regLoad = function(address){
           // in main memory and in the
           // PPU as flags):
           // (not in the real NES)
-          return NES.cpu.mem[0x2001];
+          return CPU.mem[0x2001];
 
         case 0x2:
           // 0x2002:
@@ -2081,7 +2088,7 @@ CPU.regLoad = function(address){
           // main memory in addition
           // to as flags in the PPU.
           // (not in the real NES)
-          return NES.ppu.readStatusRegister();
+          return PPU.readStatusRegister();
 
         case 0x3:
           return 0;
@@ -2089,7 +2096,7 @@ CPU.regLoad = function(address){
         case 0x4:
           // 0x2004:
           // Sprite Memory read.
-          return NES.ppu.sramLoad();
+          return PPU.sramLoad();
         case 0x5:
           return 0;
 
@@ -2099,7 +2106,7 @@ CPU.regLoad = function(address){
         case 0x7:
           // 0x2007:
           // VRAM read:
-          return NES.ppu.vramLoad();
+          return PPU.vramLoad();
       }
       break;
     case 4:
@@ -2108,7 +2115,7 @@ CPU.regLoad = function(address){
         case 0:
           // 0x4015:
           // Sound channel enable, DMC Status
-          return NES.papu.readReg(address);
+          return APU.readReg(address);
 
         case 1:
           // 0x4016:
@@ -2124,7 +2131,7 @@ CPU.regLoad = function(address){
           if(
             Mapper.zapperX !== null &&
             Mapper.zapperY !== null &&
-            NES.ppu.isPixelWhite(Mapper.zapperX, Mapper.zapperY)
+            PPU.isPixelWhite(Mapper.zapperX, Mapper.zapperY)
           ){
             w = 0;
           } else {
@@ -2145,12 +2152,12 @@ CPU.regLoad = function(address){
 CPU.write = (address, value) => {
   if(address < 0x2000){
     // Mirroring of RAM:
-    NES.cpu.mem[address & 0x7ff] = value;
+    CPU.mem[address & 0x7ff] = value;
   } else if(address > 0x4017){
-    NES.cpu.mem[address] = value;
+    CPU.mem[address] = value;
     if(address >= 0x6000 && address < 0x8000){
       // Write to persistent RAM
-      NES.opts.onBatteryRamWrite(address, value);
+      NES.onBatteryRamWrite(address, value);
     }
   } else if(address > 0x2007 && address < 0x4000){
     CPU.regWrite(0x2000 + (address & 0x7), value);
@@ -2167,12 +2174,12 @@ CPU.load = address => {
   // Check address range:
   if(address > 0x4017){
     // ROM:
-    return NES.cpu.mem[address];
+    return CPU.mem[address];
   } else if(address >= 0x2000){
     // I/O Ports.
     return CPU.regLoad(address);
   } else {
     // RAM (mirrored)
-    return NES.cpu.mem[address & 0x7ff];
+    return CPU.mem[address & 0x7ff];
   }
 }

@@ -51,16 +51,16 @@ var Mapper = {
   // Load a PRG-ROM bank in CPU memory
   load_prg_rom_bank: (bank, address) => {
     //bank %= ROM.prg_rom_count; // why JSNES does it?
-    Mapper.copy_array(ROM.prg_rom[bank], NES.cpu.mem, address);
+    Mapper.copy_array(ROM.prg_rom[bank], CPU.mem, address);
   },
 
   // Load a CHR-ROM page in PPU memory + the corresponding tiles
   load_chr_rom_bank: (bank, address) => {
     // bank %= ROM.chr_rom_count // why JSNES does it?
     if(ROM.chr_rom_count > 0){
-      NES.ppu.triggerRendering();
-      Mapper.copy_array(ROM.chr_rom[bank], NES.ppu.vramMem, address);
-      Mapper.copy_array(ROM.chr_rom_tiles[bank], NES.ppu.ptTile, address / 16);
+      PPU.triggerRendering();
+      Mapper.copy_array(ROM.chr_rom[bank], PPU.vramMem, address);
+      Mapper.copy_array(ROM.chr_rom_tiles[bank], PPU.ptTile, address / 16);
     }
   },
   

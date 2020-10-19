@@ -1,123 +1,127 @@
 // NES
 var NES = {
   
-  // Load a ROM file
-  // data: ROM file read as binary string
-  load_rom: data => { 
-    ROM.load_rom(data);
-    Mapper.load_rom();
-  },
-
-  // Resets the system
-  reset: () => {
-    if(NES.mmap !== null){
-      Mapper.reset();
-    }
-
-    NES.cpu.reset();
-    NES.ppu.reset();
-    NES.papu.reset();
-
-    NES.lastFpsTime = null;
+  // Initialize the emulator
+  init: options => {
     
-    // Send reset (IRQ) interrupt
-    NES.cpu.requestIrq(NES.cpu.IRQ_RESET);
-  },
+    // Frame handler
+    NES.onFrame = options.onFrame;
+    NES.preferredFrameRate = 60;  // frames per second
+    NES.frameTime = 16.67;        // ms per frame
+    
+    // Audio handler
+    NES.onAudioSample = options.onAudioSample;
+    NES.sampleRate = 44100;
+    
+    // Logs
+    NES.onStatusUpdate = options.onStatusUpdate;
+    
+    // Save slot
+    NES.onBatteryRamWrite = options.onBatteryRamWrite;
 
-  frame: () => {
-    NES.ppu.startFrame();
-    var cycles = 0;
-    var emulateSound = NES.opts.emulateSound;
-    var cpu = NES.cpu;
-    var ppu = NES.ppu;
-    var papu = NES.papu;
-    FRAMELOOP: for(;;){
-      if(cpu.cyclesToHalt === 0){
-        // Execute a CPU instruction
-        cycles = cpu.emulate();
-        if(emulateSound){
-          papu.clockFrameCounter(cycles);
-        }
-        cycles *= 3;
-      } else {
-        if(cpu.cyclesToHalt > 8){
-          cycles = 24;
-          if(emulateSound){
-            papu.clockFrameCounter(8);
-          }
-          cpu.cyclesToHalt -= 8;
-        } else {
-          cycles = cpu.cyclesToHalt * 3;
-          if(emulateSound){
-            papu.clockFrameCounter(cpu.cyclesToHalt);
-          }
-          cpu.cyclesToHalt = 0;
-        }
-      }
-
-      for(; cycles > 0; cycles--){
-        if(
-          ppu.curX === ppu.spr0HitX &&
-          ppu.f_spVisibility === 1 &&
-          ppu.scanline - 21 === ppu.spr0HitY
-        ){
-          // Set sprite 0 hit flag:
-          ppu.setStatusFlag(ppu.STATUS_SPRITE0HIT, true);
-        }
-
-        if(ppu.requestEndFrame){
-          ppu.nmiCounter--;
-          if(ppu.nmiCounter === 0){
-            ppu.requestEndFrame = false;
-            ppu.startVBlank();
-            break FRAMELOOP;
-          }
-        }
-
-        ppu.curX++;
-        if(ppu.curX === 341){
-          ppu.curX = 0;
-          ppu.endScanline();
-        }
-      }
-    }
-  },
-  
-  init: opts => {
-    NES.opts = {
-      onFrame: function(){},
-      onAudioSample: null,
-      onStatusUpdate: function(){},
-      onBatteryRamWrite: function(){},
-
-      // FIXME: not actually used except for in PAPU
-      preferredFrameRate: 60,
-
-      emulateSound: true,
-      sampleRate: 44100 // Sound sample rate in hz
-    };
-    if(typeof opts !== "undefined"){
-      var key;
-      for(key in NES.opts){
-        if(typeof opts[key] !== "undefined"){
-          NES.opts[key] = opts[key];
-        }
-      }
-    }
-
-    NES.frameTime = 1000 / NES.opts.preferredFrameRate;
-
-    NES.ui = {
-      writeFrame: NES.opts.onFrame,
-      updateStatus: NES.opts.onStatusUpdate
-    };
-    NES.cpu = new CPU(NES);
-    NES.ppu = new PPU(NES);
-    NES.papu = new PAPU(NES);
-    NES.mmap = null; // set in load_rom()
+    // Memory map (handled by the mapper)
+    NES.mmap = null;
+    
+    // Controllers
     NES.controllers = {
       1: new Controller(),
       2: new Controller()
     };
+  },
+  
+  // Load a ROM file
+  // data: binary string
+  load_rom: data => {
+    
+    // Parse the ROM (trainer + ROM banks)
+    ROM.load_rom(data);
+    
+    // Add the tight ROM banks to the CPU's memory
+    Mapper.load_rom();
+  },
+
+  // Boot or reset the system
+  reset: () => {
+    
+    // Reset CPU, PPU, APU
+    CPU.reset();
+    PPU.reset();
+    APU.reset();
+    
+    // Send reset (IRQ) interrupt to the CPU
+    CPU.requestIrq(CPU.IRQ_RESET);
+  },
+
+  // Render a new frame
+  frame: () => {
+    
+    // Begin a new frame
+    PPU.startFrame();
+    
+    // Count CPU/PPU cycles
+    var cpu_cycles = 0;
+    var ppu_cycles = 0;
+    
+    // Loop until a VBlank is detected or limit of cycles per frame exceeded
+    loop: for(;;){
+      
+      // If CPU is not halted
+      if(!CPU.cyclesToHalt){
+        
+        // Execute a CPU instruction, count remaining CPU cycles
+        cpu_cycles = CPU.emulate();
+        
+        // Clock the APU
+        APU.clockFrameCounter(cpu_cycles);
+      } 
+      
+      // If CPU is halted for more than 8 cycles
+      else if(CPU.cyclesToHalt > 8){
+        
+        // Clock the APU for 8 cycles
+        APU.clockFrameCounter(8);
+        
+        // Advance 8 CPU cycles
+        CPU.cyclesToHalt -= 8;
+      }
+      
+      // If CPU is halted for 1-8 cycles
+      else {
+        
+        // Clock the APU for the remaining number of cycles
+        APU.clockFrameCounter(CPU.cyclesToHalt);
+        
+        // Un-halt the CPU
+        CPU.cyclesToHalt = 0;
+      }
+
+      // Clock the PPU according to the number of CPU cycles executed
+      // The PPU executes 3 cycles for each CPU cycle  
+      for(ppu_cycles = cpu_cycles * 3; ppu_cycles > 0; ppu_cycles--){
+
+        // Handle Sprite 0 hit
+        if(PPU.curX === PPU.spr0HitX && PPU.f_spVisibility === 1 && PPU.scanline - 21 === PPU.spr0HitY){
+          PPU.setStatusFlag(PPU.STATUS_SPRITE0HIT, true);
+        }
+
+        // Handle VBlank request (end of current frame)
+        if(PPU.requestEndFrame){
+          PPU.nmiCounter--;
+          if(PPU.nmiCounter === 0){
+            PPU.requestEndFrame = false;
+            PPU.startVBlank();
+            break loop;
+          }
+        }
+
+        // The NES renders a pixel per PPU cycle
+        // At the end of each scanline (340px), a new line starts
+        PPU.curX++;
+        if(PPU.curX > 340){
+          PPU.curX = 0;
+          PPU.endScanline();
+        }
+      }
+    }
   }
 }

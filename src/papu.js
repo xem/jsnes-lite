@@ -1,238 +1,217 @@
 var CPU_FREQ_NTSC = 1789772.5; //1789772.72727272d;
 // var CPU_FREQ_PAL = 1773447.4;
 
-var PAPU = function(nes){
-  NES = nes;
+// APU
+// ====
 
-  this.square1 = new ChannelSquare(this, true);
-  this.square2 = new ChannelSquare(this, false);
-  this.triangle = new ChannelTriangle(this);
-  this.noise = new ChannelNoise(this);
-  this.dmc = new ChannelDM(this);
+var APU = {
+  frameIrqCounter: null,
+  frameIrqCounterMax: 4,
+  initCounter: 2048,
+  channelEnableValue: null,
+  sampleRate: 44100,
+  lengthLookup: null,
+  dmcFreqLookup: null,
+  noiseWavelengthLookup: null,
+  square_table: null,
+  tnd_table: null,
+  frameIrqEnabled: false,
+  frameIrqActive: null,
+  frameClockNow: null,
+  startedPlaying: false,
+  recordOutput: false,
+  initingHardware: false,
+  masterFrameCounter: null,
+  derivedFrameCounter: null,
+  countSequence: null,
+  sampleTimer: null,
+  frameTime: null,
+  sampleTimerMax: null,
+  sampleCount: null,
+  triValue: 0,
+  smpSquare1: null,
+  smpSquare2: null,
+  smpTriangle: null,
+  smpDmc: null,
+  accCount: null,
+  prevSampleL: 0,
+  prevSampleR: 0,
+  smpAccumL: 0,
+  smpAccumR: 0,
+  dacRange: 0,
+  dcValue: 0,
+  masterVolume: 256,
+  stereoPosLSquare1: null,
+  stereoPosLSquare2: null,
+  stereoPosLTriangle: null,
+  stereoPosLNoise: null,
+  stereoPosLDMC: null,
+  stereoPosRSquare1: null,
+  stereoPosRSquare2: null,
+  stereoPosRTriangle: null,
+  stereoPosRNoise: null,
+  stereoPosRDMC: null,
+  extraCycles: null,
+  maxSample: null,
+  minSample: null,
+  panning: [80, 170, 100, 150, 128],
+  
+  reset: () => {
+    APU.sampleRate = NES.sampleRate;
+    APU.sampleTimerMax = Math.floor(
+      (1024.0 * CPU_FREQ_NTSC * NES.preferredFrameRate) /
+        (APU.sampleRate * 60.0)
+    );
 
-  this.frameIrqCounter = null;
-  this.frameIrqCounterMax = 4;
-  this.initCounter = 2048;
-  this.channelEnableValue = null;
-
-  this.sampleRate = 44100;
-
-  this.lengthLookup = null;
-  this.dmcFreqLookup = null;
-  this.noiseWavelengthLookup = null;
-  this.square_table = null;
-  this.tnd_table = null;
-
-  this.frameIrqEnabled = false;
-  this.frameIrqActive = null;
-  this.frameClockNow = null;
-  this.startedPlaying = false;
-  this.recordOutput = false;
-  this.initingHardware = false;
-
-  this.masterFrameCounter = null;
-  this.derivedFrameCounter = null;
-  this.countSequence = null;
-  this.sampleTimer = null;
-  this.frameTime = null;
-  this.sampleTimerMax = null;
-  this.sampleCount = null;
-  this.triValue = 0;
-
-  this.smpSquare1 = null;
-  this.smpSquare2 = null;
-  this.smpTriangle = null;
-  this.smpDmc = null;
-  this.accCount = null;
-
-  // DC removal vars:
-  this.prevSampleL = 0;
-  this.prevSampleR = 0;
-  this.smpAccumL = 0;
-  this.smpAccumR = 0;
-
-  // DAC range:
-  this.dacRange = 0;
-  this.dcValue = 0;
-
-  // Master volume:
-  this.masterVolume = 256;
-
-  // Stereo positioning:
-  this.stereoPosLSquare1 = null;
-  this.stereoPosLSquare2 = null;
-  this.stereoPosLTriangle = null;
-  this.stereoPosLNoise = null;
-  this.stereoPosLDMC = null;
-  this.stereoPosRSquare1 = null;
-  this.stereoPosRSquare2 = null;
-  this.stereoPosRTriangle = null;
-  this.stereoPosRNoise = null;
-  this.stereoPosRDMC = null;
-
-  this.extraCycles = null;
-
-  this.maxSample = null;
-  this.minSample = null;
-
-  // Panning:
-  this.panning = [80, 170, 100, 150, 128];
-  this.setPanning(this.panning);
-
-  // Initialize lookup tables:
-  this.initLengthLookup();
-  this.initDmcFrequencyLookup();
-  this.initNoiseWavelengthLookup();
-  this.initDACtables();
-
-  // Init sound registers:
-  for(var i = 0; i < 0x14; i++){
-    if(i === 0x10){
-      this.writeReg(0x4010, 0x10);
-    } else {
-      this.writeReg(0x4000 + i, 0);
+    APU.frameTime = Math.floor(
+      (14915.0 * NES.preferredFrameRate) / 60.0
+    );
+    
+    APU.square1 = new ChannelSquare(this, true);
+    APU.square2 = new ChannelSquare(this, false);
+    APU.triangle = new ChannelTriangle(this);
+    APU.noise = new ChannelNoise(this);
+    APU.dmc = new ChannelDM(this);
+  
+    APU.setPanning(APU.panning);
+    APU.initLengthLookup();
+    APU.initDmcFrequencyLookup();
+    APU.initNoiseWavelengthLookup();
+    APU.initDACtables();
+  
+    // Init sound registers:
+    for(var i = 0; i < 0x14; i++){
+      if(i === 0x10){
+        APU.writeReg(0x4010, 0x10);
+      } else {
+        APU.writeReg(0x4000 + i, 0);
+      }
     }
-  }
 
-  this.reset();
-};
+    APU.sampleTimer = 0;
 
-PAPU.prototype = {
-  reset: function(){
-    this.sampleRate = NES.opts.sampleRate;
-    this.sampleTimerMax = Math.floor(
-      (1024.0 * CPU_FREQ_NTSC * NES.opts.preferredFrameRate) /
-        (this.sampleRate * 60.0)
-    );
+    APU.updateChannelEnable(0);
+    APU.masterFrameCounter = 0;
+    APU.derivedFrameCounter = 0;
+    APU.countSequence = 0;
+    APU.sampleCount = 0;
+    APU.initCounter = 2048;
+    APU.frameIrqEnabled = false;
+    APU.initingHardware = false;
 
-    this.frameTime = Math.floor(
-      (14915.0 * NES.opts.preferredFrameRate) / 60.0
-    );
+    APU.resetCounter();
 
-    this.sampleTimer = 0;
+    APU.square1.reset();
+    APU.square2.reset();
+    APU.triangle.reset();
+    APU.noise.reset();
+    APU.dmc.reset();
 
-    this.updateChannelEnable(0);
-    this.masterFrameCounter = 0;
-    this.derivedFrameCounter = 0;
-    this.countSequence = 0;
-    this.sampleCount = 0;
-    this.initCounter = 2048;
-    this.frameIrqEnabled = false;
-    this.initingHardware = false;
+    APU.accCount = 0;
+    APU.smpSquare1 = 0;
+    APU.smpSquare2 = 0;
+    APU.smpTriangle = 0;
+    APU.smpDmc = 0;
 
-    this.resetCounter();
+    APU.frameIrqEnabled = false;
+    APU.frameIrqCounterMax = 4;
 
-    this.square1.reset();
-    this.square2.reset();
-    this.triangle.reset();
-    this.noise.reset();
-    this.dmc.reset();
+    APU.channelEnableValue = 0xff;
+    APU.startedPlaying = false;
+    APU.prevSampleL = 0;
+    APU.prevSampleR = 0;
+    APU.smpAccumL = 0;
+    APU.smpAccumR = 0;
 
-    this.accCount = 0;
-    this.smpSquare1 = 0;
-    this.smpSquare2 = 0;
-    this.smpTriangle = 0;
-    this.smpDmc = 0;
-
-    this.frameIrqEnabled = false;
-    this.frameIrqCounterMax = 4;
-
-    this.channelEnableValue = 0xff;
-    this.startedPlaying = false;
-    this.prevSampleL = 0;
-    this.prevSampleR = 0;
-    this.smpAccumL = 0;
-    this.smpAccumR = 0;
-
-    this.maxSample = -500000;
-    this.minSample = 500000;
+    APU.maxSample = -500000;
+    APU.minSample = 500000;
   },
 
   // eslint-disable-next-line no-unused-vars
-  readReg: function(address){
+  readReg: address => {
     // Read 0x4015:
     var tmp = 0;
-    tmp |= this.square1.getLengthStatus();
-    tmp |= this.square2.getLengthStatus() << 1;
-    tmp |= this.triangle.getLengthStatus() << 2;
-    tmp |= this.noise.getLengthStatus() << 3;
-    tmp |= this.dmc.getLengthStatus() << 4;
-    tmp |= (this.frameIrqActive && this.frameIrqEnabled ? 1 : 0) << 6;
-    tmp |= this.dmc.getIrqStatus() << 7;
+    tmp |= APU.square1.getLengthStatus();
+    tmp |= APU.square2.getLengthStatus() << 1;
+    tmp |= APU.triangle.getLengthStatus() << 2;
+    tmp |= APU.noise.getLengthStatus() << 3;
+    tmp |= APU.dmc.getLengthStatus() << 4;
+    tmp |= (APU.frameIrqActive && APU.frameIrqEnabled ? 1 : 0) << 6;
+    tmp |= APU.dmc.getIrqStatus() << 7;
 
-    this.frameIrqActive = false;
-    this.dmc.irqGenerated = false;
+    APU.frameIrqActive = false;
+    APU.dmc.irqGenerated = false;
 
     return tmp & 0xffff;
   },
 
-  writeReg: function(address, value){
+  writeReg: (address, value) => {
     if(address >= 0x4000 && address < 0x4004){
       // Square Wave 1 Control
-      this.square1.writeReg(address, value);
+      APU.square1.writeReg(address, value);
       // console.log("Square Write");
     } else if(address >= 0x4004 && address < 0x4008){
       // Square 2 Control
-      this.square2.writeReg(address, value);
+      APU.square2.writeReg(address, value);
     } else if(address >= 0x4008 && address < 0x400c){
       // Triangle Control
-      this.triangle.writeReg(address, value);
+      APU.triangle.writeReg(address, value);
     } else if(address >= 0x400c && address <= 0x400f){
       // Noise Control
-      this.noise.writeReg(address, value);
+      APU.noise.writeReg(address, value);
     } else if(address === 0x4010){
       // DMC Play mode & DMA frequency
-      this.dmc.writeReg(address, value);
+      APU.dmc.writeReg(address, value);
     } else if(address === 0x4011){
       // DMC Delta Counter
-      this.dmc.writeReg(address, value);
+      APU.dmc.writeReg(address, value);
     } else if(address === 0x4012){
       // DMC Play code starting address
-      this.dmc.writeReg(address, value);
+      APU.dmc.writeReg(address, value);
     } else if(address === 0x4013){
       // DMC Play code length
-      this.dmc.writeReg(address, value);
+      APU.dmc.writeReg(address, value);
     } else if(address === 0x4015){
       // Channel enable
-      this.updateChannelEnable(value);
+      APU.updateChannelEnable(value);
 
-      if(value !== 0 && this.initCounter > 0){
+      if(value !== 0 && APU.initCounter > 0){
         // Start hardware initialization
-        this.initingHardware = true;
+        APU.initingHardware = true;
       }
 
       // DMC/IRQ Status
-      this.dmc.writeReg(address, value);
+      APU.dmc.writeReg(address, value);
     } else if(address === 0x4017){
       // Frame counter control
-      this.countSequence = (value >> 7) & 1;
-      this.masterFrameCounter = 0;
-      this.frameIrqActive = false;
+      APU.countSequence = (value >> 7) & 1;
+      APU.masterFrameCounter = 0;
+      APU.frameIrqActive = false;
 
       if(((value >> 6) & 0x1) === 0){
-        this.frameIrqEnabled = true;
+        APU.frameIrqEnabled = true;
       } else {
-        this.frameIrqEnabled = false;
+        APU.frameIrqEnabled = false;
       }
 
-      if(this.countSequence === 0){
+      if(APU.countSequence === 0){
         // NTSC:
-        this.frameIrqCounterMax = 4;
-        this.derivedFrameCounter = 4;
+        APU.frameIrqCounterMax = 4;
+        APU.derivedFrameCounter = 4;
       } else {
         // PAL:
-        this.frameIrqCounterMax = 5;
-        this.derivedFrameCounter = 0;
-        this.frameCounterTick();
+        APU.frameIrqCounterMax = 5;
+        APU.derivedFrameCounter = 0;
+        APU.frameCounterTick();
       }
     }
   },
 
-  resetCounter: function(){
-    if(this.countSequence === 0){
-      this.derivedFrameCounter = 4;
+  resetCounter: () => {
+    if(APU.countSequence === 0){
+      APU.derivedFrameCounter = 4;
     } else {
-      this.derivedFrameCounter = 0;
+      APU.derivedFrameCounter = 0;
     }
   },
 
@@ -241,45 +220,45 @@ PAPU.prototype = {
   // channel enable register (0x4015),
   // and when the user enables/disables channels
   // in the GUI.
-  updateChannelEnable: function(value){
-    this.channelEnableValue = value & 0xffff;
-    this.square1.setEnabled((value & 1) !== 0);
-    this.square2.setEnabled((value & 2) !== 0);
-    this.triangle.setEnabled((value & 4) !== 0);
-    this.noise.setEnabled((value & 8) !== 0);
-    this.dmc.setEnabled((value & 16) !== 0);
+  updateChannelEnable: value => {
+    APU.channelEnableValue = value & 0xffff;
+    APU.square1.setEnabled((value & 1) !== 0);
+    APU.square2.setEnabled((value & 2) !== 0);
+    APU.triangle.setEnabled((value & 4) !== 0);
+    APU.noise.setEnabled((value & 8) !== 0);
+    APU.dmc.setEnabled((value & 16) !== 0);
   },
 
   // Clocks the frame counter. It should be clocked at
   // twice the cpu speed, so the cycles will be
   // divided by 2 for those counters that are
   // clocked at cpu speed.
-  clockFrameCounter: function(nCycles){
-    if(this.initCounter > 0){
-      if(this.initingHardware){
-        this.initCounter -= nCycles;
-        if(this.initCounter <= 0){
-          this.initingHardware = false;
+  clockFrameCounter: nCycles => {
+    if(APU.initCounter > 0){
+      if(APU.initingHardware){
+        APU.initCounter -= nCycles;
+        if(APU.initCounter <= 0){
+          APU.initingHardware = false;
         }
         return;
       }
     }
 
     // Don't process ticks beyond next sampling:
-    nCycles += this.extraCycles;
-    var maxCycles = this.sampleTimerMax - this.sampleTimer;
+    nCycles += APU.extraCycles;
+    var maxCycles = APU.sampleTimerMax - APU.sampleTimer;
     if(nCycles << 10 > maxCycles){
-      this.extraCycles = ((nCycles << 10) - maxCycles) >> 10;
-      nCycles -= this.extraCycles;
+      APU.extraCycles = ((nCycles << 10) - maxCycles) >> 10;
+      nCycles -= APU.extraCycles;
     } else {
-      this.extraCycles = 0;
+      APU.extraCycles = 0;
     }
 
-    var dmc = this.dmc;
-    var triangle = this.triangle;
-    var square1 = this.square1;
-    var square2 = this.square2;
-    var noise = this.noise;
+    var dmc = APU.dmc;
+    var triangle = APU.triangle;
+    var square1 = APU.square1;
+    var square2 = APU.square2;
+    var noise = APU.noise;
 
     // Clock DMC:
     if(dmc.isEnabled){
@@ -374,253 +353,253 @@ PAPU.prototype = {
     }
 
     // Frame IRQ handling:
-    if(this.frameIrqEnabled && this.frameIrqActive){
-      NES.cpu.requestIrq(NES.cpu.IRQ_NORMAL);
+    if(APU.frameIrqEnabled && APU.frameIrqActive){
+      CPU.requestIrq(CPU.IRQ_NORMAL);
     }
 
     // Clock frame counter at double CPU speed:
-    this.masterFrameCounter += nCycles << 1;
-    if(this.masterFrameCounter >= this.frameTime){
+    APU.masterFrameCounter += nCycles << 1;
+    if(APU.masterFrameCounter >= APU.frameTime){
       // 240Hz tick:
-      this.masterFrameCounter -= this.frameTime;
-      this.frameCounterTick();
+      APU.masterFrameCounter -= APU.frameTime;
+      APU.frameCounterTick();
     }
 
     // Accumulate sample value:
-    this.accSample(nCycles);
+    APU.accSample(nCycles);
 
     // Clock sample timer:
-    this.sampleTimer += nCycles << 10;
-    if(this.sampleTimer >= this.sampleTimerMax){
+    APU.sampleTimer += nCycles << 10;
+    if(APU.sampleTimer >= APU.sampleTimerMax){
       // Sample channels:
-      this.sample();
-      this.sampleTimer -= this.sampleTimerMax;
+      APU.sample();
+      APU.sampleTimer -= APU.sampleTimerMax;
     }
   },
 
-  accSample: function(cycles){
+  accSample: cycles => {
     // Special treatment for triangle channel - need to interpolate.
-    if(this.triangle.sampleCondition){
-      this.triValue = Math.floor(
-        (this.triangle.progTimerCount << 4) / (this.triangle.progTimerMax + 1)
+    if(APU.triangle.sampleCondition){
+      APU.triValue = Math.floor(
+        (APU.triangle.progTimerCount << 4) / (APU.triangle.progTimerMax + 1)
       );
-      if(this.triValue > 16){
-        this.triValue = 16;
+      if(APU.triValue > 16){
+        APU.triValue = 16;
       }
-      if(this.triangle.triangleCounter >= 16){
-        this.triValue = 16 - this.triValue;
+      if(APU.triangle.triangleCounter >= 16){
+        APU.triValue = 16 - APU.triValue;
       }
 
       // Add non-interpolated sample value:
-      this.triValue += this.triangle.sampleValue;
+      APU.triValue += APU.triangle.sampleValue;
     }
 
     // Now sample normally:
     if(cycles === 2){
-      this.smpTriangle += this.triValue << 1;
-      this.smpDmc += this.dmc.sample << 1;
-      this.smpSquare1 += this.square1.sampleValue << 1;
-      this.smpSquare2 += this.square2.sampleValue << 1;
-      this.accCount += 2;
+      APU.smpTriangle += APU.triValue << 1;
+      APU.smpDmc += APU.dmc.sample << 1;
+      APU.smpSquare1 += APU.square1.sampleValue << 1;
+      APU.smpSquare2 += APU.square2.sampleValue << 1;
+      APU.accCount += 2;
     } else if(cycles === 4){
-      this.smpTriangle += this.triValue << 2;
-      this.smpDmc += this.dmc.sample << 2;
-      this.smpSquare1 += this.square1.sampleValue << 2;
-      this.smpSquare2 += this.square2.sampleValue << 2;
-      this.accCount += 4;
+      APU.smpTriangle += APU.triValue << 2;
+      APU.smpDmc += APU.dmc.sample << 2;
+      APU.smpSquare1 += APU.square1.sampleValue << 2;
+      APU.smpSquare2 += APU.square2.sampleValue << 2;
+      APU.accCount += 4;
     } else {
-      this.smpTriangle += cycles * this.triValue;
-      this.smpDmc += cycles * this.dmc.sample;
-      this.smpSquare1 += cycles * this.square1.sampleValue;
-      this.smpSquare2 += cycles * this.square2.sampleValue;
-      this.accCount += cycles;
+      APU.smpTriangle += cycles * APU.triValue;
+      APU.smpDmc += cycles * APU.dmc.sample;
+      APU.smpSquare1 += cycles * APU.square1.sampleValue;
+      APU.smpSquare2 += cycles * APU.square2.sampleValue;
+      APU.accCount += cycles;
     }
   },
 
-  frameCounterTick: function(){
-    this.derivedFrameCounter++;
-    if(this.derivedFrameCounter >= this.frameIrqCounterMax){
-      this.derivedFrameCounter = 0;
+  frameCounterTick: () => {
+    APU.derivedFrameCounter++;
+    if(APU.derivedFrameCounter >= APU.frameIrqCounterMax){
+      APU.derivedFrameCounter = 0;
     }
 
-    if(this.derivedFrameCounter === 1 || this.derivedFrameCounter === 3){
+    if(APU.derivedFrameCounter === 1 || APU.derivedFrameCounter === 3){
       // Clock length & sweep:
-      this.triangle.clockLengthCounter();
-      this.square1.clockLengthCounter();
-      this.square2.clockLengthCounter();
-      this.noise.clockLengthCounter();
-      this.square1.clockSweep();
-      this.square2.clockSweep();
+      APU.triangle.clockLengthCounter();
+      APU.square1.clockLengthCounter();
+      APU.square2.clockLengthCounter();
+      APU.noise.clockLengthCounter();
+      APU.square1.clockSweep();
+      APU.square2.clockSweep();
     }
 
-    if(this.derivedFrameCounter >= 0 && this.derivedFrameCounter < 4){
+    if(APU.derivedFrameCounter >= 0 && APU.derivedFrameCounter < 4){
       // Clock linear & decay:
-      this.square1.clockEnvDecay();
-      this.square2.clockEnvDecay();
-      this.noise.clockEnvDecay();
-      this.triangle.clockLinearCounter();
+      APU.square1.clockEnvDecay();
+      APU.square2.clockEnvDecay();
+      APU.noise.clockEnvDecay();
+      APU.triangle.clockLinearCounter();
     }
 
-    if(this.derivedFrameCounter === 3 && this.countSequence === 0){
+    if(APU.derivedFrameCounter === 3 && APU.countSequence === 0){
       // Enable IRQ:
-      this.frameIrqActive = true;
+      APU.frameIrqActive = true;
     }
 
     // End of 240Hz tick
   },
 
   // Samples the channels, mixes the output together, then writes to buffer.
-  sample: function(){
+  sample: () => {
     var sq_index, tnd_index;
 
-    if(this.accCount > 0){
-      this.smpSquare1 <<= 4;
-      this.smpSquare1 = Math.floor(this.smpSquare1 / this.accCount);
+    if(APU.accCount > 0){
+      APU.smpSquare1 <<= 4;
+      APU.smpSquare1 = Math.floor(APU.smpSquare1 / APU.accCount);
 
-      this.smpSquare2 <<= 4;
-      this.smpSquare2 = Math.floor(this.smpSquare2 / this.accCount);
+      APU.smpSquare2 <<= 4;
+      APU.smpSquare2 = Math.floor(APU.smpSquare2 / APU.accCount);
 
-      this.smpTriangle = Math.floor(this.smpTriangle / this.accCount);
+      APU.smpTriangle = Math.floor(APU.smpTriangle / APU.accCount);
 
-      this.smpDmc <<= 4;
-      this.smpDmc = Math.floor(this.smpDmc / this.accCount);
+      APU.smpDmc <<= 4;
+      APU.smpDmc = Math.floor(APU.smpDmc / APU.accCount);
 
-      this.accCount = 0;
+      APU.accCount = 0;
     } else {
-      this.smpSquare1 = this.square1.sampleValue << 4;
-      this.smpSquare2 = this.square2.sampleValue << 4;
-      this.smpTriangle = this.triangle.sampleValue;
-      this.smpDmc = this.dmc.sample << 4;
+      APU.smpSquare1 = APU.square1.sampleValue << 4;
+      APU.smpSquare2 = APU.square2.sampleValue << 4;
+      APU.smpTriangle = APU.triangle.sampleValue;
+      APU.smpDmc = APU.dmc.sample << 4;
     }
 
-    var smpNoise = Math.floor((this.noise.accValue << 4) / this.noise.accCount);
-    this.noise.accValue = smpNoise >> 4;
-    this.noise.accCount = 1;
+    var smpNoise = Math.floor((APU.noise.accValue << 4) / APU.noise.accCount);
+    APU.noise.accValue = smpNoise >> 4;
+    APU.noise.accCount = 1;
 
     // Stereo sound.
 
     // Left channel:
     sq_index =
-      (this.smpSquare1 * this.stereoPosLSquare1 +
-        this.smpSquare2 * this.stereoPosLSquare2) >>
+      (APU.smpSquare1 * APU.stereoPosLSquare1 +
+        APU.smpSquare2 * APU.stereoPosLSquare2) >>
       8;
     tnd_index =
-      (3 * this.smpTriangle * this.stereoPosLTriangle +
-        (smpNoise << 1) * this.stereoPosLNoise +
-        this.smpDmc * this.stereoPosLDMC) >>
+      (3 * APU.smpTriangle * APU.stereoPosLTriangle +
+        (smpNoise << 1) * APU.stereoPosLNoise +
+        APU.smpDmc * APU.stereoPosLDMC) >>
       8;
-    if(sq_index >= this.square_table.length){
-      sq_index = this.square_table.length - 1;
+    if(sq_index >= APU.square_table.length){
+      sq_index = APU.square_table.length - 1;
     }
-    if(tnd_index >= this.tnd_table.length){
-      tnd_index = this.tnd_table.length - 1;
+    if(tnd_index >= APU.tnd_table.length){
+      tnd_index = APU.tnd_table.length - 1;
     }
     var sampleValueL =
-      this.square_table[sq_index] + this.tnd_table[tnd_index] - this.dcValue;
+      APU.square_table[sq_index] + APU.tnd_table[tnd_index] - APU.dcValue;
 
     // Right channel:
     sq_index =
-      (this.smpSquare1 * this.stereoPosRSquare1 +
-        this.smpSquare2 * this.stereoPosRSquare2) >>
+      (APU.smpSquare1 * APU.stereoPosRSquare1 +
+        APU.smpSquare2 * APU.stereoPosRSquare2) >>
       8;
     tnd_index =
-      (3 * this.smpTriangle * this.stereoPosRTriangle +
-        (smpNoise << 1) * this.stereoPosRNoise +
-        this.smpDmc * this.stereoPosRDMC) >>
+      (3 * APU.smpTriangle * APU.stereoPosRTriangle +
+        (smpNoise << 1) * APU.stereoPosRNoise +
+        APU.smpDmc * APU.stereoPosRDMC) >>
       8;
-    if(sq_index >= this.square_table.length){
-      sq_index = this.square_table.length - 1;
+    if(sq_index >= APU.square_table.length){
+      sq_index = APU.square_table.length - 1;
     }
-    if(tnd_index >= this.tnd_table.length){
-      tnd_index = this.tnd_table.length - 1;
+    if(tnd_index >= APU.tnd_table.length){
+      tnd_index = APU.tnd_table.length - 1;
     }
     var sampleValueR =
-      this.square_table[sq_index] + this.tnd_table[tnd_index] - this.dcValue;
+      APU.square_table[sq_index] + APU.tnd_table[tnd_index] - APU.dcValue;
 
     // Remove DC from left channel:
-    var smpDiffL = sampleValueL - this.prevSampleL;
-    this.prevSampleL += smpDiffL;
-    this.smpAccumL += smpDiffL - (this.smpAccumL >> 10);
-    sampleValueL = this.smpAccumL;
+    var smpDiffL = sampleValueL - APU.prevSampleL;
+    APU.prevSampleL += smpDiffL;
+    APU.smpAccumL += smpDiffL - (APU.smpAccumL >> 10);
+    sampleValueL = APU.smpAccumL;
 
     // Remove DC from right channel:
-    var smpDiffR = sampleValueR - this.prevSampleR;
-    this.prevSampleR += smpDiffR;
-    this.smpAccumR += smpDiffR - (this.smpAccumR >> 10);
-    sampleValueR = this.smpAccumR;
+    var smpDiffR = sampleValueR - APU.prevSampleR;
+    APU.prevSampleR += smpDiffR;
+    APU.smpAccumR += smpDiffR - (APU.smpAccumR >> 10);
+    sampleValueR = APU.smpAccumR;
 
     // Write:
-    if(sampleValueL > this.maxSample){
-      this.maxSample = sampleValueL;
+    if(sampleValueL > APU.maxSample){
+      APU.maxSample = sampleValueL;
     }
-    if(sampleValueL < this.minSample){
-      this.minSample = sampleValueL;
+    if(sampleValueL < APU.minSample){
+      APU.minSample = sampleValueL;
     }
 
-    if(NES.opts.onAudioSample){
-      NES.opts.onAudioSample(sampleValueL / 32768, sampleValueR / 32768);
+    if(NES.onAudioSample){
+      NES.onAudioSample(sampleValueL / 32768, sampleValueR / 32768);
     }
 
     // Reset sampled values:
-    this.smpSquare1 = 0;
-    this.smpSquare2 = 0;
-    this.smpTriangle = 0;
-    this.smpDmc = 0;
+    APU.smpSquare1 = 0;
+    APU.smpSquare2 = 0;
+    APU.smpTriangle = 0;
+    APU.smpDmc = 0;
   },
 
-  getLengthMax: function(value){
-    return this.lengthLookup[value >> 3];
+  getLengthMax: value => {
+    return APU.lengthLookup[value >> 3];
   },
 
-  getDmcFrequency: function(value){
+  getDmcFrequency: value => {
     if(value >= 0 && value < 0x10){
-      return this.dmcFreqLookup[value];
+      return APU.dmcFreqLookup[value];
     }
     return 0;
   },
 
-  getNoiseWaveLength: function(value){
+  getNoiseWaveLength: value => {
     if(value >= 0 && value < 0x10){
-      return this.noiseWavelengthLookup[value];
+      return APU.noiseWavelengthLookup[value];
     }
     return 0;
   },
 
-  setPanning: function(pos){
+  setPanning: pos => {
     for(var i = 0; i < 5; i++){
-      this.panning[i] = pos[i];
+      APU.panning[i] = pos[i];
     }
-    this.updateStereoPos();
+    APU.updateStereoPos();
   },
 
-  setMasterVolume: function(value){
+  setMasterVolume: value => {
     if(value < 0){
       value = 0;
     }
     if(value > 256){
       value = 256;
     }
-    this.masterVolume = value;
-    this.updateStereoPos();
+    APU.masterVolume = value;
+    APU.updateStereoPos();
   },
 
-  updateStereoPos: function(){
-    this.stereoPosLSquare1 = (this.panning[0] * this.masterVolume) >> 8;
-    this.stereoPosLSquare2 = (this.panning[1] * this.masterVolume) >> 8;
-    this.stereoPosLTriangle = (this.panning[2] * this.masterVolume) >> 8;
-    this.stereoPosLNoise = (this.panning[3] * this.masterVolume) >> 8;
-    this.stereoPosLDMC = (this.panning[4] * this.masterVolume) >> 8;
+  updateStereoPos: () => {
+    APU.stereoPosLSquare1 = (APU.panning[0] * APU.masterVolume) >> 8;
+    APU.stereoPosLSquare2 = (APU.panning[1] * APU.masterVolume) >> 8;
+    APU.stereoPosLTriangle = (APU.panning[2] * APU.masterVolume) >> 8;
+    APU.stereoPosLNoise = (APU.panning[3] * APU.masterVolume) >> 8;
+    APU.stereoPosLDMC = (APU.panning[4] * APU.masterVolume) >> 8;
 
-    this.stereoPosRSquare1 = this.masterVolume - this.stereoPosLSquare1;
-    this.stereoPosRSquare2 = this.masterVolume - this.stereoPosLSquare2;
-    this.stereoPosRTriangle = this.masterVolume - this.stereoPosLTriangle;
-    this.stereoPosRNoise = this.masterVolume - this.stereoPosLNoise;
-    this.stereoPosRDMC = this.masterVolume - this.stereoPosLDMC;
+    APU.stereoPosRSquare1 = APU.masterVolume - APU.stereoPosLSquare1;
+    APU.stereoPosRSquare2 = APU.masterVolume - APU.stereoPosLSquare2;
+    APU.stereoPosRTriangle = APU.masterVolume - APU.stereoPosLTriangle;
+    APU.stereoPosRNoise = APU.masterVolume - APU.stereoPosLNoise;
+    APU.stereoPosRDMC = APU.masterVolume - APU.stereoPosLDMC;
   },
 
-  initLengthLookup: function(){
+  initLengthLookup: () => {
     // prettier-ignore
-    this.lengthLookup = [
+    APU.lengthLookup = [
             0x0A, 0xFE,
             0x14, 0x02,
             0x28, 0x04,
@@ -640,56 +619,56 @@ PAPU.prototype = {
         ];
   },
 
-  initDmcFrequencyLookup: function(){
-    this.dmcFreqLookup = new Array(16);
+  initDmcFrequencyLookup: () => {
+    APU.dmcFreqLookup = new Array(16);
 
-    this.dmcFreqLookup[0x0] = 0xd60;
-    this.dmcFreqLookup[0x1] = 0xbe0;
-    this.dmcFreqLookup[0x2] = 0xaa0;
-    this.dmcFreqLookup[0x3] = 0xa00;
-    this.dmcFreqLookup[0x4] = 0x8f0;
-    this.dmcFreqLookup[0x5] = 0x7f0;
-    this.dmcFreqLookup[0x6] = 0x710;
-    this.dmcFreqLookup[0x7] = 0x6b0;
-    this.dmcFreqLookup[0x8] = 0x5f0;
-    this.dmcFreqLookup[0x9] = 0x500;
-    this.dmcFreqLookup[0xa] = 0x470;
-    this.dmcFreqLookup[0xb] = 0x400;
-    this.dmcFreqLookup[0xc] = 0x350;
-    this.dmcFreqLookup[0xd] = 0x2a0;
-    this.dmcFreqLookup[0xe] = 0x240;
-    this.dmcFreqLookup[0xf] = 0x1b0;
+    APU.dmcFreqLookup[0x0] = 0xd60;
+    APU.dmcFreqLookup[0x1] = 0xbe0;
+    APU.dmcFreqLookup[0x2] = 0xaa0;
+    APU.dmcFreqLookup[0x3] = 0xa00;
+    APU.dmcFreqLookup[0x4] = 0x8f0;
+    APU.dmcFreqLookup[0x5] = 0x7f0;
+    APU.dmcFreqLookup[0x6] = 0x710;
+    APU.dmcFreqLookup[0x7] = 0x6b0;
+    APU.dmcFreqLookup[0x8] = 0x5f0;
+    APU.dmcFreqLookup[0x9] = 0x500;
+    APU.dmcFreqLookup[0xa] = 0x470;
+    APU.dmcFreqLookup[0xb] = 0x400;
+    APU.dmcFreqLookup[0xc] = 0x350;
+    APU.dmcFreqLookup[0xd] = 0x2a0;
+    APU.dmcFreqLookup[0xe] = 0x240;
+    APU.dmcFreqLookup[0xf] = 0x1b0;
     //for(int i=0;i<16;i++)dmcFreqLookup[i]/=8;
   },
 
-  initNoiseWavelengthLookup: function(){
-    this.noiseWavelengthLookup = new Array(16);
+  initNoiseWavelengthLookup: () => {
+    APU.noiseWavelengthLookup = new Array(16);
 
-    this.noiseWavelengthLookup[0x0] = 0x004;
-    this.noiseWavelengthLookup[0x1] = 0x008;
-    this.noiseWavelengthLookup[0x2] = 0x010;
-    this.noiseWavelengthLookup[0x3] = 0x020;
-    this.noiseWavelengthLookup[0x4] = 0x040;
-    this.noiseWavelengthLookup[0x5] = 0x060;
-    this.noiseWavelengthLookup[0x6] = 0x080;
-    this.noiseWavelengthLookup[0x7] = 0x0a0;
-    this.noiseWavelengthLookup[0x8] = 0x0ca;
-    this.noiseWavelengthLookup[0x9] = 0x0fe;
-    this.noiseWavelengthLookup[0xa] = 0x17c;
-    this.noiseWavelengthLookup[0xb] = 0x1fc;
-    this.noiseWavelengthLookup[0xc] = 0x2fa;
-    this.noiseWavelengthLookup[0xd] = 0x3f8;
-    this.noiseWavelengthLookup[0xe] = 0x7f2;
-    this.noiseWavelengthLookup[0xf] = 0xfe4;
+    APU.noiseWavelengthLookup[0x0] = 0x004;
+    APU.noiseWavelengthLookup[0x1] = 0x008;
+    APU.noiseWavelengthLookup[0x2] = 0x010;
+    APU.noiseWavelengthLookup[0x3] = 0x020;
+    APU.noiseWavelengthLookup[0x4] = 0x040;
+    APU.noiseWavelengthLookup[0x5] = 0x060;
+    APU.noiseWavelengthLookup[0x6] = 0x080;
+    APU.noiseWavelengthLookup[0x7] = 0x0a0;
+    APU.noiseWavelengthLookup[0x8] = 0x0ca;
+    APU.noiseWavelengthLookup[0x9] = 0x0fe;
+    APU.noiseWavelengthLookup[0xa] = 0x17c;
+    APU.noiseWavelengthLookup[0xb] = 0x1fc;
+    APU.noiseWavelengthLookup[0xc] = 0x2fa;
+    APU.noiseWavelengthLookup[0xd] = 0x3f8;
+    APU.noiseWavelengthLookup[0xe] = 0x7f2;
+    APU.noiseWavelengthLookup[0xf] = 0xfe4;
   },
 
-  initDACtables: function(){
+  initDACtables: () => {
     var value, ival, i;
     var max_sqr = 0;
     var max_tnd = 0;
 
-    this.square_table = new Array(32 * 16);
-    this.tnd_table = new Array(204 * 16);
+    APU.square_table = new Array(32 * 16);
+    APU.tnd_table = new Array(204 * 16);
 
     for(i = 0; i < 32 * 16; i++){
       value = 95.52 / (8128.0 / (i / 16.0) + 100.0);
@@ -697,7 +676,7 @@ PAPU.prototype = {
       value *= 50000.0;
       ival = Math.floor(value);
 
-      this.square_table[i] = ival;
+      APU.square_table[i] = ival;
       if(ival > max_sqr){
         max_sqr = ival;
       }
@@ -709,14 +688,14 @@ PAPU.prototype = {
       value *= 50000.0;
       ival = Math.floor(value);
 
-      this.tnd_table[i] = ival;
+      APU.tnd_table[i] = ival;
       if(ival > max_tnd){
         max_tnd = ival;
       }
     }
 
-    this.dacRange = max_sqr + max_tnd;
-    this.dcValue = this.dacRange / 2;
+    APU.dacRange = max_sqr + max_tnd;
+    APU.dcValue = APU.dacRange / 2;
   }
 };
 
@@ -781,7 +760,7 @@ ChannelDM.prototype = {
     }
 
     if(this.irqGenerated){
-      this.papu.nes.cpu.requestIrq(this.papu.nes.cpu.IRQ_NORMAL);
+      APU.CPU.requestIrq(APU.CPU.IRQ_NORMAL);
     }
   },
 
@@ -808,8 +787,8 @@ ChannelDM.prototype = {
 
   nextSample: function(){
     // Fetch byte:
-    this.data = this.papu.CPU.load(this.playAddress);
-    this.papu.nes.cpu.haltCycles(4);
+    this.data = APU.CPU.load(this.playAddress);
+    APU.CPU.haltCycles(4);
 
     this.playLengthCounter--;
     this.playAddress++;
@@ -835,7 +814,7 @@ ChannelDM.prototype = {
         this.irqGenerated = false;
       }
 
-      this.dmaFrequency = this.papu.getDmcFrequency(value & 0xf);
+      this.dmaFrequency = APU.getDmcFrequency(value & 0xf);
     } else if(address === 0x4011){
       // Delta counter load register:
       this.deltaCounter = (value >> 1) & 63;
@@ -1001,11 +980,11 @@ ChannelNoise.prototype = {
       }
     } else if(address === 0x400e){
       // Programmable timer:
-      this.progTimerMax = this.papu.getNoiseWaveLength(value & 0xf);
+      this.progTimerMax = APU.getNoiseWaveLength(value & 0xf);
       this.randomMode = value >> 7;
     } else if(address === 0x400f){
       // Length counter
-      this.lengthCounter = this.papu.getLengthMax(value & 248);
+      this.lengthCounter = APU.getLengthMax(value & 248);
       this.envReset = true;
     }
     // Update:
@@ -1212,7 +1191,7 @@ ChannelSquare.prototype = {
       this.progTimerMax |= (value & 0x7) << 8;
 
       if(this.isEnabled){
-        this.lengthCounter = this.papu.getLengthMax(value & 0xf8);
+        this.lengthCounter = APU.getLengthMax(value & 0xf8);
       }
 
       this.envReset = true;
@@ -1320,7 +1299,7 @@ ChannelTriangle.prototype = {
       // Programmable timer, length counter
       this.progTimerMax &= 0xff;
       this.progTimerMax |= (value & 0x07) << 8;
-      this.lengthCounter = this.papu.getLengthMax(value & 0xf8);
+      this.lengthCounter = APU.getLengthMax(value & 0xf8);
       this.lcHalt = true;
     }
 

@@ -89,10 +89,7 @@ start = file => {
     onAudioSample: function(left, right){
       leftSamples.push(left);
       rightSamples.push(right);
-    },
-    
-    // Pass the browser's sample rate to the emulator
-    sampleRate: 44100,
+    }
   });
 
   // Reset emulator

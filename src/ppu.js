@@ -1,365 +1,358 @@
-var PPU = function(nes){
-  NES = nes;
+// PPU
+// ===
 
-  // Keep Chrome happy
-  this.vramMem = null;
-  this.spriteMem = null;
-  this.vramAddress = null;
-  this.vramTmpAddress = null;
-  this.vramBufferedReadValue = null;
-  this.firstWrite = null;
-  this.sramAddress = null;
-  this.currentMirroring = null;
-  this.requestEndFrame = null;
-  this.nmiOk = null;
-  this.dummyCycleToggle = null;
-  this.validTileData = null;
-  this.nmiCounter = null;
-  this.scanlineAlreadyRendered = null;
-  this.f_nmiOnVblank = null;
-  this.f_spriteSize = null;
-  this.f_bgPatternTable = null;
-  this.f_spPatternTable = null;
-  this.f_addrInc = null;
-  this.f_nTblAddress = null;
-  this.f_color = null;
-  this.f_spVisibility = null;
-  this.f_bgVisibility = null;
-  this.f_spClipping = null;
-  this.f_bgClipping = null;
-  this.f_dispType = null;
-  this.cntFV = null;
-  this.cntV = null;
-  this.cntH = null;
-  this.cntVT = null;
-  this.cntHT = null;
-  this.regFV = null;
-  this.regV = null;
-  this.regH = null;
-  this.regVT = null;
-  this.regHT = null;
-  this.regFH = null;
-  this.regS = null;
-  this.curNt = null;
-  this.attrib = null;
-  this.buffer = null;
-  this.bgbuffer = null;
-  this.pixrendered = null;
+var PPU = {
+  vramMem: null,
+  spriteMem: null,
+  vramAddress: null,
+  vramTmpAddress: null,
+  vramBufferedReadValue: null,
+  firstWrite: null,
+  sramAddress: null,
+  currentMirroring: null,
+  requestEndFrame: null,
+  nmiOk: null,
+  dummyCycleToggle: null,
+  validTileData: null,
+  nmiCounter: null,
+  scanlineAlreadyRendered: null,
+  f_nmiOnVblank: null,
+  f_spriteSize: null,
+  f_bgPatternTable: null,
+  f_spPatternTable: null,
+  f_addrInc: null,
+  f_nTblAddress: null,
+  f_color: null,
+  f_spVisibility: null,
+  f_bgVisibility: null,
+  f_spClipping: null,
+  f_bgClipping: null,
+  f_dispType: null,
+  cntFV: null,
+  cntV: null,
+  cntH: null,
+  cntVT: null,
+  cntHT: null,
+  regFV: null,
+  regV: null,
+  regH: null,
+  regVT: null,
+  regHT: null,
+  regFH: null,
+  regS: null,
+  curNt: null,
+  attrib: null,
+  buffer: null,
+  bgbuffer: null,
+  pixrendered: null,
+  validTileData: null,
+  scantile: null,
+  scanline: null,
+  lastRenderedScanline: null,
+  curX: null,
+  sprX: null,
+  sprY: null,
+  sprTile: null,
+  sprCol: null,
+  vertFlip: null,
+  horiFlip: null,
+  bgPriority: null,
+  spr0HitX: null,
+  spr0HitY: null,
+  hitSpr0: null,
+  sprPalette: null,
+  imgPalette: null,
+  ptTile: null,
+  ntable1: null,
+  currentMirroring: null,
+  nameTable: null,
+  vramMirrorTable: null,
+  palTable: null,
+  showSpr0Hit: false,
+  clipToTvSize: true,
 
-  this.validTileData = null;
-  this.scantile = null;
-  this.scanline = null;
-  this.lastRenderedScanline = null;
-  this.curX = null;
-  this.sprX = null;
-  this.sprY = null;
-  this.sprTile = null;
-  this.sprCol = null;
-  this.vertFlip = null;
-  this.horiFlip = null;
-  this.bgPriority = null;
-  this.spr0HitX = null;
-  this.spr0HitY = null;
-  this.hitSpr0 = null;
-  this.sprPalette = null;
-  this.imgPalette = null;
-  this.ptTile = null;
-  this.ntable1 = null;
-  this.currentMirroring = null;
-  this.nameTable = null;
-  this.vramMirrorTable = null;
-  this.palTable = null;
-
-  // Rendering Options:
-  this.showSpr0Hit = false;
-  this.clipToTvSize = true;
-
-  this.reset();
-};
-
-PPU.prototype = {
   // Status flags:
   STATUS_VRAMWRITE: 4,
   STATUS_SLSPRITECOUNT: 5,
   STATUS_SPRITE0HIT: 6,
   STATUS_VBLANK: 7,
 
-  reset: function(){
+  reset: () => {
     var i;
 
     // Memory
-    this.vramMem = new Array(0x8000);
-    this.spriteMem = new Array(0x100);
-    for(i = 0; i < this.vramMem.length; i++){
-      this.vramMem[i] = 0;
+    PPU.vramMem = new Array(0x8000);
+    PPU.spriteMem = new Array(0x100);
+    for(i = 0; i < PPU.vramMem.length; i++){
+      PPU.vramMem[i] = 0;
     }
-    for(i = 0; i < this.spriteMem.length; i++){
-      this.spriteMem[i] = 0;
+    for(i = 0; i < PPU.spriteMem.length; i++){
+      PPU.spriteMem[i] = 0;
     }
 
     // VRAM I/O:
-    this.vramAddress = null;
-    this.vramTmpAddress = null;
-    this.vramBufferedReadValue = 0;
-    this.firstWrite = true; // VRAM/Scroll Hi/Lo latch
+    PPU.vramAddress = null;
+    PPU.vramTmpAddress = null;
+    PPU.vramBufferedReadValue = 0;
+    PPU.firstWrite = true; // VRAM/Scroll Hi/Lo latch
 
     // SPR-RAM I/O:
-    this.sramAddress = 0; // 8-bit only.
+    PPU.sramAddress = 0; // 8-bit only.
 
-    this.currentMirroring = -1;
-    this.requestEndFrame = false;
-    this.nmiOk = false;
-    this.dummyCycleToggle = false;
-    this.validTileData = false;
-    this.nmiCounter = 0;
-    this.scanlineAlreadyRendered = null;
+    PPU.currentMirroring = -1;
+    PPU.requestEndFrame = false;
+    PPU.nmiOk = false;
+    PPU.dummyCycleToggle = false;
+    PPU.validTileData = false;
+    PPU.nmiCounter = 0;
+    PPU.scanlineAlreadyRendered = null;
 
     // Control Flags Register 1:
-    this.f_nmiOnVblank = 0; // NMI on VBlank. 0=disable, 1=enable
-    this.f_spriteSize = 0; // Sprite size. 0=8x8, 1=8x16
-    this.f_bgPatternTable = 0; // Background Pattern Table address. 0=0x0000,1=0x1000
-    this.f_spPatternTable = 0; // Sprite Pattern Table address. 0=0x0000,1=0x1000
-    this.f_addrInc = 0; // PPU Address Increment. 0=1,1=32
-    this.f_nTblAddress = 0; // Name Table Address. 0=0x2000,1=0x2400,2=0x2800,3=0x2C00
+    PPU.f_nmiOnVblank = 0; // NMI on VBlank. 0=disable, 1=enable
+    PPU.f_spriteSize = 0; // Sprite size. 0=8x8, 1=8x16
+    PPU.f_bgPatternTable = 0; // Background Pattern Table address. 0=0x0000,1=0x1000
+    PPU.f_spPatternTable = 0; // Sprite Pattern Table address. 0=0x0000,1=0x1000
+    PPU.f_addrInc = 0; // PPU Address Increment. 0=1,1=32
+    PPU.f_nTblAddress = 0; // Name Table Address. 0=0x2000,1=0x2400,2=0x2800,3=0x2C00
 
     // Control Flags Register 2:
-    this.f_color = 0; // Background color. 0=black, 1=blue, 2=green, 4=red
-    this.f_spVisibility = 0; // Sprite visibility. 0=not displayed,1=displayed
-    this.f_bgVisibility = 0; // Background visibility. 0=Not Displayed,1=displayed
-    this.f_spClipping = 0; // Sprite clipping. 0=Sprites invisible in left 8-pixel column,1=No clipping
-    this.f_bgClipping = 0; // Background clipping. 0=BG invisible in left 8-pixel column, 1=No clipping
-    this.f_dispType = 0; // Display type. 0=color, 1=monochrome
+    PPU.f_color = 0; // Background color. 0=black, 1=blue, 2=green, 4=red
+    PPU.f_spVisibility = 0; // Sprite visibility. 0=not displayed,1=displayed
+    PPU.f_bgVisibility = 0; // Background visibility. 0=Not Displayed,1=displayed
+    PPU.f_spClipping = 0; // Sprite clipping. 0=Sprites invisible in left 8-pixel column,1=No clipping
+    PPU.f_bgClipping = 0; // Background clipping. 0=BG invisible in left 8-pixel column, 1=No clipping
+    PPU.f_dispType = 0; // Display type. 0=color, 1=monochrome
 
     // Counters:
-    this.cntFV = 0;
-    this.cntV = 0;
-    this.cntH = 0;
-    this.cntVT = 0;
-    this.cntHT = 0;
+    PPU.cntFV = 0;
+    PPU.cntV = 0;
+    PPU.cntH = 0;
+    PPU.cntVT = 0;
+    PPU.cntHT = 0;
 
     // Registers:
-    this.regFV = 0;
-    this.regV = 0;
-    this.regH = 0;
-    this.regVT = 0;
-    this.regHT = 0;
-    this.regFH = 0;
-    this.regS = 0;
+    PPU.regFV = 0;
+    PPU.regV = 0;
+    PPU.regH = 0;
+    PPU.regVT = 0;
+    PPU.regHT = 0;
+    PPU.regFH = 0;
+    PPU.regS = 0;
 
     // These are temporary variables used in rendering and sound procedures.
     // Their states outside of those procedures can be ignored.
     // TODO: the use of this is a bit weird, investigate
-    this.curNt = null;
+    PPU.curNt = null;
 
     // Variables used when rendering:
-    this.attrib = new Array(32);
-    this.buffer = new Array(256 * 240);
-    this.bgbuffer = new Array(256 * 240);
-    this.pixrendered = new Array(256 * 240);
+    PPU.attrib = new Array(32);
+    PPU.buffer = new Array(256 * 240);
+    PPU.bgbuffer = new Array(256 * 240);
+    PPU.pixrendered = new Array(256 * 240);
 
-    this.validTileData = null;
+    PPU.validTileData = null;
 
-    this.scantile = new Array(32);
+    PPU.scantile = new Array(32);
 
     // Initialize misc vars:
-    this.scanline = 0;
-    this.lastRenderedScanline = -1;
-    this.curX = 0;
+    PPU.scanline = 0;
+    PPU.lastRenderedScanline = -1;
+    PPU.curX = 0;
 
     // Sprite data:
-    this.sprX = new Array(64); // X coordinate
-    this.sprY = new Array(64); // Y coordinate
-    this.sprTile = new Array(64); // Tile Index (into pattern table)
-    this.sprCol = new Array(64); // Upper two bits of color
-    this.vertFlip = new Array(64); // Vertical Flip
-    this.horiFlip = new Array(64); // Horizontal Flip
-    this.bgPriority = new Array(64); // Background priority
-    this.spr0HitX = 0; // Sprite #0 hit X coordinate
-    this.spr0HitY = 0; // Sprite #0 hit Y coordinate
-    this.hitSpr0 = false;
+    PPU.sprX = new Array(64); // X coordinate
+    PPU.sprY = new Array(64); // Y coordinate
+    PPU.sprTile = new Array(64); // Tile Index (into pattern table)
+    PPU.sprCol = new Array(64); // Upper two bits of color
+    PPU.vertFlip = new Array(64); // Vertical Flip
+    PPU.horiFlip = new Array(64); // Horizontal Flip
+    PPU.bgPriority = new Array(64); // Background priority
+    PPU.spr0HitX = 0; // Sprite #0 hit X coordinate
+    PPU.spr0HitY = 0; // Sprite #0 hit Y coordinate
+    PPU.hitSpr0 = false;
 
     // Palette data:
-    this.sprPalette = new Array(16);
-    this.imgPalette = new Array(16);
+    PPU.sprPalette = new Array(16);
+    PPU.imgPalette = new Array(16);
 
     // Create pattern table tile buffers:
-    this.ptTile = new Array(512);
+    PPU.ptTile = new Array(512);
     for(i = 0; i < 512; i++){
-      this.ptTile[i] = { pixels: [] };
+      PPU.ptTile[i] = { pixels: [] };
     }
 
     // Create nametable buffers:
     // Name table data:
-    this.ntable1 = new Array(4);
-    this.currentMirroring = -1;
-    this.nameTable = new Array(4);
+    PPU.ntable1 = new Array(4);
+    PPU.currentMirroring = -1;
+    PPU.nameTable = new Array(4);
     for(i = 0; i < 4; i++){
-      this.nameTable[i] = new NameTable(32, 32, "Nt" + i);
+      PPU.nameTable[i] = new NameTable(32, 32, "Nt" + i);
     }
 
     // Initialize mirroring lookup table:
-    this.vramMirrorTable = new Array(0x8000);
+    PPU.vramMirrorTable = new Array(0x8000);
     for(i = 0; i < 0x8000; i++){
-      this.vramMirrorTable[i] = i;
+      PPU.vramMirrorTable[i] = i;
     }
 
-    this.palTable = new PaletteTable();
-    this.palTable.loadNTSCPalette();
-    //this.palTable.loadDefaultPalette();
+    PPU.palTable = new PaletteTable();
+    PPU.palTable.loadNTSCPalette();
+    //PPU.palTable.loadDefaultPalette();
 
-    this.updateControlReg1(0);
-    this.updateControlReg2(0);
+    PPU.updateControlReg1(0);
+    PPU.updateControlReg2(0);
   },
 
   // Sets Nametable mirroring.
-  setMirroring: function(mirroring){
-    if(mirroring === this.currentMirroring){
+  setMirroring: mirroring => {
+    if(mirroring === PPU.currentMirroring){
       return;
     }
 
-    this.currentMirroring = mirroring;
-    this.triggerRendering();
+    PPU.currentMirroring = mirroring;
+    PPU.triggerRendering();
 
     // Remove mirroring:
-    if(this.vramMirrorTable === null){
-      this.vramMirrorTable = new Array(0x8000);
+    if(PPU.vramMirrorTable === null){
+      PPU.vramMirrorTable = new Array(0x8000);
     }
     for(var i = 0; i < 0x8000; i++){
-      this.vramMirrorTable[i] = i;
+      PPU.vramMirrorTable[i] = i;
     }
 
     // Palette mirroring:
-    this.defineMirrorRegion(0x3f20, 0x3f00, 0x20);
-    this.defineMirrorRegion(0x3f40, 0x3f00, 0x20);
-    this.defineMirrorRegion(0x3f80, 0x3f00, 0x20);
-    this.defineMirrorRegion(0x3fc0, 0x3f00, 0x20);
+    PPU.defineMirrorRegion(0x3f20, 0x3f00, 0x20);
+    PPU.defineMirrorRegion(0x3f40, 0x3f00, 0x20);
+    PPU.defineMirrorRegion(0x3f80, 0x3f00, 0x20);
+    PPU.defineMirrorRegion(0x3fc0, 0x3f00, 0x20);
 
     // Additional mirroring:
-    this.defineMirrorRegion(0x3000, 0x2000, 0xf00);
-    this.defineMirrorRegion(0x4000, 0x0000, 0x4000);
+    PPU.defineMirrorRegion(0x3000, 0x2000, 0xf00);
+    PPU.defineMirrorRegion(0x4000, 0x0000, 0x4000);
 
     if(mirroring === 1){
       // Horizontal mirroring.
 
-      this.ntable1[0] = 0;
-      this.ntable1[1] = 0;
-      this.ntable1[2] = 1;
-      this.ntable1[3] = 1;
+      PPU.ntable1[0] = 0;
+      PPU.ntable1[1] = 0;
+      PPU.ntable1[2] = 1;
+      PPU.ntable1[3] = 1;
 
-      this.defineMirrorRegion(0x2400, 0x2000, 0x400);
-      this.defineMirrorRegion(0x2c00, 0x2800, 0x400);
+      PPU.defineMirrorRegion(0x2400, 0x2000, 0x400);
+      PPU.defineMirrorRegion(0x2c00, 0x2800, 0x400);
     } else if(mirroring === 0){
       // Vertical mirroring.
 
-      this.ntable1[0] = 0;
-      this.ntable1[1] = 1;
-      this.ntable1[2] = 0;
-      this.ntable1[3] = 1;
+      PPU.ntable1[0] = 0;
+      PPU.ntable1[1] = 1;
+      PPU.ntable1[2] = 0;
+      PPU.ntable1[3] = 1;
 
-      this.defineMirrorRegion(0x2800, 0x2000, 0x400);
-      this.defineMirrorRegion(0x2c00, 0x2400, 0x400);
+      PPU.defineMirrorRegion(0x2800, 0x2000, 0x400);
+      PPU.defineMirrorRegion(0x2c00, 0x2400, 0x400);
     } /*else if(mirroring === ROM.SINGLESCREEN_MIRRORING){
       // Single Screen mirroring
 
-      this.ntable1[0] = 0;
-      this.ntable1[1] = 0;
-      this.ntable1[2] = 0;
-      this.ntable1[3] = 0;
+      PPU.ntable1[0] = 0;
+      PPU.ntable1[1] = 0;
+      PPU.ntable1[2] = 0;
+      PPU.ntable1[3] = 0;
 
-      this.defineMirrorRegion(0x2400, 0x2000, 0x400);
-      this.defineMirrorRegion(0x2800, 0x2000, 0x400);
-      this.defineMirrorRegion(0x2c00, 0x2000, 0x400);
+      PPU.defineMirrorRegion(0x2400, 0x2000, 0x400);
+      PPU.defineMirrorRegion(0x2800, 0x2000, 0x400);
+      PPU.defineMirrorRegion(0x2c00, 0x2000, 0x400);
     } else if(mirroring === ROM.SINGLESCREEN_MIRRORING2){
-      this.ntable1[0] = 1;
-      this.ntable1[1] = 1;
-      this.ntable1[2] = 1;
-      this.ntable1[3] = 1;
+      PPU.ntable1[0] = 1;
+      PPU.ntable1[1] = 1;
+      PPU.ntable1[2] = 1;
+      PPU.ntable1[3] = 1;
 
-      this.defineMirrorRegion(0x2400, 0x2400, 0x400);
-      this.defineMirrorRegion(0x2800, 0x2400, 0x400);
-      this.defineMirrorRegion(0x2c00, 0x2400, 0x400);
+      PPU.defineMirrorRegion(0x2400, 0x2400, 0x400);
+      PPU.defineMirrorRegion(0x2800, 0x2400, 0x400);
+      PPU.defineMirrorRegion(0x2c00, 0x2400, 0x400);
     } */
     else {
       // Assume Four-screen mirroring.
 
-      this.ntable1[0] = 0;
-      this.ntable1[1] = 1;
-      this.ntable1[2] = 2;
-      this.ntable1[3] = 3;
+      PPU.ntable1[0] = 0;
+      PPU.ntable1[1] = 1;
+      PPU.ntable1[2] = 2;
+      PPU.ntable1[3] = 3;
     }
   },
 
   // Define a mirrored area in the address lookup table.
   // Assumes the regions don't overlap.
   // The 'to' region is the region that is physically in memory.
-  defineMirrorRegion: function(fromStart, toStart, size){
+  defineMirrorRegion: (fromStart, toStart, size) => {
     for(var i = 0; i < size; i++){
-      this.vramMirrorTable[fromStart + i] = toStart + i;
+      PPU.vramMirrorTable[fromStart + i] = toStart + i;
     }
   },
 
-  startVBlank: function(){
+  startVBlank: () => {
     // Do NMI:
-    NES.cpu.requestIrq(NES.cpu.IRQ_NMI);
+    CPU.requestIrq(CPU.IRQ_NMI);
 
     // Make sure everything is rendered:
-    if(this.lastRenderedScanline < 239){
-      this.renderFramePartially(
-        this.lastRenderedScanline + 1,
-        240 - this.lastRenderedScanline
+    if(PPU.lastRenderedScanline < 239){
+      PPU.renderFramePartially(
+        PPU.lastRenderedScanline + 1,
+        240 - PPU.lastRenderedScanline
       );
     }
 
     // End frame:
-    this.endFrame();
+    PPU.endFrame();
 
     // Reset scanline counter:
-    this.lastRenderedScanline = -1;
+    PPU.lastRenderedScanline = -1;
   },
 
-  endScanline: function(){
-    switch (this.scanline){
+  endScanline: () => {
+    switch (PPU.scanline){
       case 19:
         // Dummy scanline.
         // May be variable length:
-        if(this.dummyCycleToggle){
+        if(PPU.dummyCycleToggle){
           // Remove dead cycle at end of scanline,
           // for next scanline:
-          this.curX = 1;
-          this.dummyCycleToggle = !this.dummyCycleToggle;
+          PPU.curX = 1;
+          PPU.dummyCycleToggle = !PPU.dummyCycleToggle;
         }
         break;
 
       case 20:
         // Clear VBlank flag:
-        this.setStatusFlag(this.STATUS_VBLANK, false);
+        PPU.setStatusFlag(PPU.STATUS_VBLANK, false);
 
         // Clear Sprite #0 hit flag:
-        this.setStatusFlag(this.STATUS_SPRITE0HIT, false);
-        this.hitSpr0 = false;
-        this.spr0HitX = -1;
-        this.spr0HitY = -1;
+        PPU.setStatusFlag(PPU.STATUS_SPRITE0HIT, false);
+        PPU.hitSpr0 = false;
+        PPU.spr0HitX = -1;
+        PPU.spr0HitY = -1;
 
-        if(this.f_bgVisibility === 1 || this.f_spVisibility === 1){
+        if(PPU.f_bgVisibility === 1 || PPU.f_spVisibility === 1){
           // Update counters:
-          this.cntFV = this.regFV;
-          this.cntV = this.regV;
-          this.cntH = this.regH;
-          this.cntVT = this.regVT;
-          this.cntHT = this.regHT;
+          PPU.cntFV = PPU.regFV;
+          PPU.cntV = PPU.regV;
+          PPU.cntH = PPU.regH;
+          PPU.cntVT = PPU.regVT;
+          PPU.cntHT = PPU.regHT;
 
-          if(this.f_bgVisibility === 1){
+          if(PPU.f_bgVisibility === 1){
             // Render dummy scanline:
-            this.renderBgScanline(false, 0);
+            PPU.renderBgScanline(false, 0);
           }
         }
 
-        if(this.f_bgVisibility === 1 && this.f_spVisibility === 1){
+        if(PPU.f_bgVisibility === 1 && PPU.f_spVisibility === 1){
           // Check sprite 0 hit for first scanline:
-          this.checkSprite0(0);
+          PPU.checkSprite0(0);
         }
 
-        if(this.f_bgVisibility === 1 || this.f_spVisibility === 1){
+        if(PPU.f_bgVisibility === 1 || PPU.f_spVisibility === 1){
           // Clock mapper IRQ Counter:
           //Mapper.clockIrqCounter();
         }
@@ -368,68 +361,68 @@ PPU.prototype = {
       case 261:
         // Dead scanline, no rendering.
         // Set VINT:
-        this.setStatusFlag(this.STATUS_VBLANK, true);
-        this.requestEndFrame = true;
-        this.nmiCounter = 9;
+        PPU.setStatusFlag(PPU.STATUS_VBLANK, true);
+        PPU.requestEndFrame = true;
+        PPU.nmiCounter = 9;
 
         // Wrap around:
-        this.scanline = -1; // will be incremented to 0
+        PPU.scanline = -1; // will be incremented to 0
 
         break;
 
       default:
-        if(this.scanline >= 21 && this.scanline <= 260){
+        if(PPU.scanline >= 21 && PPU.scanline <= 260){
           // Render normally:
-          if(this.f_bgVisibility === 1){
-            if(!this.scanlineAlreadyRendered){
+          if(PPU.f_bgVisibility === 1){
+            if(!PPU.scanlineAlreadyRendered){
               // update scroll:
-              this.cntHT = this.regHT;
-              this.cntH = this.regH;
-              this.renderBgScanline(true, this.scanline + 1 - 21);
+              PPU.cntHT = PPU.regHT;
+              PPU.cntH = PPU.regH;
+              PPU.renderBgScanline(true, PPU.scanline + 1 - 21);
             }
-            this.scanlineAlreadyRendered = false;
+            PPU.scanlineAlreadyRendered = false;
 
             // Check for sprite 0 (next scanline):
-            if(!this.hitSpr0 && this.f_spVisibility === 1){
+            if(!PPU.hitSpr0 && PPU.f_spVisibility === 1){
               if(
-                this.sprX[0] >= -7 &&
-                this.sprX[0] < 256 &&
-                this.sprY[0] + 1 <= this.scanline - 20 &&
-                this.sprY[0] + 1 + (this.f_spriteSize === 0 ? 8 : 16) >=
-                  this.scanline - 20
+                PPU.sprX[0] >= -7 &&
+                PPU.sprX[0] < 256 &&
+                PPU.sprY[0] + 1 <= PPU.scanline - 20 &&
+                PPU.sprY[0] + 1 + (PPU.f_spriteSize === 0 ? 8 : 16) >=
+                  PPU.scanline - 20
               ){
-                if(this.checkSprite0(this.scanline - 20)){
-                  this.hitSpr0 = true;
+                if(PPU.checkSprite0(PPU.scanline - 20)){
+                  PPU.hitSpr0 = true;
                 }
               }
             }
           }
 
-          if(this.f_bgVisibility === 1 || this.f_spVisibility === 1){
+          if(PPU.f_bgVisibility === 1 || PPU.f_spVisibility === 1){
             // Clock mapper IRQ Counter:
             //Mapper.clockIrqCounter();
           }
         }
     }
 
-    this.scanline++;
-    this.regsToAddress();
-    this.cntsToAddress();
+    PPU.scanline++;
+    PPU.regsToAddress();
+    PPU.cntsToAddress();
   },
 
-  startFrame: function(){
+  startFrame: () => {
     // Set background color:
     var bgColor = 0;
 
-    if(this.f_dispType === 0){
+    if(PPU.f_dispType === 0){
       // Color display.
       // f_color determines color emphasis.
       // Use first entry of image palette as BG color.
-      bgColor = this.imgPalette[0];
+      bgColor = PPU.imgPalette[0];
     } else {
       // Monochrome display.
       // f_color determines the bg color.
-      switch (this.f_color){
+      switch (PPU.f_color){
         case 0:
           // Black
           bgColor = 0x00000;
@@ -456,49 +449,49 @@ PPU.prototype = {
       }
     }
 
-    var buffer = this.buffer;
+    var buffer = PPU.buffer;
     var i;
     for(i = 0; i < 256 * 240; i++){
       buffer[i] = bgColor;
     }
-    var pixrendered = this.pixrendered;
+    var pixrendered = PPU.pixrendered;
     for(i = 0; i < pixrendered.length; i++){
       pixrendered[i] = 65;
     }
   },
 
-  endFrame: function(){
+  endFrame: () => {
     var i, x, y;
-    var buffer = this.buffer;
+    var buffer = PPU.buffer;
 
     // Draw spr#0 hit coordinates:
-    if(this.showSpr0Hit){
+    if(PPU.showSpr0Hit){
       // Spr 0 position:
       if(
-        this.sprX[0] >= 0 &&
-        this.sprX[0] < 256 &&
-        this.sprY[0] >= 0 &&
-        this.sprY[0] < 240
+        PPU.sprX[0] >= 0 &&
+        PPU.sprX[0] < 256 &&
+        PPU.sprY[0] >= 0 &&
+        PPU.sprY[0] < 240
       ){
         for(i = 0; i < 256; i++){
-          buffer[(this.sprY[0] << 8) + i] = 0xff5555;
+          buffer[(PPU.sprY[0] << 8) + i] = 0xff5555;
         }
         for(i = 0; i < 240; i++){
-          buffer[(i << 8) + this.sprX[0]] = 0xff5555;
+          buffer[(i << 8) + PPU.sprX[0]] = 0xff5555;
         }
       }
       // Hit position:
       if(
-        this.spr0HitX >= 0 &&
-        this.spr0HitX < 256 &&
-        this.spr0HitY >= 0 &&
-        this.spr0HitY < 240
+        PPU.spr0HitX >= 0 &&
+        PPU.spr0HitX < 256 &&
+        PPU.spr0HitY >= 0 &&
+        PPU.spr0HitY < 240
       ){
         for(i = 0; i < 256; i++){
-          buffer[(this.spr0HitY << 8) + i] = 0x55ff55;
+          buffer[(PPU.spr0HitY << 8) + i] = 0x55ff55;
         }
         for(i = 0; i < 240; i++){
-          buffer[(i << 8) + this.spr0HitX] = 0x55ff55;
+          buffer[(i << 8) + PPU.spr0HitX] = 0x55ff55;
         }
       }
     }
@@ -507,9 +500,9 @@ PPU.prototype = {
     // if either the sprites or the background should be clipped,
     // both are clipped after rendering is finished.
     if(
-      this.clipToTvSize ||
-      this.f_bgClipping === 0 ||
-      this.f_spClipping === 0
+      PPU.clipToTvSize ||
+      PPU.f_bgClipping === 0 ||
+      PPU.f_spClipping === 0
     ){
       // Clip left 8-pixels column:
       for(y = 0; y < 240; y++){
@@ -519,7 +512,7 @@ PPU.prototype = {
       }
     }
 
-    if(this.clipToTvSize){
+    if(PPU.clipToTvSize){
       // Clip right 8-pixels column too:
       for(y = 0; y < 240; y++){
         for(x = 0; x < 8; x++){
@@ -529,7 +522,7 @@ PPU.prototype = {
     }
 
     // Clip top and bottom 8 pixels:
-    if(this.clipToTvSize){
+    if(PPU.clipToTvSize){
       for(y = 0; y < 8; y++){
         for(x = 0; x < 256; x++){
           buffer[(y << 8) + x] = 0;
@@ -538,56 +531,56 @@ PPU.prototype = {
       }
     }
 
-    NES.ui.writeFrame(buffer);
+    NES.onFrame(buffer);
   },
 
-  updateControlReg1: function(value){
-    this.triggerRendering();
+  updateControlReg1: value => {
+    PPU.triggerRendering();
 
-    this.f_nmiOnVblank = (value >> 7) & 1;
-    this.f_spriteSize = (value >> 5) & 1;
-    this.f_bgPatternTable = (value >> 4) & 1;
-    this.f_spPatternTable = (value >> 3) & 1;
-    this.f_addrInc = (value >> 2) & 1;
-    this.f_nTblAddress = value & 3;
+    PPU.f_nmiOnVblank = (value >> 7) & 1;
+    PPU.f_spriteSize = (value >> 5) & 1;
+    PPU.f_bgPatternTable = (value >> 4) & 1;
+    PPU.f_spPatternTable = (value >> 3) & 1;
+    PPU.f_addrInc = (value >> 2) & 1;
+    PPU.f_nTblAddress = value & 3;
 
-    this.regV = (value >> 1) & 1;
-    this.regH = value & 1;
-    this.regS = (value >> 4) & 1;
+    PPU.regV = (value >> 1) & 1;
+    PPU.regH = value & 1;
+    PPU.regS = (value >> 4) & 1;
   },
 
-  updateControlReg2: function(value){
-    this.triggerRendering();
+  updateControlReg2: value => {
+    PPU.triggerRendering();
 
-    this.f_color = (value >> 5) & 7;
-    this.f_spVisibility = (value >> 4) & 1;
-    this.f_bgVisibility = (value >> 3) & 1;
-    this.f_spClipping = (value >> 2) & 1;
-    this.f_bgClipping = (value >> 1) & 1;
-    this.f_dispType = value & 1;
+    PPU.f_color = (value >> 5) & 7;
+    PPU.f_spVisibility = (value >> 4) & 1;
+    PPU.f_bgVisibility = (value >> 3) & 1;
+    PPU.f_spClipping = (value >> 2) & 1;
+    PPU.f_bgClipping = (value >> 1) & 1;
+    PPU.f_dispType = value & 1;
 
-    if(this.f_dispType === 0){
-      this.palTable.setEmphasis(this.f_color);
+    if(PPU.f_dispType === 0){
+      PPU.palTable.setEmphasis(PPU.f_color);
     }
-    this.updatePalettes();
+    PPU.updatePalettes();
   },
 
-  setStatusFlag: function(flag, value){
+  setStatusFlag: (flag, value) => {
     var n = 1 << flag;
-    NES.cpu.mem[0x2002] =
-      (NES.cpu.mem[0x2002] & (255 - n)) | (value ? n : 0);
+    CPU.mem[0x2002] =
+      (CPU.mem[0x2002] & (255 - n)) | (value ? n : 0);
   },
 
   // CPU Register $2002:
   // Read the Status Register.
-  readStatusRegister: function(){
-    var tmp = NES.cpu.mem[0x2002];
+  readStatusRegister: () => {
+    var tmp = CPU.mem[0x2002];
 
     // Reset scroll & VRAM Address toggle:
-    this.firstWrite = true;
+    PPU.firstWrite = true;
 
     // Clear VBlank flag:
-    this.setStatusFlag(this.STATUS_VBLANK, false);
+    PPU.setStatusFlag(PPU.STATUS_VBLANK, false);
 
     // Fetch status data:
     return tmp;
@@ -595,232 +588,232 @@ PPU.prototype = {
 
   // CPU Register $2003:
   // Write the SPR-RAM address that is used for sramWrite (Register 0x2004 in CPU memory map)
-  writeSRAMAddress: function(address){
-    this.sramAddress = address;
+  writeSRAMAddress: address => {
+    PPU.sramAddress = address;
   },
 
   // CPU Register $2004 (R):
   // Read from SPR-RAM (Sprite RAM).
   // The address should be set first.
-  sramLoad: function(){
+  sramLoad: () => {
     /*short tmp = sprMem.load(sramAddress);
         sramAddress++; // Increment address
         sramAddress%=0x100;
         return tmp;*/
-    return this.spriteMem[this.sramAddress];
+    return PPU.spriteMem[PPU.sramAddress];
   },
 
   // CPU Register $2004 (W):
   // Write to SPR-RAM (Sprite RAM).
   // The address should be set first.
-  sramWrite: function(value){
-    this.spriteMem[this.sramAddress] = value;
-    this.spriteRamWriteUpdate(this.sramAddress, value);
-    this.sramAddress++; // Increment address
-    this.sramAddress %= 0x100;
+  sramWrite: value => {
+    PPU.spriteMem[PPU.sramAddress] = value;
+    PPU.spriteRamWriteUpdate(PPU.sramAddress, value);
+    PPU.sramAddress++; // Increment address
+    PPU.sramAddress %= 0x100;
   },
 
   // CPU Register $2005:
   // Write to scroll registers.
   // The first write is the vertical offset, the second is the
   // horizontal offset:
-  scrollWrite: function(value){
-    this.triggerRendering();
+  scrollWrite: value => {
+    PPU.triggerRendering();
 
-    if(this.firstWrite){
+    if(PPU.firstWrite){
       // First write, horizontal scroll:
-      this.regHT = (value >> 3) & 31;
-      this.regFH = value & 7;
+      PPU.regHT = (value >> 3) & 31;
+      PPU.regFH = value & 7;
     } else {
       // Second write, vertical scroll:
-      this.regFV = value & 7;
-      this.regVT = (value >> 3) & 31;
+      PPU.regFV = value & 7;
+      PPU.regVT = (value >> 3) & 31;
     }
-    this.firstWrite = !this.firstWrite;
+    PPU.firstWrite = !PPU.firstWrite;
   },
 
   // CPU Register $2006:
   // Sets the adress used when reading/writing from/to VRAM.
   // The first write sets the high byte, the second the low byte.
-  writeVRAMAddress: function(address){
-    if(this.firstWrite){
-      this.regFV = (address >> 4) & 3;
-      this.regV = (address >> 3) & 1;
-      this.regH = (address >> 2) & 1;
-      this.regVT = (this.regVT & 7) | ((address & 3) << 3);
+  writeVRAMAddress: address => {
+    if(PPU.firstWrite){
+      PPU.regFV = (address >> 4) & 3;
+      PPU.regV = (address >> 3) & 1;
+      PPU.regH = (address >> 2) & 1;
+      PPU.regVT = (PPU.regVT & 7) | ((address & 3) << 3);
     } else {
-      this.triggerRendering();
+      PPU.triggerRendering();
 
-      this.regVT = (this.regVT & 24) | ((address >> 5) & 7);
-      this.regHT = address & 31;
+      PPU.regVT = (PPU.regVT & 24) | ((address >> 5) & 7);
+      PPU.regHT = address & 31;
 
-      this.cntFV = this.regFV;
-      this.cntV = this.regV;
-      this.cntH = this.regH;
-      this.cntVT = this.regVT;
-      this.cntHT = this.regHT;
+      PPU.cntFV = PPU.regFV;
+      PPU.cntV = PPU.regV;
+      PPU.cntH = PPU.regH;
+      PPU.cntVT = PPU.regVT;
+      PPU.cntHT = PPU.regHT;
 
-      this.checkSprite0(this.scanline - 20);
+      PPU.checkSprite0(PPU.scanline - 20);
     }
 
-    this.firstWrite = !this.firstWrite;
+    PPU.firstWrite = !PPU.firstWrite;
 
     // Invoke mapper latch:
-    this.cntsToAddress();
-    if(this.vramAddress < 0x2000){
-      //Mapper.latchAccess(this.vramAddress);
+    PPU.cntsToAddress();
+    if(PPU.vramAddress < 0x2000){
+      //Mapper.latchAccess(PPU.vramAddress);
     }
   },
 
   // CPU Register $2007(R):
   // Read from PPU memory. The address should be set first.
-  vramLoad: function(){
+  vramLoad: () => {
     var tmp;
 
-    this.cntsToAddress();
-    this.regsToAddress();
+    PPU.cntsToAddress();
+    PPU.regsToAddress();
 
     // If address is in range 0x0000-0x3EFF, return buffered values:
-    if(this.vramAddress <= 0x3eff){
-      tmp = this.vramBufferedReadValue;
+    if(PPU.vramAddress <= 0x3eff){
+      tmp = PPU.vramBufferedReadValue;
 
       // Update buffered value:
-      if(this.vramAddress < 0x2000){
-        this.vramBufferedReadValue = this.vramMem[this.vramAddress];
+      if(PPU.vramAddress < 0x2000){
+        PPU.vramBufferedReadValue = PPU.vramMem[PPU.vramAddress];
       } else {
-        this.vramBufferedReadValue = this.mirroredLoad(this.vramAddress);
+        PPU.vramBufferedReadValue = PPU.mirroredLoad(PPU.vramAddress);
       }
 
       // Mapper latch access:
-      if(this.vramAddress < 0x2000){
-        //Mapper.latchAccess(this.vramAddress);
+      if(PPU.vramAddress < 0x2000){
+        //Mapper.latchAccess(PPU.vramAddress);
       }
 
       // Increment by either 1 or 32, depending on d2 of Control Register 1:
-      this.vramAddress += this.f_addrInc === 1 ? 32 : 1;
+      PPU.vramAddress += PPU.f_addrInc === 1 ? 32 : 1;
 
-      this.cntsFromAddress();
-      this.regsFromAddress();
+      PPU.cntsFromAddress();
+      PPU.regsFromAddress();
 
       return tmp; // Return the previous buffered value.
     }
 
     // No buffering in this mem range. Read normally.
-    tmp = this.mirroredLoad(this.vramAddress);
+    tmp = PPU.mirroredLoad(PPU.vramAddress);
 
     // Increment by either 1 or 32, depending on d2 of Control Register 1:
-    this.vramAddress += this.f_addrInc === 1 ? 32 : 1;
+    PPU.vramAddress += PPU.f_addrInc === 1 ? 32 : 1;
 
-    this.cntsFromAddress();
-    this.regsFromAddress();
+    PPU.cntsFromAddress();
+    PPU.regsFromAddress();
 
     return tmp;
   },
 
   // CPU Register $2007(W):
   // Write to PPU memory. The address should be set first.
-  vramWrite: function(value){
-    this.triggerRendering();
-    this.cntsToAddress();
-    this.regsToAddress();
+  vramWrite: value => {
+    PPU.triggerRendering();
+    PPU.cntsToAddress();
+    PPU.regsToAddress();
 
-    if(this.vramAddress >= 0x2000){
+    if(PPU.vramAddress >= 0x2000){
       // Mirroring is used.
-      this.mirroredWrite(this.vramAddress, value);
+      PPU.mirroredWrite(PPU.vramAddress, value);
     } else {
       // Write normally.
-      this.writeMem(this.vramAddress, value);
+      PPU.writeMem(PPU.vramAddress, value);
 
       // Invoke mapper latch:
-      //Mapper.latchAccess(this.vramAddress);
+      //Mapper.latchAccess(PPU.vramAddress);
     }
 
     // Increment by either 1 or 32, depending on d2 of Control Register 1:
-    this.vramAddress += this.f_addrInc === 1 ? 32 : 1;
-    this.regsFromAddress();
-    this.cntsFromAddress();
+    PPU.vramAddress += PPU.f_addrInc === 1 ? 32 : 1;
+    PPU.regsFromAddress();
+    PPU.cntsFromAddress();
   },
 
   // CPU Register $4014:
   // Write 256 bytes of main memory
   // into Sprite RAM.
-  sramDMA: function(value){
+  sramDMA: value => {
     var baseAddress = value * 0x100;
     var data;
-    for(var i = this.sramAddress; i < 256; i++){
-      data = NES.cpu.mem[baseAddress + i];
-      this.spriteMem[i] = data;
-      this.spriteRamWriteUpdate(i, data);
+    for(var i = PPU.sramAddress; i < 256; i++){
+      data = CPU.mem[baseAddress + i];
+      PPU.spriteMem[i] = data;
+      PPU.spriteRamWriteUpdate(i, data);
     }
 
-    NES.cpu.haltCycles(513);
+    CPU.haltCycles(513);
   },
 
   // Updates the scroll registers from a new VRAM address.
-  regsFromAddress: function(){
-    var address = (this.vramTmpAddress >> 8) & 0xff;
-    this.regFV = (address >> 4) & 7;
-    this.regV = (address >> 3) & 1;
-    this.regH = (address >> 2) & 1;
-    this.regVT = (this.regVT & 7) | ((address & 3) << 3);
+  regsFromAddress: () => {
+    var address = (PPU.vramTmpAddress >> 8) & 0xff;
+    PPU.regFV = (address >> 4) & 7;
+    PPU.regV = (address >> 3) & 1;
+    PPU.regH = (address >> 2) & 1;
+    PPU.regVT = (PPU.regVT & 7) | ((address & 3) << 3);
 
-    address = this.vramTmpAddress & 0xff;
-    this.regVT = (this.regVT & 24) | ((address >> 5) & 7);
-    this.regHT = address & 31;
+    address = PPU.vramTmpAddress & 0xff;
+    PPU.regVT = (PPU.regVT & 24) | ((address >> 5) & 7);
+    PPU.regHT = address & 31;
   },
 
   // Updates the scroll registers from a new VRAM address.
-  cntsFromAddress: function(){
-    var address = (this.vramAddress >> 8) & 0xff;
-    this.cntFV = (address >> 4) & 3;
-    this.cntV = (address >> 3) & 1;
-    this.cntH = (address >> 2) & 1;
-    this.cntVT = (this.cntVT & 7) | ((address & 3) << 3);
+  cntsFromAddress: () => {
+    var address = (PPU.vramAddress >> 8) & 0xff;
+    PPU.cntFV = (address >> 4) & 3;
+    PPU.cntV = (address >> 3) & 1;
+    PPU.cntH = (address >> 2) & 1;
+    PPU.cntVT = (PPU.cntVT & 7) | ((address & 3) << 3);
 
-    address = this.vramAddress & 0xff;
-    this.cntVT = (this.cntVT & 24) | ((address >> 5) & 7);
-    this.cntHT = address & 31;
+    address = PPU.vramAddress & 0xff;
+    PPU.cntVT = (PPU.cntVT & 24) | ((address >> 5) & 7);
+    PPU.cntHT = address & 31;
   },
 
-  regsToAddress: function(){
-    var b1 = (this.regFV & 7) << 4;
-    b1 |= (this.regV & 1) << 3;
-    b1 |= (this.regH & 1) << 2;
-    b1 |= (this.regVT >> 3) & 3;
+  regsToAddress: () => {
+    var b1 = (PPU.regFV & 7) << 4;
+    b1 |= (PPU.regV & 1) << 3;
+    b1 |= (PPU.regH & 1) << 2;
+    b1 |= (PPU.regVT >> 3) & 3;
 
-    var b2 = (this.regVT & 7) << 5;
-    b2 |= this.regHT & 31;
+    var b2 = (PPU.regVT & 7) << 5;
+    b2 |= PPU.regHT & 31;
 
-    this.vramTmpAddress = ((b1 << 8) | b2) & 0x7fff;
+    PPU.vramTmpAddress = ((b1 << 8) | b2) & 0x7fff;
   },
 
-  cntsToAddress: function(){
-    var b1 = (this.cntFV & 7) << 4;
-    b1 |= (this.cntV & 1) << 3;
-    b1 |= (this.cntH & 1) << 2;
-    b1 |= (this.cntVT >> 3) & 3;
+  cntsToAddress: () => {
+    var b1 = (PPU.cntFV & 7) << 4;
+    b1 |= (PPU.cntV & 1) << 3;
+    b1 |= (PPU.cntH & 1) << 2;
+    b1 |= (PPU.cntVT >> 3) & 3;
 
-    var b2 = (this.cntVT & 7) << 5;
-    b2 |= this.cntHT & 31;
+    var b2 = (PPU.cntVT & 7) << 5;
+    b2 |= PPU.cntHT & 31;
 
-    this.vramAddress = ((b1 << 8) | b2) & 0x7fff;
+    PPU.vramAddress = ((b1 << 8) | b2) & 0x7fff;
   },
 
-  incTileCounter: function(count){
+  incTileCounter: count => {
     for(var i = count; i !== 0; i--){
-      this.cntHT++;
-      if(this.cntHT === 32){
-        this.cntHT = 0;
-        this.cntVT++;
-        if(this.cntVT >= 30){
-          this.cntH++;
-          if(this.cntH === 2){
-            this.cntH = 0;
-            this.cntV++;
-            if(this.cntV === 2){
-              this.cntV = 0;
-              this.cntFV++;
-              this.cntFV &= 0x7;
+      PPU.cntHT++;
+      if(PPU.cntHT === 32){
+        PPU.cntHT = 0;
+        PPU.cntVT++;
+        if(PPU.cntVT >= 30){
+          PPU.cntH++;
+          if(PPU.cntH === 2){
+            PPU.cntH = 0;
+            PPU.cntV++;
+            if(PPU.cntV === 2){
+              PPU.cntV = 0;
+              PPU.cntFV++;
+              PPU.cntFV &= 0x7;
             }
           }
         }
@@ -830,67 +823,67 @@ PPU.prototype = {
 
   // Reads from memory, taking into account
   // mirroring/mapping of address ranges.
-  mirroredLoad: function(address){
-    return this.vramMem[this.vramMirrorTable[address]];
+  mirroredLoad: address =>{
+    return PPU.vramMem[PPU.vramMirrorTable[address]];
   },
 
   // Writes to memory, taking into account
   // mirroring/mapping of address ranges.
-  mirroredWrite: function(address, value){
+  mirroredWrite: (address, value) => {
     if(address >= 0x3f00 && address < 0x3f20){
       // Palette write mirroring.
       if(address === 0x3f00 || address === 0x3f10){
-        this.writeMem(0x3f00, value);
-        this.writeMem(0x3f10, value);
+        PPU.writeMem(0x3f00, value);
+        PPU.writeMem(0x3f10, value);
       } else if(address === 0x3f04 || address === 0x3f14){
-        this.writeMem(0x3f04, value);
-        this.writeMem(0x3f14, value);
+        PPU.writeMem(0x3f04, value);
+        PPU.writeMem(0x3f14, value);
       } else if(address === 0x3f08 || address === 0x3f18){
-        this.writeMem(0x3f08, value);
-        this.writeMem(0x3f18, value);
+        PPU.writeMem(0x3f08, value);
+        PPU.writeMem(0x3f18, value);
       } else if(address === 0x3f0c || address === 0x3f1c){
-        this.writeMem(0x3f0c, value);
-        this.writeMem(0x3f1c, value);
+        PPU.writeMem(0x3f0c, value);
+        PPU.writeMem(0x3f1c, value);
       } else {
-        this.writeMem(address, value);
+        PPU.writeMem(address, value);
       }
     } else {
       // Use lookup table for mirrored address:
-      if(address < this.vramMirrorTable.length){
-        this.writeMem(this.vramMirrorTable[address], value);
+      if(address < PPU.vramMirrorTable.length){
+        PPU.writeMem(PPU.vramMirrorTable[address], value);
       } else {
         throw new Error("Invalid VRAM address: " + address.toString(16));
       }
     }
   },
 
-  triggerRendering: function(){
-    if(this.scanline >= 21 && this.scanline <= 260){
+  triggerRendering: () => {
+    if(PPU.scanline >= 21 && PPU.scanline <= 260){
       // Render sprites, and combine:
-      this.renderFramePartially(
-        this.lastRenderedScanline + 1,
-        this.scanline - 21 - this.lastRenderedScanline
+      PPU.renderFramePartially(
+        PPU.lastRenderedScanline + 1,
+        PPU.scanline - 21 - PPU.lastRenderedScanline
       );
 
       // Set last rendered scanline:
-      this.lastRenderedScanline = this.scanline - 21;
+      PPU.lastRenderedScanline = PPU.scanline - 21;
     }
   },
 
-  renderFramePartially: function(startScan, scanCount){
-    if(this.f_spVisibility === 1){
-      this.renderSpritesPartially(startScan, scanCount, true);
+  renderFramePartially: (startScan, scanCount) => {
+    if(PPU.f_spVisibility === 1){
+      PPU.renderSpritesPartially(startScan, scanCount, true);
     }
 
-    if(this.f_bgVisibility === 1){
+    if(PPU.f_bgVisibility === 1){
       var si = startScan << 8;
       var ei = (startScan + scanCount) << 8;
       if(ei > 0xf000){
         ei = 0xf000;
       }
-      var buffer = this.buffer;
-      var bgbuffer = this.bgbuffer;
-      var pixrendered = this.pixrendered;
+      var buffer = PPU.buffer;
+      var bgbuffer = PPU.bgbuffer;
+      var pixrendered = PPU.pixrendered;
       for(var destIndex = si; destIndex < ei; destIndex++){
         if(pixrendered[destIndex] > 0xff){
           buffer[destIndex] = bgbuffer[destIndex];
@@ -898,39 +891,39 @@ PPU.prototype = {
       }
     }
 
-    if(this.f_spVisibility === 1){
-      this.renderSpritesPartially(startScan, scanCount, false);
+    if(PPU.f_spVisibility === 1){
+      PPU.renderSpritesPartially(startScan, scanCount, false);
     }
 
-    this.validTileData = false;
+    PPU.validTileData = false;
   },
 
-  renderBgScanline: function(bgbuffer, scan){
-    var baseTile = this.regS === 0 ? 0 : 256;
-    var destIndex = (scan << 8) - this.regFH;
+  renderBgScanline: (bgbuffer, scan) => {
+    var baseTile = PPU.regS === 0 ? 0 : 256;
+    var destIndex = (scan << 8) - PPU.regFH;
 
-    this.curNt = this.ntable1[this.cntV + this.cntV + this.cntH];
+    PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
 
-    this.cntHT = this.regHT;
-    this.cntH = this.regH;
-    this.curNt = this.ntable1[this.cntV + this.cntV + this.cntH];
+    PPU.cntHT = PPU.regHT;
+    PPU.cntH = PPU.regH;
+    PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
 
-    if(scan < 240 && scan - this.cntFV >= 0){
-      var tscanoffset = this.cntFV << 3;
-      var scantile = this.scantile;
-      var attrib = this.attrib;
-      var ptTile = this.ptTile;
-      var nameTable = this.nameTable;
-      var imgPalette = this.imgPalette;
-      var pixrendered = this.pixrendered;
-      var targetBuffer = bgbuffer ? this.bgbuffer : this.buffer;
+    if(scan < 240 && scan - PPU.cntFV >= 0){
+      var tscanoffset = PPU.cntFV << 3;
+      var scantile = PPU.scantile;
+      var attrib = PPU.attrib;
+      var ptTile = PPU.ptTile;
+      var nameTable = PPU.nameTable;
+      var imgPalette = PPU.imgPalette;
+      var pixrendered = PPU.pixrendered;
+      var targetBuffer = bgbuffer ? PPU.bgbuffer : PPU.buffer;
 
       var t, tpix, att, col;
 
       for(var tile = 0; tile < 32; tile++){
         if(scan >= 0){
           // Fetch tile & attrib data:
-          if(this.validTileData){
+          if(PPU.validTileData){
             // Get data from array:
             t = scantile[tile];
             if(typeof t === "undefined"){
@@ -943,27 +936,27 @@ PPU.prototype = {
             t =
               ptTile[
                 baseTile +
-                  nameTable[this.curNt].getTileIndex(this.cntHT, this.cntVT)
+                  nameTable[PPU.curNt].getTileIndex(PPU.cntHT, PPU.cntVT)
               ];
             if(typeof t === "undefined"){
               continue;
             }
             tpix = t.pixels;
-            att = nameTable[this.curNt].getAttrib(this.cntHT, this.cntVT);
+            att = nameTable[PPU.curNt].getAttrib(PPU.cntHT, PPU.cntVT);
             scantile[tile] = t;
             attrib[tile] = att;
           }
 
           // Render tile scanline:
           var sx = 0;
-          var x = (tile << 3) - this.regFH;
+          var x = (tile << 3) - PPU.regFH;
 
           if(x > -8){
             if(x < 0){
               destIndex -= x;
               sx = -x;
             }
-            /*if(t.opaque[this.cntFV]){
+            /*if(t.opaque[PPU.cntFV]){
               for(; sx < 8; sx++){
                 targetBuffer[destIndex] =
                   imgPalette[tpix[tscanoffset + sx] + att];
@@ -984,134 +977,134 @@ PPU.prototype = {
         }
 
         // Increase Horizontal Tile Counter:
-        if(++this.cntHT === 32){
-          this.cntHT = 0;
-          this.cntH++;
-          this.cntH %= 2;
-          this.curNt = this.ntable1[(this.cntV << 1) + this.cntH];
+        if(++PPU.cntHT === 32){
+          PPU.cntHT = 0;
+          PPU.cntH++;
+          PPU.cntH %= 2;
+          PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
         }
       }
 
       // Tile data for one row should now have been fetched,
       // so the data in the array is valid.
-      this.validTileData = true;
+      PPU.validTileData = true;
     }
 
     // update vertical scroll:
-    this.cntFV++;
-    if(this.cntFV === 8){
-      this.cntFV = 0;
-      this.cntVT++;
-      if(this.cntVT === 30){
-        this.cntVT = 0;
-        this.cntV++;
-        this.cntV %= 2;
-        this.curNt = this.ntable1[(this.cntV << 1) + this.cntH];
-      } else if(this.cntVT === 32){
-        this.cntVT = 0;
+    PPU.cntFV++;
+    if(PPU.cntFV === 8){
+      PPU.cntFV = 0;
+      PPU.cntVT++;
+      if(PPU.cntVT === 30){
+        PPU.cntVT = 0;
+        PPU.cntV++;
+        PPU.cntV %= 2;
+        PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
+      } else if(PPU.cntVT === 32){
+        PPU.cntVT = 0;
       }
 
       // Invalidate fetched data:
-      this.validTileData = false;
+      PPU.validTileData = false;
     }
   },
 
-  renderSpritesPartially: function(startscan, scancount, bgPri){
-    if(this.f_spVisibility === 1){
+  renderSpritesPartially: (startscan, scancount, bgPri) => {
+    if(PPU.f_spVisibility === 1){
       for(var i = 0; i < 64; i++){
         if(
-          this.bgPriority[i] === bgPri &&
-          this.sprX[i] >= 0 &&
-          this.sprX[i] < 256 &&
-          this.sprY[i] + 8 >= startscan &&
-          this.sprY[i] < startscan + scancount
+          PPU.bgPriority[i] === bgPri &&
+          PPU.sprX[i] >= 0 &&
+          PPU.sprX[i] < 256 &&
+          PPU.sprY[i] + 8 >= startscan &&
+          PPU.sprY[i] < startscan + scancount
         ){
           // Show sprite.
-          if(this.f_spriteSize === 0){
+          if(PPU.f_spriteSize === 0){
             // 8x8 sprites
 
-            this.srcy1 = 0;
-            this.srcy2 = 8;
+            PPU.srcy1 = 0;
+            PPU.srcy2 = 8;
 
-            if(this.sprY[i] < startscan){
-              this.srcy1 = startscan - this.sprY[i] - 1;
+            if(PPU.sprY[i] < startscan){
+              PPU.srcy1 = startscan - PPU.sprY[i] - 1;
             }
 
-            if(this.sprY[i] + 8 > startscan + scancount){
-              this.srcy2 = startscan + scancount - this.sprY[i] + 1;
+            if(PPU.sprY[i] + 8 > startscan + scancount){
+              PPU.srcy2 = startscan + scancount - PPU.sprY[i] + 1;
             }
 
             Tile.draw_sprite(
-              this.ptTile[this.f_spPatternTable === 0 ? this.sprTile[i] : this.sprTile[i] + 256],
-              this.buffer,
-              this.srcy1,
-              this.srcy2,
-              this.sprX[i],
-              this.sprY[i] + 1,
-              this.sprPalette,
-              this.sprCol[i],
-              this.horiFlip[i],
-              this.vertFlip[i],
+              PPU.ptTile[PPU.f_spPatternTable === 0 ? PPU.sprTile[i] : PPU.sprTile[i] + 256],
+              PPU.buffer,
+              PPU.srcy1,
+              PPU.srcy2,
+              PPU.sprX[i],
+              PPU.sprY[i] + 1,
+              PPU.sprPalette,
+              PPU.sprCol[i],
+              PPU.horiFlip[i],
+              PPU.vertFlip[i],
               i,
-              this.pixrendered
+              PPU.pixrendered
             );
           } else {
             // 8x16 sprites
-            var top = this.sprTile[i];
+            var top = PPU.sprTile[i];
             if((top & 1) !== 0){
-              top = this.sprTile[i] - 1 + 256;
+              top = PPU.sprTile[i] - 1 + 256;
             }
 
             var srcy1 = 0;
             var srcy2 = 8;
 
-            if(this.sprY[i] < startscan){
-              srcy1 = startscan - this.sprY[i] - 1;
+            if(PPU.sprY[i] < startscan){
+              srcy1 = startscan - PPU.sprY[i] - 1;
             }
 
-            if(this.sprY[i] + 8 > startscan + scancount){
-              srcy2 = startscan + scancount - this.sprY[i];
+            if(PPU.sprY[i] + 8 > startscan + scancount){
+              srcy2 = startscan + scancount - PPU.sprY[i];
             }
 
             Tile.draw_sprite(
-              this.ptTile[top + (this.vertFlip[i] ? 1 : 0)],
-              this.buffer,
+              PPU.ptTile[top + (PPU.vertFlip[i] ? 1 : 0)],
+              PPU.buffer,
               srcy1,
               srcy2,
-              this.sprX[i],
-              this.sprY[i] + 1,
-              this.sprPalette,
-              this.sprCol[i],
-              this.horiFlip[i],
-              this.vertFlip[i],
+              PPU.sprX[i],
+              PPU.sprY[i] + 1,
+              PPU.sprPalette,
+              PPU.sprCol[i],
+              PPU.horiFlip[i],
+              PPU.vertFlip[i],
               i,
-              this.pixrendered
+              PPU.pixrendered
             );
 
             srcy1 = 0;
             srcy2 = 8;
 
-            if(this.sprY[i] + 8 < startscan){
-              srcy1 = startscan - (this.sprY[i] + 8 + 1);
+            if(PPU.sprY[i] + 8 < startscan){
+              srcy1 = startscan - (PPU.sprY[i] + 8 + 1);
             }
 
-            if(this.sprY[i] + 16 > startscan + scancount){
-              srcy2 = startscan + scancount - (this.sprY[i] + 8);
+            if(PPU.sprY[i] + 16 > startscan + scancount){
+              srcy2 = startscan + scancount - (PPU.sprY[i] + 8);
             }
 
             Tile.draw_sprite(
-              this.ptTile[top + (this.vertFlip[i] ? 0 : 1)],
-              this.buffer,
+              PPU.ptTile[top + (PPU.vertFlip[i] ? 0 : 1)],
+              PPU.buffer,
               srcy1,
               srcy2,
-              this.sprX[i],
-              this.sprY[i] + 1 + 8,
-              this.sprPalette,
-              this.sprCol[i],
-              this.horiFlip[i],
-              this.vertFlip[i],
+              PPU.sprX[i],
+              PPU.sprY[i] + 1 + 8,
+              PPU.sprPalette,
+              PPU.sprCol[i],
+              PPU.horiFlip[i],
+              PPU.vertFlip[i],
               i,
-              this.pixrendered
+              PPU.pixrendered
             );
           }
         }
@@ -1119,28 +1112,28 @@ PPU.prototype = {
     }
   },
 
-  checkSprite0: function(scan){
-    this.spr0HitX = -1;
-    this.spr0HitY = -1;
+  checkSprite0: scan => {
+    PPU.spr0HitX = -1;
+    PPU.spr0HitY = -1;
 
     var toffset;
-    var tIndexAdd = this.f_spPatternTable === 0 ? 0 : 256;
+    var tIndexAdd = PPU.f_spPatternTable === 0 ? 0 : 256;
     var x, y, t, i;
     var bufferIndex;
 
-    x = this.sprX[0];
-    y = this.sprY[0] + 1;
+    x = PPU.sprX[0];
+    y = PPU.sprY[0] + 1;
 
-    if(this.f_spriteSize === 0){
+    if(PPU.f_spriteSize === 0){
       // 8x8 sprites.
 
       // Check range:
       if(y <= scan && y + 8 > scan && x >= -7 && x < 256){
         // Sprite is in range.
         // Draw scanline:
-        t = this.ptTile[this.sprTile[0] + tIndexAdd];
+        t = PPU.ptTile[PPU.sprTile[0] + tIndexAdd];
 
-        if(this.vertFlip[0]){
+        if(PPU.vertFlip[0]){
           toffset = 7 - (scan - y);
         } else {
           toffset = scan - y;
@@ -1148,17 +1141,17 @@ PPU.prototype = {
         toffset *= 8;
 
         bufferIndex = scan * 256 + x;
-        if(this.horiFlip[0]){
+        if(PPU.horiFlip[0]){
           for(i = 7; i >= 0; i--){
             if(x >= 0 && x < 256){
               if(
                 bufferIndex >= 0 &&
                 bufferIndex < 61440 &&
-                this.pixrendered[bufferIndex] !== 0
+                PPU.pixrendered[bufferIndex] !== 0
               ){
                 if(t.pixels[toffset + i] !== 0){
-                  this.spr0HitX = bufferIndex % 256;
-                  this.spr0HitY = scan;
+                  PPU.spr0HitX = bufferIndex % 256;
+                  PPU.spr0HitY = scan;
                   return true;
                 }
               }
@@ -1172,11 +1165,11 @@ PPU.prototype = {
               if(
                 bufferIndex >= 0 &&
                 bufferIndex < 61440 &&
-                this.pixrendered[bufferIndex] !== 0
+                PPU.pixrendered[bufferIndex] !== 0
               ){
                 if(t.pixels[toffset + i] !== 0){
-                  this.spr0HitX = bufferIndex % 256;
-                  this.spr0HitY = scan;
+                  PPU.spr0HitX = bufferIndex % 256;
+                  PPU.spr0HitY = scan;
                   return true;
                 }
               }
@@ -1194,7 +1187,7 @@ PPU.prototype = {
         // Sprite is in range.
         // Draw scanline:
 
-        if(this.vertFlip[0]){
+        if(PPU.vertFlip[0]){
           toffset = 15 - (scan - y);
         } else {
           toffset = scan - y;
@@ -1202,19 +1195,19 @@ PPU.prototype = {
 
         if(toffset < 8){
           // first half of sprite.
-          t = this.ptTile[
-            this.sprTile[0] +
-              (this.vertFlip[0] ? 1 : 0) +
-              ((this.sprTile[0] & 1) !== 0 ? 255 : 0)
+          t = PPU.ptTile[
+            PPU.sprTile[0] +
+              (PPU.vertFlip[0] ? 1 : 0) +
+              ((PPU.sprTile[0] & 1) !== 0 ? 255 : 0)
           ];
         } else {
           // second half of sprite.
-          t = this.ptTile[
-            this.sprTile[0] +
-              (this.vertFlip[0] ? 0 : 1) +
-              ((this.sprTile[0] & 1) !== 0 ? 255 : 0)
+          t = PPU.ptTile[
+            PPU.sprTile[0] +
+              (PPU.vertFlip[0] ? 0 : 1) +
+              ((PPU.sprTile[0] & 1) !== 0 ? 255 : 0)
           ];
-          if(this.vertFlip[0]){
+          if(PPU.vertFlip[0]){
             toffset = 15 - toffset;
           } else {
             toffset -= 8;
@@ -1223,17 +1216,17 @@ PPU.prototype = {
         toffset *= 8;
 
         bufferIndex = scan * 256 + x;
-        if(this.horiFlip[0]){
+        if(PPU.horiFlip[0]){
           for(i = 7; i >= 0; i--){
             if(x >= 0 && x < 256){
               if(
                 bufferIndex >= 0 &&
                 bufferIndex < 61440 &&
-                this.pixrendered[bufferIndex] !== 0
+                PPU.pixrendered[bufferIndex] !== 0
               ){
                 if(t.pixels[toffset + i] !== 0){
-                  this.spr0HitX = bufferIndex % 256;
-                  this.spr0HitY = scan;
+                  PPU.spr0HitX = bufferIndex % 256;
+                  PPU.spr0HitY = scan;
                   return true;
                 }
               }
@@ -1247,11 +1240,11 @@ PPU.prototype = {
               if(
                 bufferIndex >= 0 &&
                 bufferIndex < 61440 &&
-                this.pixrendered[bufferIndex] !== 0
+                PPU.pixrendered[bufferIndex] !== 0
               ){
                 if(t.pixels[toffset + i] !== 0){
-                  this.spr0HitX = bufferIndex % 256;
-                  this.spr0HitY = scan;
+                  PPU.spr0HitX = bufferIndex % 256;
+                  PPU.spr0HitY = scan;
                   return true;
                 }
               }
@@ -1269,58 +1262,58 @@ PPU.prototype = {
   // This will write to PPU memory, and
   // update internally buffered data
   // appropriately.
-  writeMem: function(address, value){
-    this.vramMem[address] = value;
+  writeMem: (address, value) => {
+    PPU.vramMem[address] = value;
 
     // Update internally buffered data:
     if(address < 0x2000){
-      this.vramMem[address] = value;
-      this.patternWrite(address, value);
+      PPU.vramMem[address] = value;
+      PPU.patternWrite(address, value);
     } else if(address >= 0x2000 && address < 0x23c0){
-      this.nameTableWrite(this.ntable1[0], address - 0x2000, value);
+      PPU.nameTableWrite(PPU.ntable1[0], address - 0x2000, value);
     } else if(address >= 0x23c0 && address < 0x2400){
-      this.attribTableWrite(this.ntable1[0], address - 0x23c0, value);
+      PPU.attribTableWrite(PPU.ntable1[0], address - 0x23c0, value);
     } else if(address >= 0x2400 && address < 0x27c0){
-      this.nameTableWrite(this.ntable1[1], address - 0x2400, value);
+      PPU.nameTableWrite(PPU.ntable1[1], address - 0x2400, value);
     } else if(address >= 0x27c0 && address < 0x2800){
-      this.attribTableWrite(this.ntable1[1], address - 0x27c0, value);
+      PPU.attribTableWrite(PPU.ntable1[1], address - 0x27c0, value);
     } else if(address >= 0x2800 && address < 0x2bc0){
-      this.nameTableWrite(this.ntable1[2], address - 0x2800, value);
+      PPU.nameTableWrite(PPU.ntable1[2], address - 0x2800, value);
     } else if(address >= 0x2bc0 && address < 0x2c00){
-      this.attribTableWrite(this.ntable1[2], address - 0x2bc0, value);
+      PPU.attribTableWrite(PPU.ntable1[2], address - 0x2bc0, value);
     } else if(address >= 0x2c00 && address < 0x2fc0){
-      this.nameTableWrite(this.ntable1[3], address - 0x2c00, value);
+      PPU.nameTableWrite(PPU.ntable1[3], address - 0x2c00, value);
     } else if(address >= 0x2fc0 && address < 0x3000){
-      this.attribTableWrite(this.ntable1[3], address - 0x2fc0, value);
+      PPU.attribTableWrite(PPU.ntable1[3], address - 0x2fc0, value);
     } else if(address >= 0x3f00 && address < 0x3f20){
-      this.updatePalettes();
+      PPU.updatePalettes();
     }
   },
 
   // Reads data from $3f00 to $f20
   // into the two buffered palettes.
-  updatePalettes: function(){
+  updatePalettes: () => {
     var i;
 
     for(i = 0; i < 16; i++){
-      if(this.f_dispType === 0){
-        this.imgPalette[i] = this.palTable.getEntry(
-          this.vramMem[0x3f00 + i] & 63
+      if(PPU.f_dispType === 0){
+        PPU.imgPalette[i] = PPU.palTable.getEntry(
+          PPU.vramMem[0x3f00 + i] & 63
         );
       } else {
-        this.imgPalette[i] = this.palTable.getEntry(
-          this.vramMem[0x3f00 + i] & 32
+        PPU.imgPalette[i] = PPU.palTable.getEntry(
+          PPU.vramMem[0x3f00 + i] & 32
         );
       }
     }
     for(i = 0; i < 16; i++){
-      if(this.f_dispType === 0){
-        this.sprPalette[i] = this.palTable.getEntry(
-          this.vramMem[0x3f10 + i] & 63
+      if(PPU.f_dispType === 0){
+        PPU.sprPalette[i] = PPU.palTable.getEntry(
+          PPU.vramMem[0x3f10 + i] & 63
         );
       } else {
-        this.sprPalette[i] = this.palTable.getEntry(
-          this.vramMem[0x3f10 + i] & 32
+        PPU.sprPalette[i] = PPU.palTable.getEntry(
+          PPU.vramMem[0x3f10 + i] & 32
         );
       }
     }
@@ -1329,7 +1322,7 @@ PPU.prototype = {
   // Updates the internal pattern
   // table buffers with this new byte.
   // In vNES, there is a version of this with 4 arguments which isn't used.
-  patternWrite: function(address, value){
+  patternWrite: (address, value) => {
     var bank = address > 0x1000 ? 1 : 0;
     var tileIndex = Math.floor(address / 16);
     ROM.chr_rom[bank][address % 0x1000] = value;
@@ -1339,59 +1332,59 @@ PPU.prototype = {
 
   // Updates the internal name table buffers
   // with this new byte.
-  nameTableWrite: function(index, address, value){
-    this.nameTable[index].tile[address] = value;
+  nameTableWrite: (index, address, value) => {
+    PPU.nameTable[index].tile[address] = value;
 
     // Update Sprite #0 hit:
     //updateSpr0Hit();
-    this.checkSprite0(this.scanline - 20);
+    PPU.checkSprite0(PPU.scanline - 20);
   },
 
   // Updates the internal pattern
   // table buffers with this new attribute
   // table byte.
-  attribTableWrite: function(index, address, value){
-    this.nameTable[index].writeAttrib(address, value);
+  attribTableWrite: (index, address, value) => {
+    PPU.nameTable[index].writeAttrib(address, value);
   },
 
   // Updates the internally buffered sprite
   // data with this new byte of info.
-  spriteRamWriteUpdate: function(address, value){
+  spriteRamWriteUpdate: (address, value) => {
     var tIndex = Math.floor(address / 4);
 
     if(tIndex === 0){
       //updateSpr0Hit();
-      this.checkSprite0(this.scanline - 20);
+      PPU.checkSprite0(PPU.scanline - 20);
     }
 
     if(address % 4 === 0){
       // Y coordinate
-      this.sprY[tIndex] = value;
+      PPU.sprY[tIndex] = value;
     } else if(address % 4 === 1){
       // Tile index
-      this.sprTile[tIndex] = value;
+      PPU.sprTile[tIndex] = value;
     } else if(address % 4 === 2){
       // Attributes
-      this.vertFlip[tIndex] = (value & 0x80) !== 0;
-      this.horiFlip[tIndex] = (value & 0x40) !== 0;
-      this.bgPriority[tIndex] = (value & 0x20) !== 0;
-      this.sprCol[tIndex] = (value & 3) << 2;
+      PPU.vertFlip[tIndex] = (value & 0x80) !== 0;
+      PPU.horiFlip[tIndex] = (value & 0x40) !== 0;
+      PPU.bgPriority[tIndex] = (value & 0x20) !== 0;
+      PPU.sprCol[tIndex] = (value & 3) << 2;
     } else if(address % 4 === 3){
       // X coordinate
-      this.sprX[tIndex] = value;
+      PPU.sprX[tIndex] = value;
     }
   },
 
-  doNMI: function(){
+  doNMI: () => {
     // Set VBlank flag:
-    this.setStatusFlag(this.STATUS_VBLANK, true);
+    PPU.setStatusFlag(PPU.STATUS_VBLANK, true);
     //nes.getCpu().doNonMaskableInterrupt();
-    NES.cpu.requestIrq(NES.cpu.IRQ_NMI);
+    CPU.requestIrq(CPU.IRQ_NMI);
   },
 
-  isPixelWhite: function(x, y){
-    this.triggerRendering();
-    return NES.ppu.buffer[(y << 8) + x] === 0xffffff;
+  isPixelWhite: (x, y) => {
+    PPU.triggerRendering();
+    return PPU.buffer[(y << 8) + x] === 0xffffff;
   },
 };
 
