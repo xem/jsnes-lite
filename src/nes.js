@@ -49,7 +49,7 @@ var NES = {
     APU.reset();
     
     // Send reset (IRQ) interrupt to the CPU
-    CPU.requestIrq(CPU.IRQ_RESET);
+    CPU.requestIrq(CPU.RESET);
   },
 
   // Render a new frame
@@ -66,7 +66,7 @@ var NES = {
     loop: for(;;){
       
       // If CPU is not halted
-      if(!CPU.cyclesToHalt){
+      if(!CPU.halt_cycles){
         
         // Execute a CPU instruction, count remaining CPU cycles
         cpu_cycles = CPU.emulate();
@@ -76,23 +76,23 @@ var NES = {
       } 
       
       // If CPU is halted for more than 8 cycles
-      else if(CPU.cyclesToHalt > 8){
+      else if(CPU.halt_cycles > 8){
         
         // Clock the APU for 8 cycles
         APU.clockFrameCounter(8);
         
         // Advance 8 CPU cycles
-        CPU.cyclesToHalt -= 8;
+        CPU.halt_cycles -= 8;
       }
       
       // If CPU is halted for 1-8 cycles
       else {
         
         // Clock the APU for the remaining number of cycles
-        APU.clockFrameCounter(CPU.cyclesToHalt);
+        APU.clockFrameCounter(CPU.halt_cycles);
         
         // Un-halt the CPU
-        CPU.cyclesToHalt = 0;
+        CPU.halt_cycles = 0;
       }
 
       // Clock the PPU according to the number of CPU cycles executed

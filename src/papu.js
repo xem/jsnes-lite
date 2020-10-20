@@ -354,7 +354,7 @@ var APU = {
 
     // Frame IRQ handling:
     if(APU.frameIrqEnabled && APU.frameIrqActive){
-      CPU.requestIrq(CPU.IRQ_NORMAL);
+      CPU.requestIrq(CPU.IRQ);
     }
 
     // Clock frame counter at double CPU speed:
@@ -760,7 +760,7 @@ ChannelDM.prototype = {
     }
 
     if(this.irqGenerated){
-      APU.CPU.requestIrq(APU.CPU.IRQ_NORMAL);
+      CPU.requestIrq(CPU.IRQ);
     }
   },
 
@@ -787,8 +787,8 @@ ChannelDM.prototype = {
 
   nextSample: function(){
     // Fetch byte:
-    this.data = APU.CPU.load(this.playAddress);
-    APU.CPU.haltCycles(4);
+    this.data = CPU.load(this.playAddress);
+    CPU.haltCycles(4);
 
     this.playLengthCounter--;
     this.playAddress++;

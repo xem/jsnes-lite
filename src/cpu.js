@@ -2,102 +2,55 @@
 // ===
 
 var CPU = {
-  
-  // Memory
-  mem: null,
-  
-  // Registers
-  REG_ACC: null,
-  REG_X: null,
-  REG_Y: null,
-  REG_SP: null,
-  REG_PC: null,
-  REG_PC_NEW: null,
-  REG_STATUS: null,
-  
-  // Flags
-  F_CARRY: null,
-  F_DECIMAL: null,
-  F_INTERRUPT: null,
-  F_INTERRUPT_NEW: null,
-  F_OVERFLOW: null,
-  F_SIGN: null,
-  F_ZERO: null,
-  F_NOTUSED: null,
-  F_NOTUSED_NEW: null,
-  F_BRK: null,
-  F_BRK_NEW: null,
-  
-  // ?
-  opdata: null,
-  cyclesToHalt: null,
-  crash: null,
-  
-  // IRQ
-  irqRequested: null,
-  irqType: null,
 
-  // IRQ Types
-  IRQ_NORMAL: 0,
-  IRQ_NMI: 1,
-  IRQ_RESET: 2,
+  // Interrupt types
+  IRQ: 0,   // IRQ/BRK
+  NMI: 1,   // Non-maskable
+  RESET: 2, // Reset
 
+  // Reset the CPU
   reset: () => {
-    // Main memory
-    CPU.mem = new Array(0x10000);
-
-    for(var i = 0; i < 0x2000; i++){
-      CPU.mem[i] = 0xff;
-    }
-    for(var p = 0; p < 4; p++){
-      var j = p * 0x800;
-      CPU.mem[j + 0x008] = 0xf7;
-      CPU.mem[j + 0x009] = 0xef;
-      CPU.mem[j + 0x00a] = 0xdf;
-      CPU.mem[j + 0x00f] = 0xbf;
-    }
-    for(var k = 0x2001; k < CPU.mem.length; k++){
-      CPU.mem[k] = 0;
+    
+    var i;
+    
+    // CPU memory map (16kb)
+    CPU.mem = [];
+    for(i = 0; i < 16 * 1024; i++){
+      CPU.mem[i] = 0;
     }
 
-    // CPU Registers:
-    CPU.REG_ACC = 0;
-    CPU.REG_X = 0;
-    CPU.REG_Y = 0;
-    // Reset Stack pointer:
-    CPU.REG_SP = 0x01ff;
-    // Reset Program counter:
-    CPU.REG_PC = 0x8000 - 1;
-    CPU.REG_PC_NEW = 0x8000 - 1;
-    // Reset Status register:
-    CPU.REG_STATUS = 0x28;
+    // CPU Registers
+    CPU.A = 0;            // Accumulator
+    CPU.X = 0;            // Address indexes
+    CPU.Y = 0;
+    CPU.S = 0x01ff;       // Stack pointer
+    CPU.PC = 0x8000 - 1;  // Program counter
+    CPU.PC_NEW = 0x8000 - 1;
 
-    CPU.setStatus(0x28);
+    // 8 bit flags form the Status Register (P)
+    // P is set to $34 (00110100) when booting the console
+    // Bit 3 is set to 1 when resetting the console
+    CPU.C = 0;  // Bit 0: Carry
+    CPU.Z = 0;  // Bit 1: Zero
+    CPU.I = 1;  // Bit 2: Interrupt disable
+    CPU.I_NEW = 1;
+    CPU.D = 0;  // Bit 3: Decimal
+    CPU.B = 1;  // Bit 4: B flag (PHP/BRK set it to 1, IRQ/NMI set it to 0)
+    CPU.B_NEW = 1;
+                // Bit 5 is always 1 
+    CPU.V = 0;  // Bit 6: Overflow
+    CPU.N = 0;  // Bit 7: Negative
 
-    // Set flags:
-    CPU.F_CARRY = 0;
-    CPU.F_DECIMAL = 0;
-    CPU.F_INTERRUPT = 1;
-    CPU.F_INTERRUPT_NEW = 1;
-    CPU.F_OVERFLOW = 0;
-    CPU.F_SIGN = 0;
-    CPU.F_ZERO = 1;
-
-    CPU.F_NOTUSED = 1;
-    CPU.F_NOTUSED_NEW = 1;
-    CPU.F_BRK = 1;
-    CPU.F_BRK_NEW = 1;
-
+    // TMP
     OpData.init();
     CPU.opdata = OpData.opdata;
-    CPU.cyclesToHalt = 0;
-
-    // Reset crash flag:
-    CPU.crash = false;
-
-    // Interrupt notification:
-    CPU.irqRequested = false;
-    CPU.irqType = null;
+    
+    // Cycles to wait until next opcode
+    CPU.halt_cycles = 0;
+    
+    // Interrupts
+    CPU.interrupt_requested = false;
+    CPU.interrupt_type = null;
   },
 
   // Emulates a single CPU instruction, returns the number of cycles
@@ -106,28 +59,28 @@ var CPU = {
     var add;
 
     // Check interrupts:
-    if(CPU.irqRequested){
+    if(CPU.interrupt_requested){
       temp =
-        CPU.F_CARRY |
-        ((CPU.F_ZERO === 0 ? 1 : 0) << 1) |
-        (CPU.F_INTERRUPT << 2) |
-        (CPU.F_DECIMAL << 3) |
-        (CPU.F_BRK << 4) |
-        (CPU.F_NOTUSED << 5) |
-        (CPU.F_OVERFLOW << 6) |
-        (CPU.F_SIGN << 7);
+        CPU.C |
+        ((CPU.Z === 0 ? 1 : 0) << 1) |
+        (CPU.I << 2) |
+        (CPU.D << 3) |
+        (CPU.B << 4) |
+        (1 << 5) |
+        (CPU.V << 6) |
+        (CPU.N << 7);
 
-      CPU.REG_PC_NEW = CPU.REG_PC;
-      CPU.F_INTERRUPT_NEW = CPU.F_INTERRUPT;
-      switch (CPU.irqType){
+      CPU.PC_NEW = CPU.PC;
+      CPU.I_NEW = CPU.I;
+      switch (CPU.interrupt_type){
         case 0: {
           // Normal IRQ:
-          if(CPU.F_INTERRUPT !== 0){
+          if(CPU.I !== 0){
             // console.log("Interrupt was masked.");
             break;
           }
           CPU.doIrq(temp);
-          // console.log("Did normal IRQ. I="+CPU.F_INTERRUPT);
+          // console.log("Did normal IRQ. I="+CPU.I);
           break;
         }
         case 1: {
@@ -142,13 +95,13 @@ var CPU = {
         }
       }
 
-      CPU.REG_PC = CPU.REG_PC_NEW;
-      CPU.F_INTERRUPT = CPU.F_INTERRUPT_NEW;
-      CPU.F_BRK = CPU.F_BRK_NEW;
-      CPU.irqRequested = false;
+      CPU.PC = CPU.PC_NEW;
+      CPU.I = CPU.I_NEW;
+      CPU.B = CPU.B_NEW;
+      CPU.interrupt_requested = false;
     }
 
-    var opinf = CPU.opdata[CPU.load(CPU.REG_PC + 1)];
+    var opinf = CPU.opdata[CPU.load(CPU.PC + 1)];
     var cycleCount = opinf >> 24;
     var cycleAdd = 0;
 
@@ -156,8 +109,8 @@ var CPU = {
     var addrMode = (opinf >> 8) & 0xff;
 
     // Increment PC by number of op bytes:
-    var opaddr = CPU.REG_PC;
-    CPU.REG_PC += (opinf >> 16) & 0xff;
+    var opaddr = CPU.PC;
+    CPU.PC += (opinf >> 16) & 0xff;
 
     var addr = 0;
     switch (addrMode){
@@ -171,9 +124,9 @@ var CPU = {
         // Relative mode.
         addr = CPU.load(opaddr + 2);
         if(addr < 0x80){
-          addr += CPU.REG_PC;
+          addr += CPU.PC;
         } else {
-          addr += CPU.REG_PC - 256;
+          addr += CPU.PC - 256;
         }
         break;
       }
@@ -190,46 +143,46 @@ var CPU = {
       case 4: {
         // Accumulator mode. The address is in the accumulator
         // register.
-        addr = CPU.REG_ACC;
+        addr = CPU.A;
         break;
       }
       case 5: {
         // Immediate mode. The value is given after the opcode.
-        addr = CPU.REG_PC;
+        addr = CPU.PC;
         break;
       }
       case 6: {
         // Zero Page Indexed mode, X as index. Use the address given
         // after the opcode, then add the
         // X register to it to get the final address.
-        addr = (CPU.load(opaddr + 2) + CPU.REG_X) & 0xff;
+        addr = (CPU.load(opaddr + 2) + CPU.X) & 0xff;
         break;
       }
       case 7: {
         // Zero Page Indexed mode, Y as index. Use the address given
         // after the opcode, then add the
         // Y register to it to get the final address.
-        addr = (CPU.load(opaddr + 2) + CPU.REG_Y) & 0xff;
+        addr = (CPU.load(opaddr + 2) + CPU.Y) & 0xff;
         break;
       }
       case 8: {
         // Absolute Indexed Mode, X as index. Same as zero page
         // indexed, but with the high byte.
         addr = CPU.load16bit(opaddr + 2);
-        if((addr & 0xff00) !== ((addr + CPU.REG_X) & 0xff00)){
+        if((addr & 0xff00) !== ((addr + CPU.X) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += CPU.REG_X;
+        addr += CPU.X;
         break;
       }
       case 9: {
         // Absolute Indexed Mode, Y as index. Same as zero page
         // indexed, but with the high byte.
         addr = CPU.load16bit(opaddr + 2);
-        if((addr & 0xff00) !== ((addr + CPU.REG_Y) & 0xff00)){
+        if((addr & 0xff00) !== ((addr + CPU.Y) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += CPU.REG_Y;
+        addr += CPU.Y;
         break;
       }
       case 10: {
@@ -238,10 +191,10 @@ var CPU = {
         // the current X register. The value is the contents of that
         // address.
         addr = CPU.load(opaddr + 2);
-        if((addr & 0xff00) !== ((addr + CPU.REG_X) & 0xff00)){
+        if((addr & 0xff00) !== ((addr + CPU.X) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += CPU.REG_X;
+        addr += CPU.X;
         addr &= 0xff;
         addr = CPU.load16bit(addr);
         break;
@@ -253,10 +206,10 @@ var CPU = {
         // of the Y register. Fetch the value
         // stored at that adress.
         addr = CPU.load16bit(CPU.load(opaddr + 2));
-        if((addr & 0xff00) !== ((addr + CPU.REG_Y) & 0xff00)){
+        if((addr & 0xff00) !== ((addr + CPU.Y) & 0xff00)){
           cycleAdd = 1;
         }
-        addr += CPU.REG_Y;
+        addr += CPU.Y;
         break;
       }
       case 12: {
@@ -293,20 +246,20 @@ var CPU = {
         // *******
 
         // Add with carry.
-        temp = CPU.REG_ACC + CPU.load(addr) + CPU.F_CARRY;
+        temp = CPU.A + CPU.load(addr) + CPU.C;
 
         if(
-          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
-          ((CPU.REG_ACC ^ temp) & 0x80) !== 0
+          ((CPU.A ^ CPU.load(addr)) & 0x80) === 0 &&
+          ((CPU.A ^ temp) & 0x80) !== 0
         ){
-          CPU.F_OVERFLOW = 1;
+          CPU.V = 1;
         } else {
-          CPU.F_OVERFLOW = 0;
+          CPU.V = 0;
         }
-        CPU.F_CARRY = temp > 255 ? 1 : 0;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
-        CPU.REG_ACC = temp & 255;
+        CPU.C = temp > 255 ? 1 : 0;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
+        CPU.A = temp & 255;
         cycleCount += cycleAdd;
         break;
       }
@@ -316,9 +269,9 @@ var CPU = {
         // *******
 
         // AND memory with accumulator.
-        CPU.REG_ACC = CPU.REG_ACC & CPU.load(addr);
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = CPU.A & CPU.load(addr);
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -331,16 +284,16 @@ var CPU = {
         if(addrMode === 4){
           // ADDR_ACC = 4
 
-          CPU.F_CARRY = (CPU.REG_ACC >> 7) & 1;
-          CPU.REG_ACC = (CPU.REG_ACC << 1) & 255;
-          CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-          CPU.F_ZERO = CPU.REG_ACC;
+          CPU.C = (CPU.A >> 7) & 1;
+          CPU.A = (CPU.A << 1) & 255;
+          CPU.N = (CPU.A >> 7) & 1;
+          CPU.Z = CPU.A;
         } else {
           temp = CPU.load(addr);
-          CPU.F_CARRY = (temp >> 7) & 1;
+          CPU.C = (temp >> 7) & 1;
           temp = (temp << 1) & 255;
-          CPU.F_SIGN = (temp >> 7) & 1;
-          CPU.F_ZERO = temp;
+          CPU.N = (temp >> 7) & 1;
+          CPU.Z = temp;
           CPU.write(addr, temp);
         }
         break;
@@ -351,9 +304,9 @@ var CPU = {
         // *******
 
         // Branch on carry clear
-        if(CPU.F_CARRY === 0){
+        if(CPU.C === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -363,9 +316,9 @@ var CPU = {
         // *******
 
         // Branch on carry set
-        if(CPU.F_CARRY === 1){
+        if(CPU.C === 1){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -375,9 +328,9 @@ var CPU = {
         // *******
 
         // Branch on zero
-        if(CPU.F_ZERO === 0){
+        if(CPU.Z === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -387,10 +340,10 @@ var CPU = {
         // *******
 
         temp = CPU.load(addr);
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_OVERFLOW = (temp >> 6) & 1;
-        temp &= CPU.REG_ACC;
-        CPU.F_ZERO = temp;
+        CPU.N = (temp >> 7) & 1;
+        CPU.V = (temp >> 6) & 1;
+        temp &= CPU.A;
+        CPU.Z = temp;
         break;
       }
       case 7: {
@@ -399,9 +352,9 @@ var CPU = {
         // *******
 
         // Branch on negative result
-        if(CPU.F_SIGN === 1){
+        if(CPU.N === 1){
           cycleCount++;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -411,9 +364,9 @@ var CPU = {
         // *******
 
         // Branch on not zero
-        if(CPU.F_ZERO !== 0){
+        if(CPU.Z !== 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -423,9 +376,9 @@ var CPU = {
         // *******
 
         // Branch on positive result
-        if(CPU.F_SIGN === 0){
+        if(CPU.N === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -434,26 +387,26 @@ var CPU = {
         // * BRK *
         // *******
 
-        CPU.REG_PC += 2;
-        CPU.push((CPU.REG_PC >> 8) & 255);
-        CPU.push(CPU.REG_PC & 255);
-        CPU.F_BRK = 1;
+        CPU.PC += 2;
+        CPU.push((CPU.PC >> 8) & 255);
+        CPU.push(CPU.PC & 255);
+        CPU.B = 1;
 
         CPU.push(
-          CPU.F_CARRY |
-            ((CPU.F_ZERO === 0 ? 1 : 0) << 1) |
-            (CPU.F_INTERRUPT << 2) |
-            (CPU.F_DECIMAL << 3) |
-            (CPU.F_BRK << 4) |
-            (CPU.F_NOTUSED << 5) |
-            (CPU.F_OVERFLOW << 6) |
-            (CPU.F_SIGN << 7)
+          CPU.C |
+          ((CPU.Z === 0 ? 1 : 0) << 1) |
+          (CPU.I << 2) |
+          (CPU.D << 3) |
+          (CPU.B << 4) |
+          (1 << 5) |
+          (CPU.V << 6) |
+          (CPU.N << 7)
         );
 
-        CPU.F_INTERRUPT = 1;
-        //CPU.REG_PC = load(0xFFFE) | (load(0xFFFF) << 8);
-        CPU.REG_PC = CPU.load16bit(0xfffe);
-        CPU.REG_PC--;
+        CPU.I = 1;
+        //CPU.PC = load(0xFFFE) | (load(0xFFFF) << 8);
+        CPU.PC = CPU.load16bit(0xfffe);
+        CPU.PC--;
         break;
       }
       case 11: {
@@ -462,9 +415,9 @@ var CPU = {
         // *******
 
         // Branch on overflow clear
-        if(CPU.F_OVERFLOW === 0){
+        if(CPU.V === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -474,9 +427,9 @@ var CPU = {
         // *******
 
         // Branch on overflow set
-        if(CPU.F_OVERFLOW === 1){
+        if(CPU.V === 1){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
-          CPU.REG_PC = addr;
+          CPU.PC = addr;
         }
         break;
       }
@@ -486,7 +439,7 @@ var CPU = {
         // *******
 
         // Clear carry flag
-        CPU.F_CARRY = 0;
+        CPU.C = 0;
         break;
       }
       case 14: {
@@ -495,7 +448,7 @@ var CPU = {
         // *******
 
         // Clear decimal flag
-        CPU.F_DECIMAL = 0;
+        CPU.D = 0;
         break;
       }
       case 15: {
@@ -504,7 +457,7 @@ var CPU = {
         // *******
 
         // Clear interrupt flag
-        CPU.F_INTERRUPT = 0;
+        CPU.I = 0;
         break;
       }
       case 16: {
@@ -513,7 +466,7 @@ var CPU = {
         // *******
 
         // Clear overflow flag
-        CPU.F_OVERFLOW = 0;
+        CPU.V = 0;
         break;
       }
       case 17: {
@@ -522,10 +475,10 @@ var CPU = {
         // *******
 
         // Compare memory and accumulator:
-        temp = CPU.REG_ACC - CPU.load(addr);
-        CPU.F_CARRY = temp >= 0 ? 1 : 0;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = CPU.A - CPU.load(addr);
+        CPU.C = temp >= 0 ? 1 : 0;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         cycleCount += cycleAdd;
         break;
       }
@@ -535,10 +488,10 @@ var CPU = {
         // *******
 
         // Compare memory and index X:
-        temp = CPU.REG_X - CPU.load(addr);
-        CPU.F_CARRY = temp >= 0 ? 1 : 0;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = CPU.X - CPU.load(addr);
+        CPU.C = temp >= 0 ? 1 : 0;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         break;
       }
       case 19: {
@@ -547,10 +500,10 @@ var CPU = {
         // *******
 
         // Compare memory and index Y:
-        temp = CPU.REG_Y - CPU.load(addr);
-        CPU.F_CARRY = temp >= 0 ? 1 : 0;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = CPU.Y - CPU.load(addr);
+        CPU.C = temp >= 0 ? 1 : 0;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         break;
       }
       case 20: {
@@ -560,8 +513,8 @@ var CPU = {
 
         // Decrement memory by one:
         temp = (CPU.load(addr) - 1) & 0xff;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp;
         CPU.write(addr, temp);
         break;
       }
@@ -571,9 +524,9 @@ var CPU = {
         // *******
 
         // Decrement index X by one:
-        CPU.REG_X = (CPU.REG_X - 1) & 0xff;
-        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_X;
+        CPU.X = (CPU.X - 1) & 0xff;
+        CPU.N = (CPU.X >> 7) & 1;
+        CPU.Z = CPU.X;
         break;
       }
       case 22: {
@@ -582,9 +535,9 @@ var CPU = {
         // *******
 
         // Decrement index Y by one:
-        CPU.REG_Y = (CPU.REG_Y - 1) & 0xff;
-        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_Y;
+        CPU.Y = (CPU.Y - 1) & 0xff;
+        CPU.N = (CPU.Y >> 7) & 1;
+        CPU.Z = CPU.Y;
         break;
       }
       case 23: {
@@ -593,9 +546,9 @@ var CPU = {
         // *******
 
         // XOR Memory with accumulator, store in accumulator:
-        CPU.REG_ACC = (CPU.load(addr) ^ CPU.REG_ACC) & 0xff;
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = (CPU.load(addr) ^ CPU.A) & 0xff;
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         cycleCount += cycleAdd;
         break;
       }
@@ -606,8 +559,8 @@ var CPU = {
 
         // Increment memory by one:
         temp = (CPU.load(addr) + 1) & 0xff;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp;
         CPU.write(addr, temp & 0xff);
         break;
       }
@@ -617,9 +570,9 @@ var CPU = {
         // *******
 
         // Increment index X by one:
-        CPU.REG_X = (CPU.REG_X + 1) & 0xff;
-        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_X;
+        CPU.X = (CPU.X + 1) & 0xff;
+        CPU.N = (CPU.X >> 7) & 1;
+        CPU.Z = CPU.X;
         break;
       }
       case 26: {
@@ -628,10 +581,10 @@ var CPU = {
         // *******
 
         // Increment index Y by one:
-        CPU.REG_Y++;
-        CPU.REG_Y &= 0xff;
-        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_Y;
+        CPU.Y++;
+        CPU.Y &= 0xff;
+        CPU.N = (CPU.Y >> 7) & 1;
+        CPU.Z = CPU.Y;
         break;
       }
       case 27: {
@@ -640,7 +593,7 @@ var CPU = {
         // *******
 
         // Jump to new location:
-        CPU.REG_PC = addr - 1;
+        CPU.PC = addr - 1;
         break;
       }
       case 28: {
@@ -650,9 +603,9 @@ var CPU = {
 
         // Jump to new location, saving return address.
         // Push return address on stack:
-        CPU.push((CPU.REG_PC >> 8) & 255);
-        CPU.push(CPU.REG_PC & 255);
-        CPU.REG_PC = addr - 1;
+        CPU.push((CPU.PC >> 8) & 255);
+        CPU.push(CPU.PC & 255);
+        CPU.PC = addr - 1;
         break;
       }
       case 29: {
@@ -661,9 +614,9 @@ var CPU = {
         // *******
 
         // Load accumulator with memory:
-        CPU.REG_ACC = CPU.load(addr);
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = CPU.load(addr);
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         cycleCount += cycleAdd;
         break;
       }
@@ -673,9 +626,9 @@ var CPU = {
         // *******
 
         // Load index X with memory:
-        CPU.REG_X = CPU.load(addr);
-        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_X;
+        CPU.X = CPU.load(addr);
+        CPU.N = (CPU.X >> 7) & 1;
+        CPU.Z = CPU.X;
         cycleCount += cycleAdd;
         break;
       }
@@ -685,9 +638,9 @@ var CPU = {
         // *******
 
         // Load index Y with memory:
-        CPU.REG_Y = CPU.load(addr);
-        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_Y;
+        CPU.Y = CPU.load(addr);
+        CPU.N = (CPU.Y >> 7) & 1;
+        CPU.Z = CPU.Y;
         cycleCount += cycleAdd;
         break;
       }
@@ -700,18 +653,18 @@ var CPU = {
         if(addrMode === 4){
           // ADDR_ACC
 
-          temp = CPU.REG_ACC & 0xff;
-          CPU.F_CARRY = temp & 1;
+          temp = CPU.A & 0xff;
+          CPU.C = temp & 1;
           temp >>= 1;
-          CPU.REG_ACC = temp;
+          CPU.A = temp;
         } else {
           temp = CPU.load(addr) & 0xff;
-          CPU.F_CARRY = temp & 1;
+          CPU.C = temp & 1;
           temp >>= 1;
           CPU.write(addr, temp);
         }
-        CPU.F_SIGN = 0;
-        CPU.F_ZERO = temp;
+        CPU.N = 0;
+        CPU.Z = temp;
         break;
       }
       case 33: {
@@ -729,10 +682,10 @@ var CPU = {
         // *******
 
         // OR memory with accumulator, store in accumulator.
-        temp = (CPU.load(addr) | CPU.REG_ACC) & 255;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp;
-        CPU.REG_ACC = temp;
+        temp = (CPU.load(addr) | CPU.A) & 255;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp;
+        CPU.A = temp;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -742,7 +695,7 @@ var CPU = {
         // *******
 
         // Push accumulator on stack
-        CPU.push(CPU.REG_ACC);
+        CPU.push(CPU.A);
         break;
       }
       case 36: {
@@ -751,16 +704,16 @@ var CPU = {
         // *******
 
         // Push processor status on stack
-        CPU.F_BRK = 1;
+        CPU.B = 1;
         CPU.push(
-          CPU.F_CARRY |
-            ((CPU.F_ZERO === 0 ? 1 : 0) << 1) |
-            (CPU.F_INTERRUPT << 2) |
-            (CPU.F_DECIMAL << 3) |
-            (CPU.F_BRK << 4) |
-            (CPU.F_NOTUSED << 5) |
-            (CPU.F_OVERFLOW << 6) |
-            (CPU.F_SIGN << 7)
+          CPU.C |
+          ((CPU.Z === 0 ? 1 : 0) << 1) |
+          (CPU.I << 2) |
+          (CPU.D << 3) |
+          (CPU.B << 4) |
+          (1 << 5) |
+          (CPU.V << 6) |
+          (CPU.N << 7)
         );
         break;
       }
@@ -770,9 +723,9 @@ var CPU = {
         // *******
 
         // Pull accumulator from stack
-        CPU.REG_ACC = CPU.pull();
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = CPU.pull();
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         break;
       }
       case 38: {
@@ -782,16 +735,14 @@ var CPU = {
 
         // Pull processor status from stack
         temp = CPU.pull();
-        CPU.F_CARRY = temp & 1;
-        CPU.F_ZERO = ((temp >> 1) & 1) === 1 ? 0 : 1;
-        CPU.F_INTERRUPT = (temp >> 2) & 1;
-        CPU.F_DECIMAL = (temp >> 3) & 1;
-        CPU.F_BRK = (temp >> 4) & 1;
-        CPU.F_NOTUSED = (temp >> 5) & 1;
-        CPU.F_OVERFLOW = (temp >> 6) & 1;
-        CPU.F_SIGN = (temp >> 7) & 1;
-
-        CPU.F_NOTUSED = 1;
+        CPU.C = temp & 1;
+        CPU.Z = ((temp >> 1) & 1) === 1 ? 0 : 1;
+        CPU.I = (temp >> 2) & 1;
+        CPU.D = (temp >> 3) & 1;
+        CPU.B = (temp >> 4) & 1;
+        
+        CPU.V = (temp >> 6) & 1;
+        CPU.N = (temp >> 7) & 1;
         break;
       }
       case 39: {
@@ -803,20 +754,20 @@ var CPU = {
         if(addrMode === 4){
           // ADDR_ACC = 4
 
-          temp = CPU.REG_ACC;
-          add = CPU.F_CARRY;
-          CPU.F_CARRY = (temp >> 7) & 1;
+          temp = CPU.A;
+          add = CPU.C;
+          CPU.C = (temp >> 7) & 1;
           temp = ((temp << 1) & 0xff) + add;
-          CPU.REG_ACC = temp;
+          CPU.A = temp;
         } else {
           temp = CPU.load(addr);
-          add = CPU.F_CARRY;
-          CPU.F_CARRY = (temp >> 7) & 1;
+          add = CPU.C;
+          CPU.C = (temp >> 7) & 1;
           temp = ((temp << 1) & 0xff) + add;
           CPU.write(addr, temp);
         }
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp;
         break;
       }
       case 40: {
@@ -828,19 +779,19 @@ var CPU = {
         if(addrMode === 4){
           // ADDR_ACC = 4
 
-          add = CPU.F_CARRY << 7;
-          CPU.F_CARRY = CPU.REG_ACC & 1;
-          temp = (CPU.REG_ACC >> 1) + add;
-          CPU.REG_ACC = temp;
+          add = CPU.C << 7;
+          CPU.C = CPU.A & 1;
+          temp = (CPU.A >> 1) + add;
+          CPU.A = temp;
         } else {
           temp = CPU.load(addr);
-          add = CPU.F_CARRY << 7;
-          CPU.F_CARRY = temp & 1;
+          add = CPU.C << 7;
+          CPU.C = temp & 1;
           temp = (temp >> 1) + add;
           CPU.write(addr, temp);
         }
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp;
         break;
       }
       case 41: {
@@ -851,22 +802,20 @@ var CPU = {
         // Return from interrupt. Pull status and PC from stack.
 
         temp = CPU.pull();
-        CPU.F_CARRY = temp & 1;
-        CPU.F_ZERO = ((temp >> 1) & 1) === 0 ? 1 : 0;
-        CPU.F_INTERRUPT = (temp >> 2) & 1;
-        CPU.F_DECIMAL = (temp >> 3) & 1;
-        CPU.F_BRK = (temp >> 4) & 1;
-        CPU.F_NOTUSED = (temp >> 5) & 1;
-        CPU.F_OVERFLOW = (temp >> 6) & 1;
-        CPU.F_SIGN = (temp >> 7) & 1;
+        CPU.C = temp & 1;
+        CPU.Z = ((temp >> 1) & 1) === 0 ? 1 : 0;
+        CPU.I = (temp >> 2) & 1;
+        CPU.D = (temp >> 3) & 1;
+        CPU.B = (temp >> 4) & 1;
+        CPU.V = (temp >> 6) & 1;
+        CPU.N = (temp >> 7) & 1;
 
-        CPU.REG_PC = CPU.pull();
-        CPU.REG_PC += CPU.pull() << 8;
-        if(CPU.REG_PC === 0xffff){
+        CPU.PC = CPU.pull();
+        CPU.PC += CPU.pull() << 8;
+        if(CPU.PC === 0xffff){
           return;
         }
-        CPU.REG_PC--;
-        CPU.F_NOTUSED = 1;
+        CPU.PC--;
         break;
       }
       case 42: {
@@ -876,10 +825,10 @@ var CPU = {
 
         // Return from subroutine. Pull PC from stack.
 
-        CPU.REG_PC = CPU.pull();
-        CPU.REG_PC += CPU.pull() << 8;
+        CPU.PC = CPU.pull();
+        CPU.PC += CPU.pull() << 8;
 
-        if(CPU.REG_PC === 0xffff){
+        if(CPU.PC === 0xffff){
           return; // return from NSF play routine:
         }
         break;
@@ -889,19 +838,19 @@ var CPU = {
         // * SBC *
         // *******
 
-        temp = CPU.REG_ACC - CPU.load(addr) - (1 - CPU.F_CARRY);
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = CPU.A - CPU.load(addr) - (1 - CPU.C);
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         if(
-          ((CPU.REG_ACC ^ temp) & 0x80) !== 0 &&
-          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
+          ((CPU.A ^ temp) & 0x80) !== 0 &&
+          ((CPU.A ^ CPU.load(addr)) & 0x80) !== 0
         ){
-          CPU.F_OVERFLOW = 1;
+          CPU.V = 1;
         } else {
-          CPU.F_OVERFLOW = 0;
+          CPU.V = 0;
         }
-        CPU.F_CARRY = temp < 0 ? 0 : 1;
-        CPU.REG_ACC = temp & 0xff;
+        CPU.C = temp < 0 ? 0 : 1;
+        CPU.A = temp & 0xff;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -911,7 +860,7 @@ var CPU = {
         // *******
 
         // Set carry flag
-        CPU.F_CARRY = 1;
+        CPU.C = 1;
         break;
       }
       case 45: {
@@ -920,7 +869,7 @@ var CPU = {
         // *******
 
         // Set decimal mode
-        CPU.F_DECIMAL = 1;
+        CPU.D = 1;
         break;
       }
       case 46: {
@@ -929,7 +878,7 @@ var CPU = {
         // *******
 
         // Set interrupt disable status
-        CPU.F_INTERRUPT = 1;
+        CPU.I = 1;
         break;
       }
       case 47: {
@@ -938,7 +887,7 @@ var CPU = {
         // *******
 
         // Store accumulator in memory
-        CPU.write(addr, CPU.REG_ACC);
+        CPU.write(addr, CPU.A);
         break;
       }
       case 48: {
@@ -947,7 +896,7 @@ var CPU = {
         // *******
 
         // Store index X in memory
-        CPU.write(addr, CPU.REG_X);
+        CPU.write(addr, CPU.X);
         break;
       }
       case 49: {
@@ -956,7 +905,7 @@ var CPU = {
         // *******
 
         // Store index Y in memory:
-        CPU.write(addr, CPU.REG_Y);
+        CPU.write(addr, CPU.Y);
         break;
       }
       case 50: {
@@ -965,9 +914,9 @@ var CPU = {
         // *******
 
         // Transfer accumulator to index X:
-        CPU.REG_X = CPU.REG_ACC;
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.X = CPU.A;
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         break;
       }
       case 51: {
@@ -976,9 +925,9 @@ var CPU = {
         // *******
 
         // Transfer accumulator to index Y:
-        CPU.REG_Y = CPU.REG_ACC;
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.Y = CPU.A;
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         break;
       }
       case 52: {
@@ -987,9 +936,9 @@ var CPU = {
         // *******
 
         // Transfer stack pointer to index X:
-        CPU.REG_X = CPU.REG_SP - 0x0100;
-        CPU.F_SIGN = (CPU.REG_SP >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_X;
+        CPU.X = CPU.S - 0x0100;
+        CPU.N = (CPU.S >> 7) & 1;
+        CPU.Z = CPU.X;
         break;
       }
       case 53: {
@@ -998,9 +947,9 @@ var CPU = {
         // *******
 
         // Transfer index X to accumulator:
-        CPU.REG_ACC = CPU.REG_X;
-        CPU.F_SIGN = (CPU.REG_X >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_X;
+        CPU.A = CPU.X;
+        CPU.N = (CPU.X >> 7) & 1;
+        CPU.Z = CPU.X;
         break;
       }
       case 54: {
@@ -1009,7 +958,7 @@ var CPU = {
         // *******
 
         // Transfer index X to stack pointer:
-        CPU.REG_SP = CPU.REG_X + 0x0100;
+        CPU.S = CPU.X + 0x0100;
         CPU.stackWrap();
         break;
       }
@@ -1019,9 +968,9 @@ var CPU = {
         // *******
 
         // Transfer index Y to accumulator:
-        CPU.REG_ACC = CPU.REG_Y;
-        CPU.F_SIGN = (CPU.REG_Y >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_Y;
+        CPU.A = CPU.Y;
+        CPU.N = (CPU.Y >> 7) & 1;
+        CPU.Z = CPU.Y;
         break;
       }
       case 56: {
@@ -1030,10 +979,10 @@ var CPU = {
         // *******
 
         // Shift right one bit after ANDing:
-        temp = CPU.REG_ACC & CPU.load(addr);
-        CPU.F_CARRY = temp & 1;
-        CPU.REG_ACC = CPU.F_ZERO = temp >> 1;
-        CPU.F_SIGN = 0;
+        temp = CPU.A & CPU.load(addr);
+        CPU.C = temp & 1;
+        CPU.A = CPU.Z = temp >> 1;
+        CPU.N = 0;
         break;
       }
       case 57: {
@@ -1042,8 +991,8 @@ var CPU = {
         // *******
 
         // AND accumulator, setting carry to bit 7 result.
-        CPU.REG_ACC = CPU.F_ZERO = CPU.REG_ACC & CPU.load(addr);
-        CPU.F_CARRY = CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.A = CPU.Z = CPU.A & CPU.load(addr);
+        CPU.C = CPU.N = (CPU.A >> 7) & 1;
         break;
       }
       case 58: {
@@ -1052,11 +1001,11 @@ var CPU = {
         // *******
 
         // Rotate right one bit after ANDing:
-        temp = CPU.REG_ACC & CPU.load(addr);
-        CPU.REG_ACC = CPU.F_ZERO = (temp >> 1) + (CPU.F_CARRY << 7);
-        CPU.F_SIGN = CPU.F_CARRY;
-        CPU.F_CARRY = (temp >> 7) & 1;
-        CPU.F_OVERFLOW = ((temp >> 7) ^ (temp >> 6)) & 1;
+        temp = CPU.A & CPU.load(addr);
+        CPU.A = CPU.Z = (temp >> 1) + (CPU.C << 7);
+        CPU.N = CPU.C;
+        CPU.C = (temp >> 7) & 1;
+        CPU.V = ((temp >> 7) ^ (temp >> 6)) & 1;
         break;
       }
       case 59: {
@@ -1065,19 +1014,19 @@ var CPU = {
         // *******
 
         // Set X to (X AND A) - value.
-        temp = (CPU.REG_X & CPU.REG_ACC) - CPU.load(addr);
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = (CPU.X & CPU.A) - CPU.load(addr);
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         if(
-          ((CPU.REG_X ^ temp) & 0x80) !== 0 &&
-          ((CPU.REG_X ^ CPU.load(addr)) & 0x80) !== 0
+          ((CPU.X ^ temp) & 0x80) !== 0 &&
+          ((CPU.X ^ CPU.load(addr)) & 0x80) !== 0
         ){
-          CPU.F_OVERFLOW = 1;
+          CPU.V = 1;
         } else {
-          CPU.F_OVERFLOW = 0;
+          CPU.V = 0;
         }
-        CPU.F_CARRY = temp < 0 ? 0 : 1;
-        CPU.REG_X = temp & 0xff;
+        CPU.C = temp < 0 ? 0 : 1;
+        CPU.X = temp & 0xff;
         break;
       }
       case 60: {
@@ -1086,8 +1035,8 @@ var CPU = {
         // *******
 
         // Load A and X with memory:
-        CPU.REG_ACC = CPU.REG_X = CPU.F_ZERO = CPU.load(addr);
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
+        CPU.A = CPU.X = CPU.Z = CPU.load(addr);
+        CPU.N = (CPU.A >> 7) & 1;
         cycleCount += cycleAdd;
         break;
       }
@@ -1097,7 +1046,7 @@ var CPU = {
         // *******
 
         // Store A AND X in memory:
-        CPU.write(addr, CPU.REG_ACC & CPU.REG_X);
+        CPU.write(addr, CPU.A & CPU.X);
         break;
       }
       case 62: {
@@ -1110,10 +1059,10 @@ var CPU = {
         CPU.write(addr, temp);
 
         // Then compare with the accumulator:
-        temp = CPU.REG_ACC - temp;
-        CPU.F_CARRY = temp >= 0 ? 1 : 0;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = CPU.A - temp;
+        CPU.C = temp >= 0 ? 1 : 0;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1127,19 +1076,19 @@ var CPU = {
         CPU.write(addr, temp);
 
         // Then subtract from the accumulator:
-        temp = CPU.REG_ACC - temp - (1 - CPU.F_CARRY);
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
+        temp = CPU.A - temp - (1 - CPU.C);
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
         if(
-          ((CPU.REG_ACC ^ temp) & 0x80) !== 0 &&
-          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) !== 0
+          ((CPU.A ^ temp) & 0x80) !== 0 &&
+          ((CPU.A ^ CPU.load(addr)) & 0x80) !== 0
         ){
-          CPU.F_OVERFLOW = 1;
+          CPU.V = 1;
         } else {
-          CPU.F_OVERFLOW = 0;
+          CPU.V = 0;
         }
-        CPU.F_CARRY = temp < 0 ? 0 : 1;
-        CPU.REG_ACC = temp & 0xff;
+        CPU.C = temp < 0 ? 0 : 1;
+        CPU.A = temp & 0xff;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1150,15 +1099,15 @@ var CPU = {
 
         // Rotate one bit left
         temp = CPU.load(addr);
-        add = CPU.F_CARRY;
-        CPU.F_CARRY = (temp >> 7) & 1;
+        add = CPU.C;
+        CPU.C = (temp >> 7) & 1;
         temp = ((temp << 1) & 0xff) + add;
         CPU.write(addr, temp);
 
         // Then AND with the accumulator.
-        CPU.REG_ACC = CPU.REG_ACC & temp;
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = CPU.A & temp;
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1169,26 +1118,26 @@ var CPU = {
 
         // Rotate one bit right
         temp = CPU.load(addr);
-        add = CPU.F_CARRY << 7;
-        CPU.F_CARRY = temp & 1;
+        add = CPU.C << 7;
+        CPU.C = temp & 1;
         temp = (temp >> 1) + add;
         CPU.write(addr, temp);
 
         // Then add to the accumulator
-        temp = CPU.REG_ACC + CPU.load(addr) + CPU.F_CARRY;
+        temp = CPU.A + CPU.load(addr) + CPU.C;
 
         if(
-          ((CPU.REG_ACC ^ CPU.load(addr)) & 0x80) === 0 &&
-          ((CPU.REG_ACC ^ temp) & 0x80) !== 0
+          ((CPU.A ^ CPU.load(addr)) & 0x80) === 0 &&
+          ((CPU.A ^ temp) & 0x80) !== 0
         ){
-          CPU.F_OVERFLOW = 1;
+          CPU.V = 1;
         } else {
-          CPU.F_OVERFLOW = 0;
+          CPU.V = 0;
         }
-        CPU.F_CARRY = temp > 255 ? 1 : 0;
-        CPU.F_SIGN = (temp >> 7) & 1;
-        CPU.F_ZERO = temp & 0xff;
-        CPU.REG_ACC = temp & 255;
+        CPU.C = temp > 255 ? 1 : 0;
+        CPU.N = (temp >> 7) & 1;
+        CPU.Z = temp & 0xff;
+        CPU.A = temp & 255;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1199,14 +1148,14 @@ var CPU = {
 
         // Shift one bit left
         temp = CPU.load(addr);
-        CPU.F_CARRY = (temp >> 7) & 1;
+        CPU.C = (temp >> 7) & 1;
         temp = (temp << 1) & 255;
         CPU.write(addr, temp);
 
         // Then OR with the accumulator.
-        CPU.REG_ACC = CPU.REG_ACC | temp;
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = CPU.A | temp;
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1217,14 +1166,14 @@ var CPU = {
 
         // Shift one bit right
         temp = CPU.load(addr) & 0xff;
-        CPU.F_CARRY = temp & 1;
+        CPU.C = temp & 1;
         temp >>= 1;
         CPU.write(addr, temp);
 
         // Then XOR with the accumulator.
-        CPU.REG_ACC = CPU.REG_ACC ^ temp;
-        CPU.F_SIGN = (CPU.REG_ACC >> 7) & 1;
-        CPU.F_ZERO = CPU.REG_ACC;
+        CPU.A = CPU.A ^ temp;
+        CPU.N = (CPU.A >> 7) & 1;
+        CPU.Z = CPU.A;
         if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
@@ -1272,30 +1221,30 @@ var CPU = {
   },
 
   requestIrq: type => {
-    if(CPU.irqRequested){
-      if(type === CPU.IRQ_NORMAL){
+    if(CPU.interrupt_requested){
+      if(type === CPU.IRQ){
         return;
       }
       // console.log("too fast irqs. type="+type);
     }
-    CPU.irqRequested = true;
-    CPU.irqType = type;
+    CPU.interrupt_requested = true;
+    CPU.interrupt_type = type;
   },
 
   push: value => {
-    CPU.write(CPU.REG_SP, value);
-    CPU.REG_SP--;
-    CPU.REG_SP = 0x0100 | (CPU.REG_SP & 0xff);
+    CPU.write(CPU.S, value);
+    CPU.S--;
+    CPU.S = 0x0100 | (CPU.S & 0xff);
   },
 
   stackWrap: () => {
-    CPU.REG_SP = 0x0100 | (CPU.REG_SP & 0xff);
+    CPU.S = 0x0100 | (CPU.S & 0xff);
   },
 
   pull: () => {
-    CPU.REG_SP++;
-    CPU.REG_SP = 0x0100 | (CPU.REG_SP & 0xff);
-    return CPU.load(CPU.REG_SP);
+    CPU.S++;
+    CPU.S = 0x0100 | (CPU.S & 0xff);
+    return CPU.load(CPU.S);
   },
 
   pageCrossed: (addr1, addr2) => {
@@ -1303,66 +1252,274 @@ var CPU = {
   },
 
   haltCycles: cycles => {
-    CPU.cyclesToHalt += cycles;
+    CPU.halt_cycles += cycles;
   },
 
   doNonMaskableInterrupt: status => {
     if((CPU.load(0x2000) & 128) !== 0){
       // Check whether VBlank Interrupts are enabled
 
-      CPU.REG_PC_NEW++;
-      CPU.push((CPU.REG_PC_NEW >> 8) & 0xff);
-      CPU.push(CPU.REG_PC_NEW & 0xff);
-      //CPU.F_INTERRUPT_NEW = 1;
+      CPU.PC_NEW++;
+      CPU.push((CPU.PC_NEW >> 8) & 0xff);
+      CPU.push(CPU.PC_NEW & 0xff);
+      //CPU.I_NEW = 1;
       CPU.push(status);
 
-      CPU.REG_PC_NEW =
+      CPU.PC_NEW =
         CPU.load(0xfffa) | (CPU.load(0xfffb) << 8);
-      CPU.REG_PC_NEW--;
+      CPU.PC_NEW--;
     }
   },
 
   doResetInterrupt: () => {
-    CPU.REG_PC_NEW =
+    CPU.PC_NEW =
       CPU.load(0xfffc) | (CPU.load(0xfffd) << 8);
-    CPU.REG_PC_NEW--;
+    CPU.PC_NEW--;
   },
 
   doIrq: status => {
-    CPU.REG_PC_NEW++;
-    CPU.push((CPU.REG_PC_NEW >> 8) & 0xff);
-    CPU.push(CPU.REG_PC_NEW & 0xff);
+    CPU.PC_NEW++;
+    CPU.push((CPU.PC_NEW >> 8) & 0xff);
+    CPU.push(CPU.PC_NEW & 0xff);
     CPU.push(status);
-    CPU.F_INTERRUPT_NEW = 1;
-    CPU.F_BRK_NEW = 0;
+    CPU.I_NEW = 1;
+    CPU.B_NEW = 0;
 
-    CPU.REG_PC_NEW =
+    CPU.PC_NEW =
       CPU.load(0xfffe) | (CPU.load(0xffff) << 8);
-    CPU.REG_PC_NEW--;
+    CPU.PC_NEW--;
   },
 
   getStatus: () => {
     return (
-      CPU.F_CARRY |
-      (CPU.F_ZERO << 1) |
-      (CPU.F_INTERRUPT << 2) |
-      (CPU.F_DECIMAL << 3) |
-      (CPU.F_BRK << 4) |
-      (CPU.F_NOTUSED << 5) |
-      (CPU.F_OVERFLOW << 6) |
-      (CPU.F_SIGN << 7)
+      CPU.C |
+      (CPU.Z << 1) |
+      (CPU.I << 2) |
+      (CPU.D << 3) |
+      (CPU.B << 4) |
+      (1 << 5) |
+      (CPU.V << 6) |
+      (CPU.N << 7)
     );
   },
 
   setStatus: st => {
-    CPU.F_CARRY = st & 1;
-    CPU.F_ZERO = (st >> 1) & 1;
-    CPU.F_INTERRUPT = (st >> 2) & 1;
-    CPU.F_DECIMAL = (st >> 3) & 1;
-    CPU.F_BRK = (st >> 4) & 1;
-    CPU.F_NOTUSED = (st >> 5) & 1;
-    CPU.F_OVERFLOW = (st >> 6) & 1;
-    CPU.F_SIGN = (st >> 7) & 1;
+    CPU.C = st & 1;
+    CPU.Z = (st >> 1) & 1;
+    CPU.I = (st >> 2) & 1;
+    CPU.D = (st >> 3) & 1;
+    CPU.B = (st >> 4) & 1;
+
+    CPU.V = (st >> 6) & 1;
+    CPU.N = (st >> 7) & 1;
+  },
+  
+  regWrite: (address, value) => {
+    switch (address){
+      case 0x2000:
+        // PPU Control register 1
+        CPU.mem[address] = value;
+        PPU.updateControlReg1(value);
+        break;
+
+      case 0x2001:
+        // PPU Control register 2
+        CPU.mem[address] = value;
+        PPU.updateControlReg2(value);
+        break;
+
+      case 0x2003:
+        // Set Sprite RAM address:
+        PPU.writeSRAMAddress(value);
+        break;
+
+      case 0x2004:
+        // Write to Sprite RAM:
+        PPU.sramWrite(value);
+        break;
+
+      case 0x2005:
+        // Screen Scroll offsets:
+        PPU.scrollWrite(value);
+        break;
+
+      case 0x2006:
+        // Set VRAM address:
+        PPU.writeVRAMAddress(value);
+        break;
+
+      case 0x2007:
+        // Write to VRAM:
+        PPU.vramWrite(value);
+        break;
+
+      case 0x4014:
+        // Sprite Memory DMA Access
+        PPU.sramDMA(value);
+        break;
+
+      case 0x4015:
+        // Sound Channel Switch, DMC Status
+        APU.writeReg(address, value);
+        break;
+
+      case 0x4016:
+        // Joystick 1 + Strobe
+        if((value & 1) === 0 && (Mapper.joypadLastWrite & 1) === 1){
+          Mapper.joy1StrobeState = 0;
+          Mapper.joy2StrobeState = 0;
+        }
+        Mapper.joypadLastWrite = value;
+        break;
+
+      case 0x4017:
+        // Sound channel frame sequencer:
+        APU.writeReg(address, value);
+        break;
+
+      default:
+        // Sound registers
+        // console.log("write to sound reg");
+        if(address >= 0x4000 && address <= 0x4017){
+          APU.writeReg(address, value);
+        }
+    }
+  },
+
+  regLoad:  address => {
+    switch (
+      address >> 12 // use fourth nibble (0xF000)
+    ){
+      case 0:
+        break;
+
+      case 1:
+        break;
+
+      case 2:
+      // Fall through to case 3
+      case 3:
+        // PPU Registers
+        switch (address & 0x7){
+          case 0x0:
+            // 0x2000:
+            // PPU Control Register 1.
+            // (the value is stored both
+            // in main memory and in the
+            // PPU as flags):
+            // (not in the real NES)
+            return CPU.mem[0x2000];
+
+          case 0x1:
+            // 0x2001:
+            // PPU Control Register 2.
+            // (the value is stored both
+            // in main memory and in the
+            // PPU as flags):
+            // (not in the real NES)
+            return CPU.mem[0x2001];
+
+          case 0x2:
+            // 0x2002:
+            // PPU Status Register.
+            // The value is stored in
+            // main memory in addition
+            // to as flags in the PPU.
+            // (not in the real NES)
+            return PPU.readStatusRegister();
+
+          case 0x3:
+            return 0;
+
+          case 0x4:
+            // 0x2004:
+            // Sprite Memory read.
+            return PPU.sramLoad();
+          case 0x5:
+            return 0;
+
+          case 0x6:
+            return 0;
+
+          case 0x7:
+            // 0x2007:
+            // VRAM read:
+            return PPU.vramLoad();
+        }
+        break;
+      case 4:
+        // Sound+Joypad registers
+        switch (address - 0x4015){
+          case 0:
+            // 0x4015:
+            // Sound channel enable, DMC Status
+            return APU.readReg(address);
+
+          case 1:
+            // 0x4016:
+            // Joystick 1 + Strobe
+            return joy1Read();
+
+          case 2:
+            // 0x4017:
+            // Joystick 2 + Strobe
+            // https://wiki.nesdev.com/w/index.php/Zapper
+            var w;
+
+            if(
+              Mapper.zapperX !== null &&
+              Mapper.zapperY !== null &&
+              PPU.isPixelWhite(Mapper.zapperX, Mapper.zapperY)
+            ){
+              w = 0;
+            } else {
+              w = 0x1 << 3;
+            }
+
+            if(Mapper.zapperFired){
+              w |= 0x1 << 4;
+            }
+            return (joy2Read() | w) & 0xffff;
+        }
+        break;
+    }
+    return 0;
+  },
+
+  // Handle 8-bit writes in CPU memory
+  write: (address, value) => {
+    if(address < 0x2000){
+      // Mirroring of RAM:
+      CPU.mem[address & 0x7ff] = value;
+    } else if(address > 0x4017){
+      CPU.mem[address] = value;
+      if(address >= 0x6000 && address < 0x8000){
+        // Write to persistent RAM
+        NES.onBatteryRamWrite(address, value);
+      }
+    } else if(address > 0x2007 && address < 0x4000){
+      CPU.regWrite(0x2000 + (address & 0x7), value);
+    } else {
+      CPU.regWrite(address, value);
+    }
+  },
+
+  // Handle 8-bit reads from CPU memory
+  load: address => {
+    // Wrap around:
+    address &= 0xffff;
+
+    // Check address range:
+    if(address > 0x4017){
+      // ROM:
+      return CPU.mem[address];
+    } else if(address >= 0x2000){
+      // I/O Ports.
+      return CPU.regLoad(address);
+    } else {
+      // RAM (mirrored)
+      return CPU.mem[address & 0x7ff];
+    }
   }
 };
 
@@ -1773,93 +1930,7 @@ var OpData = {
 
     OpData.instname = new Array(70);
 
-    // Instruction Names:
-    OpData.instname[0] = "ADC";
-    OpData.instname[1] = "AND";
-    OpData.instname[2] = "ASL";
-    OpData.instname[3] = "BCC";
-    OpData.instname[4] = "BCS";
-    OpData.instname[5] = "BEQ";
-    OpData.instname[6] = "BIT";
-    OpData.instname[7] = "BMI";
-    OpData.instname[8] = "BNE";
-    OpData.instname[9] = "BPL";
-    OpData.instname[10] = "BRK";
-    OpData.instname[11] = "BVC";
-    OpData.instname[12] = "BVS";
-    OpData.instname[13] = "CLC";
-    OpData.instname[14] = "CLD";
-    OpData.instname[15] = "CLI";
-    OpData.instname[16] = "CLV";
-    OpData.instname[17] = "CMP";
-    OpData.instname[18] = "CPX";
-    OpData.instname[19] = "CPY";
-    OpData.instname[20] = "DEC";
-    OpData.instname[21] = "DEX";
-    OpData.instname[22] = "DEY";
-    OpData.instname[23] = "EOR";
-    OpData.instname[24] = "INC";
-    OpData.instname[25] = "INX";
-    OpData.instname[26] = "INY";
-    OpData.instname[27] = "JMP";
-    OpData.instname[28] = "JSR";
-    OpData.instname[29] = "LDA";
-    OpData.instname[30] = "LDX";
-    OpData.instname[31] = "LDY";
-    OpData.instname[32] = "LSR";
-    OpData.instname[33] = "NOP";
-    OpData.instname[34] = "ORA";
-    OpData.instname[35] = "PHA";
-    OpData.instname[36] = "PHP";
-    OpData.instname[37] = "PLA";
-    OpData.instname[38] = "PLP";
-    OpData.instname[39] = "ROL";
-    OpData.instname[40] = "ROR";
-    OpData.instname[41] = "RTI";
-    OpData.instname[42] = "RTS";
-    OpData.instname[43] = "SBC";
-    OpData.instname[44] = "SEC";
-    OpData.instname[45] = "SED";
-    OpData.instname[46] = "SEI";
-    OpData.instname[47] = "STA";
-    OpData.instname[48] = "STX";
-    OpData.instname[49] = "STY";
-    OpData.instname[50] = "TAX";
-    OpData.instname[51] = "TAY";
-    OpData.instname[52] = "TSX";
-    OpData.instname[53] = "TXA";
-    OpData.instname[54] = "TXS";
-    OpData.instname[55] = "TYA";
-    OpData.instname[56] = "ALR";
-    OpData.instname[57] = "ANC";
-    OpData.instname[58] = "ARR";
-    OpData.instname[59] = "AXS";
-    OpData.instname[60] = "LAX";
-    OpData.instname[61] = "SAX";
-    OpData.instname[62] = "DCP";
-    OpData.instname[63] = "ISC";
-    OpData.instname[64] = "RLA";
-    OpData.instname[65] = "RRA";
-    OpData.instname[66] = "SLO";
-    OpData.instname[67] = "SRE";
-    OpData.instname[68] = "SKB";
-    OpData.instname[69] = "IGN";
-
-    OpData.addrDesc = new Array(
-      "Zero Page           ",
-      "Relative            ",
-      "Implied             ",
-      "Absolute            ",
-      "Accumulator         ",
-      "Immediate           ",
-      "Zero Page,X         ",
-      "Zero Page,Y         ",
-      "Absolute,X          ",
-      "Absolute,Y          ",
-      "Preindexed Indirect ",
-      "Postindexed Indirect",
-      "Indirect Absolute   "
-    );
+    OpData.addrDesc = new Array();
   },
 
   INS_ADC: 0,
@@ -1974,212 +2045,3 @@ var OpData = {
       ((cycles & 0xff) << 24);
   },
 };
-
-
-CPU.regWrite = (address, value) => {
-  switch (address){
-    case 0x2000:
-      // PPU Control register 1
-      CPU.mem[address] = value;
-      PPU.updateControlReg1(value);
-      break;
-
-    case 0x2001:
-      // PPU Control register 2
-      CPU.mem[address] = value;
-      PPU.updateControlReg2(value);
-      break;
-
-    case 0x2003:
-      // Set Sprite RAM address:
-      PPU.writeSRAMAddress(value);
-      break;
-
-    case 0x2004:
-      // Write to Sprite RAM:
-      PPU.sramWrite(value);
-      break;
-
-    case 0x2005:
-      // Screen Scroll offsets:
-      PPU.scrollWrite(value);
-      break;
-
-    case 0x2006:
-      // Set VRAM address:
-      PPU.writeVRAMAddress(value);
-      break;
-
-    case 0x2007:
-      // Write to VRAM:
-      PPU.vramWrite(value);
-      break;
-
-    case 0x4014:
-      // Sprite Memory DMA Access
-      PPU.sramDMA(value);
-      break;
-
-    case 0x4015:
-      // Sound Channel Switch, DMC Status
-      APU.writeReg(address, value);
-      break;
-
-    case 0x4016:
-      // Joystick 1 + Strobe
-      if((value & 1) === 0 && (Mapper.joypadLastWrite & 1) === 1){
-        Mapper.joy1StrobeState = 0;
-        Mapper.joy2StrobeState = 0;
-      }
-      Mapper.joypadLastWrite = value;
-      break;
-
-    case 0x4017:
-      // Sound channel frame sequencer:
-      APU.writeReg(address, value);
-      break;
-
-    default:
-      // Sound registers
-      // console.log("write to sound reg");
-      if(address >= 0x4000 && address <= 0x4017){
-        APU.writeReg(address, value);
-      }
-  }
-}
-
-CPU.regLoad = address => {
-  switch (
-    address >> 12 // use fourth nibble (0xF000)
-  ){
-    case 0:
-      break;
-
-    case 1:
-      break;
-
-    case 2:
-    // Fall through to case 3
-    case 3:
-      // PPU Registers
-      switch (address & 0x7){
-        case 0x0:
-          // 0x2000:
-          // PPU Control Register 1.
-          // (the value is stored both
-          // in main memory and in the
-          // PPU as flags):
-          // (not in the real NES)
-          return CPU.mem[0x2000];
-
-        case 0x1:
-          // 0x2001:
-          // PPU Control Register 2.
-          // (the value is stored both
-          // in main memory and in the
-          // PPU as flags):
-          // (not in the real NES)
-          return CPU.mem[0x2001];
-
-        case 0x2:
-          // 0x2002:
-          // PPU Status Register.
-          // The value is stored in
-          // main memory in addition
-          // to as flags in the PPU.
-          // (not in the real NES)
-          return PPU.readStatusRegister();
-
-        case 0x3:
-          return 0;
-
-        case 0x4:
-          // 0x2004:
-          // Sprite Memory read.
-          return PPU.sramLoad();
-        case 0x5:
-          return 0;
-
-        case 0x6:
-          return 0;
-
-        case 0x7:
-          // 0x2007:
-          // VRAM read:
-          return PPU.vramLoad();
-      }
-      break;
-    case 4:
-      // Sound+Joypad registers
-      switch (address - 0x4015){
-        case 0:
-          // 0x4015:
-          // Sound channel enable, DMC Status
-          return APU.readReg(address);
-
-        case 1:
-          // 0x4016:
-          // Joystick 1 + Strobe
-          return joy1Read();
-
-        case 2:
-          // 0x4017:
-          // Joystick 2 + Strobe
-          // https://wiki.nesdev.com/w/index.php/Zapper
-          var w;
-
-          if(
-            Mapper.zapperX !== null &&
-            Mapper.zapperY !== null &&
-            PPU.isPixelWhite(Mapper.zapperX, Mapper.zapperY)
-          ){
-            w = 0;
-          } else {
-            w = 0x1 << 3;
-          }
-
-          if(Mapper.zapperFired){
-            w |= 0x1 << 4;
-          }
-          return (joy2Read() | w) & 0xffff;
-      }
-      break;
-  }
-  return 0;
-}
-
-// Handle 8-bit writes in CPU memory
-CPU.write = (address, value) => {
-  if(address < 0x2000){
-    // Mirroring of RAM:
-    CPU.mem[address & 0x7ff] = value;
-  } else if(address > 0x4017){
-    CPU.mem[address] = value;
-    if(address >= 0x6000 && address < 0x8000){
-      // Write to persistent RAM
-      NES.onBatteryRamWrite(address, value);
-    }
-  } else if(address > 0x2007 && address < 0x4000){
-    CPU.regWrite(0x2000 + (address & 0x7), value);
-  } else {
-    CPU.regWrite(address, value);
-  }
-},
-
-// Handle 8-bit reads from CPU memory
-CPU.load = address => {
-  // Wrap around:
-  address &= 0xffff;
-
-  // Check address range:
-  if(address > 0x4017){
-    // ROM:
-    return CPU.mem[address];
-  } else if(address >= 0x2000){
-    // I/O Ports.
-    return CPU.regLoad(address);
-  } else {
-    // RAM (mirrored)
-    return CPU.mem[address & 0x7ff];
-  }
-}

@@ -293,7 +293,7 @@ var PPU = {
 
   startVBlank: () => {
     // Do NMI:
-    CPU.requestIrq(CPU.IRQ_NMI);
+    CPU.requestIrq(CPU.NMI);
 
     // Make sure everything is rendered:
     if(PPU.lastRenderedScanline < 239){
@@ -1379,7 +1379,7 @@ var PPU = {
     // Set VBlank flag:
     PPU.setStatusFlag(PPU.STATUS_VBLANK, true);
     //nes.getCpu().doNonMaskableInterrupt();
-    CPU.requestIrq(CPU.IRQ_NMI);
+    CPU.requestIrq(CPU.NMI);
   },
 
   isPixelWhite: (x, y) => {
