@@ -204,6 +204,29 @@ var PPU = {
     PPU.updateControlReg2(0);
   },
 
+  // Clock one PPU cycle
+  // Each PPU cycle advances the rendering by one pixel on a 341*262px grid
+  
+  //        x=0                 x=256      x=340
+  //       _|____________________|__________|
+  //  y=-1  | pre-render scanline| prepare *|
+  //       _|____________________| sprites  |
+  //  y=0   | visible area       | for the  |
+  //        | - this is rendered | next     |
+  //  y=239 |   on the screen.   | scanline |
+  //       _|____________________|__________|
+  //  y=240 | idle                          |
+  //       _|_______________________________|
+  //  y=241 | vertical blanking (idle)      |
+  //        | 20 scanlines long             |
+  //  y=260_|_______________________________|
+  
+  // (*) When background-rendering is enabled, the pre-render scanline alternates between 340 and 341 pixels at each frame
+  
+  tick: () => {
+    // TODO
+  },
+  
   // Sets Nametable mirroring.
   setMirroring: mirroring => {
     if(mirroring === PPU.currentMirroring){

@@ -52,6 +52,15 @@ var CPU = {
     CPU.interrupt_requested = false;
     CPU.interrupt_type = null;
   },
+  
+  // Clock 1 CPU cycle
+  // During this time, 3 PPU cycles and 1 APU cycles take place
+  tick: () => {
+    PPU.tick();
+    PPU.tick();
+    PPU.tick();
+    APU.tick();
+  },
 
   // Emulates a single CPU instruction, returns the number of cycles
   emulate: () => {

@@ -1,9 +1,11 @@
 ﻿<div id=a></div>
+<br><br>
+<div id=b></div>
 <style>
-*{margin:0;padding:0;letter-spacing:-1;line-height:12px;font-family:courier}
+*{margin:0;padding:0;letter-spacing:-1;line-height:12px;font-family:courier;control-characters:visible}
 table{border-spacing:0;border-collapse:collapse}
 th{padding:2px}
-td{padding:1px}
+td{padding:2px}
 </style>
 <script>
 out = "<table border><tr><th style='min-width:600px'>Code";//<th>Opcodes 0-255 + interrupts 0-2";
@@ -22,17 +24,26 @@ values = [
 bits = [];
 
 len = 0;
-for(i=0;i<259;i++){out+="<th>"+ops[i].split('').join('<br>')}
+taskperops = [];
+for(i=0;i<259;i++){
+  out+="<th>"+ops[i].split('').join('<br>');
+  taskperops[i] = [];
+}
+  
+task = 0;
 t = (a,code) => {
   bits[len] = [];
   bitstr = "";
   for(i = 0; i < 33; i++){
     bitstr += ("00000000"+values[pattern.indexOf(a[i])].toString(2)).slice(-8).split('').reverse().join('');
   }
-  
+  for(i = 0; i < 259; i++){
+     taskperops[i][task] = bitstr[i];
+  }
   bitstr = bitstr.split('').join('<td>').replace(/0/g,' ').replace(/1/g,'<b>⬤<b/>');
   len++;
   out += "<tr><td>"+code+"</pre><td>" + bitstr;
+  task ++;
 }
 
 t("                                !", "addr = 0xFFFA// NMI vector location");
@@ -93,5 +104,47 @@ t("wwwv||wvwwwvwxwv 5 !}}||{}wv{{wv ", "P.Z = u8(t) == 0");
 t("             0                   ", "P.V = (((t >> 5)+1)&2)// [arr]");
 
 a.innerHTML = out;
+
+
+
+out = "<table border><tr><th>Opcode<th colspan=56>Tasks<th>8 ASCII chars<th>7 Bytes<th>3 Unicode chars";
+for(i = 0; i < 259; i++){
+  out += "<tr><td>" + ("000" + i.toString(16)).slice(-3).replace(/^0/,'&nbsp;') + " " + ops[i] + "<td>" + taskperops[i].join('<td>').replace(/0/g,' ').replace(/1/g,'<b>⬤<b/>') + "<th>";
+  
+  arr = [];
+  for(j = 0; j < 8; j++){
+    encode = "";
+    for(k = 0; k < 7; k++){
+      encode += taskperops[i][j*8+k] || 0;
+    }
+    encode = parseInt(encode, 2);
+    encode = (127-encode) < 32 ? ("\\x" + (127-encode).toString(16) + " ") : String.fromCodePoint(127-encode);
+    out += encode;
+  }
+  
+  out+= "<th>";
+  for(j = 0; j < 7; j++){
+    encode = "";
+    
+    for(k = 0; k < 8; k++){
+      encode += taskperops[i][j*6+k] || 0;
+    }
+    encode = parseInt(encode, 2);
+    arr.push(("00"+encode.toString(16)).slice(-2));
+    
+  }
+  out+= arr.join(' ') + "<th>";
+  
+  for(j = 0; j < 3; j++){
+    encode = "";
+    for(k = 0; k < 19; k++){
+      encode += taskperops[i][j*20+k] || 0;
+    }
+    encode = parseInt("1"+encode, 2);
+    encode = String.fromCodePoint(encode);
+    out += encode;
+  }
+}
+b.innerHTML = out;
 
 </script>
