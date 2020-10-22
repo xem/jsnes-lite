@@ -129,7 +129,7 @@ var APU = {
 
   // Clock one APU cycle
   // The APU has some events happening 120Hz or 240hz (NTSC) / 96 or 192Hz (PAL)
-  // So every 14,915 CPU cycles, the 120Hz counter increases, and the 240Hz counter increases twice
+  // Every 14,915 CPU cycles, the 120Hz counter increases, and the 240Hz counter increases twice
   tick: () => {
     // TODO
   },

@@ -105,7 +105,7 @@ t("             0                   ", "P.V = (((t >> 5)+1)&2)// [arr]");
 
 a.innerHTML = out;
 
-
+bytes = {};
 
 out = "<table border><tr><th>Opcode<th colspan=56>Tasks<th>8 ASCII chars<th>7 Bytes<th>3 Unicode chars";
 for(i = 0; i < 259; i++){
@@ -127,9 +127,10 @@ for(i = 0; i < 259; i++){
     encode = "";
     
     for(k = 0; k < 8; k++){
-      encode += taskperops[i][j*6+k] || 0;
+      encode += taskperops[i][j*7+k] || 0;
     }
     encode = parseInt(encode, 2);
+    bytes[encode] = 1;
     arr.push(("00"+encode.toString(16)).slice(-2));
     
   }
@@ -138,7 +139,7 @@ for(i = 0; i < 259; i++){
   for(j = 0; j < 3; j++){
     encode = "";
     for(k = 0; k < 19; k++){
-      encode += taskperops[i][j*20+k] || 0;
+      encode += taskperops[i][j*19+k] || 0;
     }
     encode = parseInt("1"+encode, 2);
     encode = String.fromCodePoint(encode);

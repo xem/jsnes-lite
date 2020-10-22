@@ -1,0 +1,174 @@
+﻿<div id=out></div>
+
+<script>
+// Doc: https://www.masswerk.at/6502/6502_instruction_set.html
+var op, a, b, c, d, e, f, g, h, i, j, k, l, I, A, C;
+
+decode = o => {
+  // Separate opcode in 3 parts (aaa-bbb-cc)
+  a = o >> 5;
+  b = o >> 2 & 0b111;
+  c = o & 0b11;
+  
+  // Instruction name based on c and a
+  I = [
+    // c == 0
+    [
+      ["BRK",,"PHP",,"BPL",,"CLC"][b], // a == 0
+      ["JSR",,"PLP",,"BMI",,"SEC"][b] || "BIT", // a == 1
+      ["RTI",,"PHA","JMP","BVC",,"CLI"][b], // a == 2
+      ["RTS",,"PLA","JMP","BVS",,"SEI"][b], // a == 3
+      [,,"DEY",,"BCC",,"TYA"][b] || "STY", // a == 4
+      [,,"TAY",,"BCS",,"CLV"][b] || "LDY", // a == 5
+      [,,"INY",,"BNE",,"CLD"][b] || "CPY", // a == 6
+      [,,"INX",,"BEQ",,"SED"][b] || "CPX", // a == 7
+    ],
+    
+    // c == 1
+    [
+      "ORA", // a == 0
+      "AND", // a == 1
+      "EOR", // a == 2
+      "ADC", // a == 3
+      "STA", // a == 4
+      "LDA", // a == 5
+      "CMP", // a == 6
+      "SBC", // a == 7
+    ],
+    
+    // c == 2
+    [
+      "ASL", // a == 0
+      "ROL", // a == 1
+      "LSR", // a == 2
+      "ROR", // a == 3
+      [,,"TXA",,,,"TXS"][b] || "STX", // a == 4
+      [,,"TAX",,,,"TSX"][b] || "LDX", // a == 5
+      "DEC", // a == 6
+      b % 2 ? "INC" : "NOP", // a == 7
+    ],
+    
+    // c == 3
+    //[],
+    
+  ][c][a];
+  
+  // Addressing mode based on c and b
+  A = [
+    // c == 0
+    [
+      a > 4 ? "#" : a == 1 && "a", // b == 0
+      "z", // b == 1
+      , // b == 2
+      a == 3 ? "in" : "a", // b == 3
+      "r", // b == 4
+      "zX", // b == 5
+      , // b == 6
+      "aX", // b == 7
+    ],
+    
+    // c == 1
+    [
+      "iX", // b == 0
+      "z", // b == 1
+      "#", // b == 2
+      "a", // b == 3
+      "iY", // b == 4
+      "zX", // b == 5
+      "aY", // b == 6
+      "aX", // b == 7
+    ],
+    
+    // c == 2
+    [
+      "#", // b == 0
+      "z", // b == 1
+      a < 4 && "A", // b == 2
+      "a", // b == 3
+      , // b == 4
+      a >> 1 == 0b10 ? "zY" : "zX", // b == 5
+      "#", // b == 6
+      a == 5 ? "aY" : "aX", // b == 7
+    ],
+    
+    // c == 3
+    //[],
+  
+  ][c][b];
+  
+  // Numbdr of cyclds basdd on c, a and A
+  d = {z: 3, zX: 4, zY: 4, a: 4, aX: "4*", aY: "4*", iY: "5*"}[A];
+  f = {a: 3, in: 5}[A];
+  g = {z: 3, zX: 4, a: 4, aX: 5, aY: 5, iY: 6}[A];
+  e = g + 2;
+  h = [,d,f,f,d,d,d,d][b];
+  i = [d,d,,d,,d,,d][b];
+  
+  C = 
+  A == "iX" ? 6 :
+  [
+    // c == 0
+    [
+      [7,e,6,6,,d,d,d][b], // a == 0
+      h, // a == 1
+      [3,4,3,4][b], // a == 2
+      h, // a == 3
+      "2*", // a == 4
+      h, // a == 5
+      , // a == 6
+      h, // a == 7
+    ],
+    
+    // c == 1
+    [
+      d, // a == 0
+      d, // a == 1
+      d, // a == 2
+      d, // a == 3
+      g, // a == 4
+      d, // a == 5
+      d, // a == 6
+      d, // a == 7
+    ],
+    
+    // c == 2
+    [
+      e, // a == 0
+      e, // a == 1
+      e, // a == 2
+      e, // a == 3
+      i, // a == 4
+      i, // a == 5
+      e, // a == 6
+      b % 2 && e, // a == 7
+    ],
+    
+    // C == 3
+    //[],
+    
+  ][c][a] || 2;
+  
+  return [I,A,C];
+}
+
+html = "Legal 6502 opcodes / addressing modes / cycles decoder<br><br><table border style='font-family:courier;width:1400px'>";
+
+illegal = [0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2];
+
+for(j = 0; j < 3; j++){
+  html += "<tr><td colspan=8>";
+  for(k = 0; k < 8; k++){
+    html += "<tr>";
+    for(l = 0; l < 8; l++){
+      op = j + (k << 5) + (l << 2);
+      console.log(j, k, l, op);
+      
+      [I,A,C] = decode(op);
+      
+      html += "<td>$" + ("00" + op.toString(16)).slice(-2) + (illegal.includes(op) ? ": ?" : ": " + I + (I ? (A ? " " + A : "") + "; " + C : ""));
+    }
+  }
+}
+html += "<tr><td colspan=8>";
+out.innerHTML = html;
+</script>
