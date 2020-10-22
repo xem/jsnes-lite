@@ -171,4 +171,8 @@ for(j = 0; j < 3; j++){
 }
 html += "<tr><td colspan=8>";
 out.innerHTML = html;
+
+d=X=>(a=X>>5,b=X>>2&7,c=3&X,I=[[["BRK",,"PHP",,"BPL",,"CLC"][b],["JSR",,"PLP",,"BMI",,"SEC"][b]||"BIT",["RTI",,"PHA","JMP","BVC",,"CLI"][b],["RTS",,"PLA","JMP","BVS",,"SEI"][b],[,,"DEY",,"BCC",,"TYA"][b]||"STY",[,,"TAY",,"BCS",,"CLV"][b]||"LDY",[,,"INY",,"BNE",,"CLD"][b]||"CPY",[,,"INX",,"BEQ",,"SED"][b]||"CPX"],["ORA","AND","EOR","ADC","STA","LDA","CMP","SBC"],["ASL","ROL","LSR","ROR",[,,"TXA",,,,"TXS"][b]||"STX",[,,"TAX",,,,"TSX"][b]||"LDX","DEC",b%2?"INC":"NOP"]][c][a],A=[[a>4?"#":1==a&&"a","z",,3==a?"in":"a","r","zX",,"aX"],["iX","z","#","a","iY","zX","aY","aX"],["#","z",a<4&&"A","a",,a>>1==2?"zY":"zX","#",5==a?"aY":"aX"]][c][b],d={z:3,zX:4,zY:4,a:4,aX:"4*",aY:"4*",iY:"5*"}[A],f={a:3,in:5}[A],g={z:3,zX:4,a:4,aX:5,aY:5,iY:6}[A],e=g+2,h=[,d,f,f,d,d,d,d][b],i=[d,d,,d,,d,,d][b],C="iX"==A?6:[[[7,e,6,6,,d,d,d][b],h,[3,4,3,4][b],h,"2*",h,,h],[d,d,d,d,g,d,d,d],[e,e,e,e,i,i,e,b%2&&e]][c][a]||2,[I,A,C])
+
+
 </script>
