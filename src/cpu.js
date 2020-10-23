@@ -110,12 +110,74 @@ var CPU = {
       CPU.interrupt_requested = false;
     }
 
-    var opinf = CPU.opdata[CPU.load(CPU.PC + 1)];
+    var op = CPU.load(CPU.PC + 1);
+    
+    // Separate opcode in 3 parts (aaa-bbb-cc)
+    var a = op >> 5;
+    var b = op >> 2 & 0b111;
+    var c = op & 0b11;
+    if([0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(op) || c==3){
+      console.log(op.toString(16));
+      CPU.stop();
+    }
+    
+    var opinf = CPU.opdata[op];
     var cycleCount = opinf >> 24;
     var cycleAdd = 0;
 
     // Find address mode:
-    var addrMode = (opinf >> 8) & 0xff;
+    // Addressing mode based on c and b
+    var addrMode = [
+      
+      // c == 0
+      [
+        a > 4 ? "#" : a == 1 && "a", // b == 0
+        "z", // b == 1
+        , // b == 2
+        a == 3 ? "in" : "a", // b == 3
+        "r", // b == 4
+        "zX", // b == 5
+        , // b == 6
+        "aX", // b == 7
+      ],
+      
+      // c == 1
+      [
+        "iX", // b == 0
+        "z", // b == 1
+        "#", // b == 2
+        "a", // b == 3
+        "iY", // b == 4
+        "zX", // b == 5
+        "aY", // b == 6
+        "aX", // b == 7
+      ],
+      
+      // c == 2
+      [
+        "#", // b == 0
+        "z", // b == 1
+        a < 4 && "A", // b == 2
+        "a", // b == 3
+        , // b == 4
+        a >> 1 == 0b10 ? "zY" : "zX", // b == 5
+        , // b == 6
+        a == 5 ? "aY" : "aX", // b == 7
+      ],
+      
+      // c == 3
+      //[],
+    
+    ][c][b] || "im";
+    
+    admnames = ["z", "r", "im", "a", "A",  "#", "zX", "zY", "aX", "aY", "iX", "iY", "in"];
+    /*if(addrMode != admnames[(opinf >> 8) & 0xff]){
+      console.log(op, addrMode, admnames[(opinf >> 8) & 0xff]);
+      CPU.stop()
+    }*/
+    addrMode = admnames[(opinf >> 8) & 0xff];
+    
+    //console.log(op, addrMode);
 
     // Increment PC by number of op bytes:
     var opaddr = CPU.PC;
@@ -123,13 +185,13 @@ var CPU = {
 
     var addr = 0;
     switch (addrMode){
-      case 0: {
+      case "z": {
         // Zero Page mode. Use the address given after the opcode,
         // but without high byte.
         addr = CPU.load(opaddr + 2);
         break;
       }
-      case 1: {
+      case "r": {
         // Relative mode.
         addr = CPU.load(opaddr + 2);
         if(addr < 0x80){
@@ -139,42 +201,42 @@ var CPU = {
         }
         break;
       }
-      case 2: {
+      case "im": {
         // Ignore. Address is implied in instruction.
         break;
       }
-      case 3: {
+      case "a": {
         // Absolute mode. Use the two bytes following the opcode as
         // an address.
         addr = CPU.load16bit(opaddr + 2);
         break;
       }
-      case 4: {
+      case "A": {
         // Accumulator mode. The address is in the accumulator
         // register.
         addr = CPU.A;
         break;
       }
-      case 5: {
+      case "#": {
         // Immediate mode. The value is given after the opcode.
         addr = CPU.PC;
         break;
       }
-      case 6: {
+      case "zX": {
         // Zero Page Indexed mode, X as index. Use the address given
         // after the opcode, then add the
         // X register to it to get the final address.
         addr = (CPU.load(opaddr + 2) + CPU.X) & 0xff;
         break;
       }
-      case 7: {
+      case "zY": {
         // Zero Page Indexed mode, Y as index. Use the address given
         // after the opcode, then add the
         // Y register to it to get the final address.
         addr = (CPU.load(opaddr + 2) + CPU.Y) & 0xff;
         break;
       }
-      case 8: {
+      case "aX": {
         // Absolute Indexed Mode, X as index. Same as zero page
         // indexed, but with the high byte.
         addr = CPU.load16bit(opaddr + 2);
@@ -184,7 +246,7 @@ var CPU = {
         addr += CPU.X;
         break;
       }
-      case 9: {
+      case "aY": {
         // Absolute Indexed Mode, Y as index. Same as zero page
         // indexed, but with the high byte.
         addr = CPU.load16bit(opaddr + 2);
@@ -194,7 +256,7 @@ var CPU = {
         addr += CPU.Y;
         break;
       }
-      case 10: {
+      case "iX": {
         // Pre-indexed Indirect mode. Find the 16-bit address
         // starting at the given location plus
         // the current X register. The value is the contents of that
@@ -208,7 +270,7 @@ var CPU = {
         addr = CPU.load16bit(addr);
         break;
       }
-      case 11: {
+      case "iY": {
         // Post-indexed Indirect mode. Find the 16-bit address
         // contained in the given location
         // (and the one following). Add to that address the contents
@@ -221,7 +283,7 @@ var CPU = {
         addr += CPU.Y;
         break;
       }
-      case 12: {
+      case "in": {
         // Indirect Absolute mode. Find the 16-bit address contained
         // at the given location.
         addr = CPU.load16bit(opaddr + 2); // Find op
@@ -281,7 +343,7 @@ var CPU = {
         CPU.A = CPU.A & CPU.load(addr);
         CPU.N = (CPU.A >> 7) & 1;
         CPU.Z = CPU.A;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 2: {
@@ -290,7 +352,7 @@ var CPU = {
         // *******
 
         // Shift left one bit
-        if(addrMode === 4){
+        if(addrMode === admnames[4]){
           // ADDR_ACC = 4
 
           CPU.C = (CPU.A >> 7) & 1;
@@ -659,7 +721,7 @@ var CPU = {
         // *******
 
         // Shift right one bit:
-        if(addrMode === 4){
+        if(addrMode === admnames[4]){
           // ADDR_ACC
 
           temp = CPU.A & 0xff;
@@ -695,7 +757,7 @@ var CPU = {
         CPU.N = (temp >> 7) & 1;
         CPU.Z = temp;
         CPU.A = temp;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 35: {
@@ -760,7 +822,7 @@ var CPU = {
         // *******
 
         // Rotate one bit left
-        if(addrMode === 4){
+        if(addrMode === admnames[4]){
           // ADDR_ACC = 4
 
           temp = CPU.A;
@@ -785,7 +847,7 @@ var CPU = {
         // *******
 
         // Rotate one bit right
-        if(addrMode === 4){
+        if(addrMode === admnames[4]){
           // ADDR_ACC = 4
 
           add = CPU.C << 7;
@@ -860,7 +922,7 @@ var CPU = {
         }
         CPU.C = temp < 0 ? 0 : 1;
         CPU.A = temp & 0xff;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 44: {
@@ -1072,7 +1134,7 @@ var CPU = {
         CPU.C = temp >= 0 ? 1 : 0;
         CPU.N = (temp >> 7) & 1;
         CPU.Z = temp & 0xff;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 63: {
@@ -1098,7 +1160,7 @@ var CPU = {
         }
         CPU.C = temp < 0 ? 0 : 1;
         CPU.A = temp & 0xff;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 64: {
@@ -1117,7 +1179,7 @@ var CPU = {
         CPU.A = CPU.A & temp;
         CPU.N = (CPU.A >> 7) & 1;
         CPU.Z = CPU.A;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 65: {
@@ -1147,7 +1209,7 @@ var CPU = {
         CPU.N = (temp >> 7) & 1;
         CPU.Z = temp & 0xff;
         CPU.A = temp & 255;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 66: {
@@ -1165,7 +1227,7 @@ var CPU = {
         CPU.A = CPU.A | temp;
         CPU.N = (CPU.A >> 7) & 1;
         CPU.Z = CPU.A;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 67: {
@@ -1183,7 +1245,7 @@ var CPU = {
         CPU.A = CPU.A ^ temp;
         CPU.N = (CPU.A >> 7) & 1;
         CPU.Z = CPU.A;
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
       case 68: {
@@ -1202,7 +1264,7 @@ var CPU = {
         // Do nothing but load.
         // TODO: Properly implement the double-reads.
         CPU.load(addr);
-        if(addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
+        if(addrMode !== admnames[11]) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
 
