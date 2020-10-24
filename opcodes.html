@@ -22,7 +22,6 @@ values = [
 ];
         
 bits = [];
-
 len = 0;
 taskperops = [];
 for(i=0;i<259;i++){
@@ -74,7 +73,7 @@ t("        nnnknnnk                 ", "t = (t >> 1) | (sb * 0x80)");
 t("                 !      kink     ", "t = u8(t - 1)// dec,dex,dey,dcp");
 t("                         !  khnk ", "t = u8(t + 1)// inc,inx,iny,isb");
 t("kgnkkgnkkgnkkgnkzy|J    kgnkkgnk ", "WB(addr+d, t)");
-t("                   q             ", "WB(wrap(addr, addr+d), t &= ((addr+d) >> 8))// [shx,shy,shs,sha?]");
+//t("                   q             ", "WB(wrap(addr, addr+d), t &= ((addr+d) >> 8))// [shx,shy,shs,sha?]");
 t("rpstljstqjstrjst - - - -kjstkjst/", "tick()// nop,flag ops,inc,dec,shifts,stack,transregister,interrupts");
 t("     !  !    !                   ", "tick(); t = Pop()// pla,plp,rti");
 t("        !   !                    ", "RB(PC++); PC = Pop(); PC |= (Pop() << 8)// rti,rts");
@@ -89,10 +88,10 @@ t("  !   !   !   !        !         ", "t <<= 4");
 t("   !       !           !   !____ ", "t = u8(~t)// sbc, isb,      clear flag");
 t("`^__   !       !               !/", "t = c | t// ora, slo,      set flag");
 t("  !!dc`_  !!  !   !   !!  !!  !  ", "t = c & t// and, bit, rla, clear/test flag");
-t("        _^__                     ", "t = c ^ t// eor, sre");
+//t("        _^__                     ", "t = c ^ t// eor, sre");
 t("      !       !       !       !  ", "if(t)  { tick(); Misfire(PC, addr = s8(addr) + PC); PC=addr; }");
 t("  !       !       !       !      ", "if(!t) { tick(); Misfire(PC, addr = s8(addr) + PC); PC=addr; }");
-t("            _^__            ____ ", "c = t; t += A + P.C; P.V = (c^t) & (A^t) & 0x80; P.C = t & 0x100");
+//t("            _^__            ____ ", "c = t; t += A + P.C; P.V = (c^t) & (A^t) & 0x80; P.C = t & 0x100");
 t("                        ed__98   ", "t = c - t; P.C = ~t & 0x100// cmp,cpx,cpy, dcp, sbx");
 t("aa__aa__aa__ab__ 4 !____    ____ ", "A = t");
 t("                    nnnn 4   !   ", "X = t// ldx, dex, tax, inx, tsx,lax,las,sbx");
@@ -101,51 +100,160 @@ t("                   4   0         ", "S = t// txs, las, shs");
 t("!  ! ! !!  !   !       !   !   !/", "P.raw = t & ~0x30// plp, rti, flag set/clear");
 t("wwwvwwwvwwwvwxwv 5 !}}||{}wv{{wv ", "P.N = t & 0x80");
 t("wwwv||wvwwwvwxwv 5 !}}||{}wv{{wv ", "P.Z = u8(t) == 0");
-t("             0                   ", "P.V = (((t >> 5)+1)&2)// [arr]");
-
+//t("             0                   ", "P.V = (((t >> 5)+1)&2)// [arr]");
 a.innerHTML = out;
-
 bytes = {};
-
-out = "<table border><tr><th>Opcode<th colspan=56>Tasks<th>8 ASCII chars<th>7 Bytes<th>3 Unicode chars";
+taskperopslite = []
+out = "<table border style='width:1700px'><tr><th>Opcode<th colspan=52>Tasks<th>Hex<th>8 ASCII chars";
 for(i = 0; i < 259; i++){
-  out += "<tr><td>" + ("000" + i.toString(16)).slice(-3).replace(/^0/,'&nbsp;') + " " + ops[i] + "<td>" + taskperops[i].join('<td>').replace(/0/g,' ').replace(/1/g,'<b>⬤<b/>') + "<th>";
-  
-  arr = [];
-  for(j = 0; j < 8; j++){
-    encode = "";
-    for(k = 0; k < 7; k++){
-      encode += taskperops[i][j*8+k] || 0;
-    }
-    encode = parseInt(encode, 2);
-    encode = (127-encode) < 32 ? ("\\x" + (127-encode).toString(16) + " ") : String.fromCodePoint(127-encode);
-    out += encode;
+  //if(i%4 == 1) continue;
+  if([0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(i) || (i < 256 && ((i & 0b11) == 0b11))){
+    taskperopslite.push([]);
+    //if(i < 256 && ((i & 0b11) != 0b11)) out+="<tr><td colspan=54><td>!<td>";
+    //console.log(i);
   }
-  
-  out+= "<th>";
-  for(j = 0; j < 7; j++){
-    encode = "";
+  else {
+    taskperopslite.push(taskperops[i]);
+    out += "<tr><td>" + ("000" + i.toString(16)).slice(-3).replace(/^0/,'&nbsp;') + " " + ops[i] + "<td>" + taskperops[i].join('<td>').replace(/0/g,' ').replace(/1/g,'<b>⬤<b/>') + "<th>";
     
-    for(k = 0; k < 8; k++){
-      encode += taskperops[i][j*7+k] || 0;
-    }
-    encode = parseInt(encode, 2);
-    bytes[encode] = 1;
-    arr.push(("00"+encode.toString(16)).slice(-2));
+    arr = [];
+    /*
+    for(j = 0; j < 8; j++){
+      encode = "";
+      for(k = 0; k < 7; k++){
+        encode += taskperops[i][j*8+k] || 0;
+      }
+      encode = parseInt(encode, 2);
+      encode = (127-encode) < 32 ? ("\\x" + (127-encode).toString(16) + " ") : String.fromCodePoint(127-encode);
+      out += encode;
+    }*/
     
-  }
-  out+= arr.join(' ') + "<th>";
-  
-  for(j = 0; j < 3; j++){
-    encode = "";
-    for(k = 0; k < 19; k++){
-      encode += taskperops[i][j*19+k] || 0;
+    //out+= "<th>";
+    for(j = 0; j < 7; j++){
+      encode = "";
+      
+      for(k = 0; k < 8; k++){
+        encode += taskperops[i][j*8+k] || 0;
+      }
+      encode = parseInt(encode, 2);
+      bytes[encode] = 1;
+      arr.push(("00"+encode.toString(16)).slice(-2));
+      
     }
-    encode = parseInt("1"+encode, 2);
-    encode = String.fromCodePoint(encode);
-    out += encode;
+    out+= arr.join('') + "<th>";
+    
+    /*
+    shortcuts = [
+      /*
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      7,
+      8,
+      9,
+      11,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      25,
+      26,
+      32,
+      40,
+      48,
+      52,
+      * /
+      64,
+      72,
+      81,
+      83,
+      88,
+      96,
+      104,
+      128,
+      129,
+      130,
+      131,
+      132,
+      136,
+      138,
+      140,
+      143,
+      144,
+      152,
+      160,
+      161,
+      163,
+      164,
+      168,
+      170,
+      176,
+      178,
+      179,
+      186,
+      192,
+      194,
+      195,
+      228,
+      234,
+      242,
+      243
+    ];
+    
+    str = "";
+    for(j = 0; j < 7; j++){
+      encode = "";
+      
+      for(k = 0; k < 8; k++){
+        encode += taskperops[i][j*8+k] || 0;
+      }
+      encode = parseInt(encode, 2);
+      //console.log(encode, shortcuts.indexOf(encode), String.fromCharCode(shortcuts.indexOf(encode) + 35));
+      bytes[encode] = 1;
+      str += encode < 54 ? String.fromCharCode(encode+35).replace("<","&lt;") : String.fromCharCode(shortcuts.indexOf(encode) + 93).replace("<","&lt;")
+      
+    }
+    out+=str + "<th>";*/
+    
+    str = "";
+    for(j = 0; j < 8; j++){
+      encode = "";
+      
+      for(k = 0; k < 7; k++){
+        encode += taskperops[i][j*7+k] || 0;
+      }
+      //console.log(encode);
+      encode = parseInt(encode.replace(/0/g,"2").replace(/1/g,"0").replace(/2/g,"1"), 2);
+      //console.log(encode);
+      //console.log(encode, shortcuts.indexOf(encode), String.fromCharCode(shortcuts.indexOf(encode) + 35));
+      bytes[encode] = 1;
+      str += String.fromCharCode(encode).replace("<","&lt;")
+    }
+    out+=str + "";/*<th>";
+   
+    for(j = 0; j < 3; j++){
+      encode = "";
+      for(k = 0; k < 19; k++){
+        encode += taskperops[i][j*19+k] || 0;
+      }
+      encode = parseInt("1"+encode, 2);
+      encode = String.fromCodePoint(encode);
+      out += encode;
+    }*/
   }
 }
 b.innerHTML = out;
+
+// Golf
+z=d=>(o="C]]$lr$!=^S##'3!!!3+S##'3!3#4qd##!##]$f##!#+K##'3!#+$pd#3!!4iS##'3!4d4qd##!3#]#$~]!7cS##'3!!!=+S##'3!=#4qd##!##]$ej$!8sS##'3!!!<sS##'3!<m4qd##!4d#$k##!=^S##%3!!3+W##%#!3+S##%3!3#6qd##!###$y#$!#+K##%3!#+&pd#3!4iW##%#!4iS##%3!4d6qd##!3#]#$d!7cS##%3!!!=+S##%3!=#6qd##!##]$eh$!8sS##%3!!!<sS##%3!<m6qd##!####b#$!=^S###3!!!3+S###3!3#3`d##!#+#$f##!#+K###3!#+#_d#3!4d##'##!4iS###3!4d3`d##!3#]#$v]!7cS###3!!!=+S###3!=#3`d##!##]$et$!8sS###3!!!<sS###3!<m3`d##!###$u##!=]3###3!!!3#3###3!3#5`d##!###$y#3!##+###3!#+%_d#3!4y##'##!4d3###3!4d5`d##!3#]#$wd!7b3###3!!!=#3###3!=#5`d##!##]$er$!8o3###3!!!<o3###3!<m5`d##!!=^#%###!!3%#%###!3+#%###!3'#%###!#%#,d#'!!#'#$d#3!4f#%###!4i#%###!4h#%###!3#]#$f]!7a#%###!!=%#%###!=+#%###!9'#%###!#%#$d#3!8n#%###!#'#$d#%!!<n#%###!!##+###'!=]3###3!##+###+!3#3###'!3#3###3!3#3###+!#+#$d#'!##+###3!#+#$d#+!4d3###'!4d3###3!4d3###+!3#]#$gd!7b3###3!!=#3###'!=#3###3!9#3###+!##]$ex$!8o3###3!#$d$d#+!<o3###'!<o3###3!8o3###+!#%K###C!=^S###C!!3%S###C!3+S###C!3#3.d##!#%#(d#'!#+K###C!#'#,d#+!4fS###C!4iS###C!4d3.d##!3#]#$z]!7cS###C!!!=+S###C!=#3.d##!##]$e}$!8sS###C!!!<sS###C!<m3.d##!#'K###C!=]3##+3!!3'S###C!3#3##+3!3#3*d##!#'#(d#+!##+##+3!###$d##!4hS###C!4d3##+3!4d3*d##!3#]#${d!7b3##+3!!!=#3##+3!=#3*d##!##]$e|$!8o3##+3!!!<o3##+3!<m3*d##!d]]$lr$!]]]$lr$!C]]$lr$".split("!"),s=[64,72,81,83,88,96,104,128,129,130,131,132,136,138,140,143,144,152,160,161,163,164,168,170,176,178,179,186,192,194,195,228,234,242,243],o[d-~~(d/4)].replace(/./g,d=>((d=d.charCodeAt()-35)<58?d:s[d-58]).toString(16).padStart(2,0)))
+
+z=(w,O)=>!("o__8-?r[g}wO!!w{g}wOww.?O_>{k}wO{/?wO!w;g}wOw?w.?Ow__uKg}wO!!r{g}wOrw.?O_?:?u+g}wO!!s+g}wOs7w.?Ow?9r[g~wO!w{e~ow{g~wOwv.?O?{k~wO{~/?wOw;e~ow;g~wOw?v.?Ow_?uKg~wO!!r{g~wOrv.?O_?=?u+g~wO!!s+g~wOs7v.?OO?r[gwO!!w{gwOwwV?O{>{kwO{W?wOw?}w;gwOw?wV?Ow_&_uKgwO!!r{gwOrwV?O_?*?u+gwO!!s+gwOs7wV?O'r_wwO!!wwwOwvV?OwO{wO{~W?wOw}w?wwOw?vV?Ow_&?uOwwO!!rwwOrvV?O_?-?u/wwO!!s/wwOs7vV?O!r[~!w~~w{~w}~~{?}O!}?wOw>~w;~w=~w_>_uS~!r~~r{~t}~~?wOu3~}?~!s3~!{}Or_wwO{{Oww}OwwwOww{O{?}O{wO{?{Ow?w}Ow?wwOw?w{Ow_>?uOwwO!rw}OrwwOtw{O_?\"?u/wwO??{Os/w}Os/wwOu/w{O~koOr[goO!w~goOw{goOwwz?O~}?}O{koO}{?{Ow>goOw;goOw?wz?Ow__uKgoO!!r{goOrwz?O_? ?u+goO!!s+goOs7wz?O}koOr_w{wO!w}goOww{wOww|?O}}?{O{{wO?w=goOw?w{wOw?w|?Ow_?uOw{wO!!rw{wOrw|?O_? ?u/w{wO!!s/w{wOs7w|?O?__8-?___8-?o__8-?".match(/!|.{8}/g)[w-~~(w/4)].charCodeAt(O/7)>>6-O%7&1)
+
 
 </script>
