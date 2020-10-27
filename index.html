@@ -12,7 +12,7 @@
 body { font: 14px Arial }
 canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * 1.067); image-rendering: crisp-edges; image-rendering: pixelated; }
 #dk, #smb, #ic { display: none; }
-.localhost #dk, .localhost #smb, .localhost #ic { display: inline; }
+.local #dk, .local #smb, .local #ic { display: inline; }
 </style>
 <script src="src/nes.js"></script>
 <script src="src/rom.js"></script>
@@ -28,7 +28,7 @@ canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 
 // ==========
 
 // If hostname is localhost, show ROM shortcuts
-document.body.className = location.host;
+document.body.className = location.host.includes("localhost") ? "local" : "prod";
 
 // Canvas + framebuffer
 // ====================
@@ -99,6 +99,7 @@ start = file => {
   NES.load_rom(file);
   
   // First 10 frames are garbage
+  /*NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
@@ -107,10 +108,10 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
-  NES.frame();
-  NES.frame();
+  NES.frame();*/
 
   // 60 fps loop
+  NES.frame();
   clearInterval(interval);
   interval = setInterval(NES.frame, 16);
   

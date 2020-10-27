@@ -21,22 +21,22 @@ var CPU = {
 
     // CPU Registers
     CPU.A = 0;            // Accumulator
-    CPU.X = 0;            // Address indexes
-    CPU.Y = 0;
+    CPU.X = 0;            // Address index X
+    CPU.Y = 0;            // Address index Y
     CPU.S = 0x01ff;       // Stack pointer
     CPU.PC = 0x8000 - 1;  // Program counter
-    CPU.PC_NEW = 0x8000 - 1;
 
     // 8 bit flags form the Status Register (P)
     // P is set to $34 (00110100) when booting the console
     // Bit 3 is set to 1 when resetting the console
+    
+    //CPU.P = 0x0010100;
+    
     CPU.C = 0;  // Bit 0: Carry
     CPU.Z = 0;  // Bit 1: Zero
     CPU.I = 1;  // Bit 2: Interrupt disable
-    CPU.I_NEW = 1;
     CPU.D = 0;  // Bit 3: Decimal
     CPU.B = 1;  // Bit 4: B flag (PHP/BRK set it to 1, IRQ/NMI set it to 0)
-    CPU.B_NEW = 1;
                 // Bit 5 is always 1 
     CPU.V = 0;  // Bit 6: Overflow
     CPU.N = 0;  // Bit 7: Negative

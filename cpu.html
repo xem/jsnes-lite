@@ -1,0 +1,101 @@
+Opcode: <input id=op placeholder=00-FF>
+<br>
+Operands: <input id=o1 placeholder=00-FF> <input id=o2 placeholder=00-FF>
+<br>
+<button id=run>run</button>
+
+<script>
+// Init CPU
+m=[],A=X=Y=0,S=511,PC=32767,P=52,C=Z=I=D=B=V=N=0,
+o=[],
+O="o__\\wr[g~~y!!w{g~~yww._y__?{k~~y{/_~y!w;g~~yw?w._yw_C7uKg~~y!!r{g~~yrw._y__]?wu+g~~y!!s+g~~ys7w._yw?\\r[g>y!w{e?}w{g>ywv._yOw{k>y{~/_~yw;e?}w;g>yw?v._yw_C/uKg>y!!r{g>yrv._y__^wu+g>y!!s+g>ys7v._ygwr[g^y!!w{g^ywwV_y{_?{k^y{W_~yw?~w;g^yw?wV_yw_S7uKg^y!!r{g^yrwV_y__U?wu+g^y!!s+g^ys7wV_ySr_wzy!!wwzywvV_yO~y{zy{~W_~yw~w?wzyw?vV_yw_S/uOwzy!!rwzyrvV_y__Vwu/wzy!!s/wzys7vV_y!r[~!w~~w{~w}~~{_Y!}_~yw>~w;~w=~w__7uS~!r~~r{~t}~~_~yu3~}_o!s3~!{Yr_w~y{9wwYww~yww9{_Y{~y{_9w?wYw?w~yw?w9w__/uOw~y!rwYrw~ytw9__Q?wu/w~y?_9s/wYs/w~yu/w9~k}yr[g}y!w~g}yw{g}ywwz_y~}_Y{k}y}{_9w>g}yw;g}yw?wz_yw_O7uKg}y!!r{g}yrwz_y__E?wu+g}y!!s+g}ys7wz_y}k}yr_w}zy!w}g}yww}zyww|_y}}_9{}zy_w=g}yw?w}zyw?w|_yw_O/uOw}zy!!rw}zyrw|_y__Fwu/w}zy!!s/w}zys7w|_y?__\\w___\\wo__\\w".match(/!|.{8}/g),
+u=[
+"a=65530",
+"a=65532",
+"a=65534",
+"a=m[PC++]",
+"d=X",
+"d=Y",
+"a=b(a+d),d=0,T()",
+"a=b(a),a+=256*r(PC++)",
+"a=r(c=a),a+=256*r(W(c,c+1))",
+"M(a,a+d)",
+"r(W(a,a+d))",
+"t&=A",
+"t&=X",
+"t&=Y",
+"t&=S",
+"t&=g()|p,c=t",
+"c=t,t=255",
+"t&=r(a+d)",
+"t&=r(PC++)",
+"V=64&t,N=128&t",
+"sb=C",
+"C=128&t",
+"C=1&t",
+"t=t<<1|1*sb",
+"t=t>>1|128*sb",
+"t=b(t-1)",
+"t=b(t+1)",
+"w(a+d,t)",,
+"T()",
+"T(),t=y()",
+"r(PC++),PC=y(),PC|=y()<<8",
+"r(PC++)",
+"d=PC+(op?-1:1),z(d>>8),z(d)",
+"PC=a",
+"z(t)",
+"t=1",
+"t<<=1",
+"t<<=2",
+"t<<=4",
+"t=b(~t)",
+"t=c|t",
+"t=c&t",,
+"t&&(T(),M(PC,a=s8(a)+PC),PC=a)",
+"t||(T(),M(PC,a=s8(a)+PC),PC=a)",
+"c=t,t+=A+C,V=(c^t)&(A^t)&128,C=256&t",,
+"A=t",
+"X=t",
+"Y=t",
+"S=t",
+"s(-49&t)",
+"N=128&t",
+"Z=0==b(t)"];
+for(i=0;i<259;i++){
+  o[i]=[];
+  if(i%4 == 1 || [0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(i)){o[i]=[];}
+  else{
+    for(j=0;j<56;j++){
+      O[i-~~(i/4)].charCodeAt(j/7)>>6-j%7&1||(o[i].push(u[j]));
+    }
+  }
+}
+
+e=()=>{for(i of(p=m[PC]<256?48:32,a=d=c=sb=0,t=255,o[m[PC]]))console.log(i),eval(i)};
+
+//e=()=>{p=m[PC]<256?48:32,a=0,d=0,t=255,c=0,sb=0,eval(o[m[PC]])}
+
+b=w=>255&w
+W=(w,y)=>(65280&w)+b(y)
+M=(w,y)=>{q=W(w,y),q!=y&&r(q)}
+y=()=>r(256|b(++S))
+z=y=>{w(256|b(S--),y)}
+r=w=>m[w]
+w=(w,y)=>m[w]=y
+g=()=>C|Z<<1|I<<2|D<<3|B<<4|32|V<<6|N<<7
+s=w=>{C=1&w,Z=w>>1&1,I=w>>2&1,D=w>>3&1,B=w>>4&1,V=w>>6&1,N=w>>7&1}
+
+// Demo
+
+T = () => { console.log("Tick"); }
+
+run.onclick = () => {
+  m[PC] = parseInt(op.value, 16) || 0;
+  m[PC+1] = parseInt(o1.value, 16) || 0;
+  m[PC+1] = parseInt(o2.value, 16) || 0;
+  console.log(m[PC]);
+  e();
+  console.log({A,X,Y,S,P,PC,C,Z,I,D,B,V,N})
+}
+</script>

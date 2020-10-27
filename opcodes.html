@@ -41,7 +41,7 @@ t = (a,code) => {
   }
   bitstr = bitstr.split('').join('<td>').replace(/0/g,' ').replace(/1/g,'<b>⬤<b/>');
   len++;
-  out += "<tr><td>"+code+"</pre><td>" + bitstr;
+  out += "<tr><td>"+code+"<td>" + bitstr;
   task ++;
 }
 
@@ -73,7 +73,7 @@ t("        nnnknnnk                 ", "t = (t >> 1) | (sb * 0x80)");
 t("                 !      kink     ", "t = u8(t - 1)// dec,dex,dey,dcp");
 t("                         !  khnk ", "t = u8(t + 1)// inc,inx,iny,isb");
 t("kgnkkgnkkgnkkgnkzy|J    kgnkkgnk ", "WB(addr+d, t)");
-//t("                   q             ", "WB(wrap(addr, addr+d), t &= ((addr+d) >> 8))// [shx,shy,shs,sha?]");
+t("                   q             ", "WB(wrap(addr, addr+d), t &= ((addr+d) >> 8))// [shx,shy,shs,sha?]"); // useless
 t("rpstljstqjstrjst - - - -kjstkjst/", "tick()// nop,flag ops,inc,dec,shifts,stack,transregister,interrupts");
 t("     !  !    !                   ", "tick(); t = Pop()// pla,plp,rti");
 t("        !   !                    ", "RB(PC++); PC = Pop(); PC |= (Pop() << 8)// rti,rts");
@@ -88,11 +88,11 @@ t("  !   !   !   !        !         ", "t <<= 4");
 t("   !       !           !   !____ ", "t = u8(~t)// sbc, isb,      clear flag");
 t("`^__   !       !               !/", "t = c | t// ora, slo,      set flag");
 t("  !!dc`_  !!  !   !   !!  !!  !  ", "t = c & t// and, bit, rla, clear/test flag");
-//t("        _^__                     ", "t = c ^ t// eor, sre");
+t("        _^__                     ", "t = c ^ t// eor, sre");  // useless
 t("      !       !       !       !  ", "if(t)  { tick(); Misfire(PC, addr = s8(addr) + PC); PC=addr; }");
 t("  !       !       !       !      ", "if(!t) { tick(); Misfire(PC, addr = s8(addr) + PC); PC=addr; }");
-//t("            _^__            ____ ", "c = t; t += A + P.C; P.V = (c^t) & (A^t) & 0x80; P.C = t & 0x100");
-t("                        ed__98   ", "t = c - t; P.C = ~t & 0x100// cmp,cpx,cpy, dcp, sbx");
+t("            _^__            ____ ", "c = t; t += A + P.C; P.V = (c^t) & (A^t) & 0x80; P.C = t & 0x100");
+t("                        ed__98   ", "t = c - t; P.C = ~t & 0x100// cmp,cpx,cpy, dcp, sbx");  // useless
 t("aa__aa__aa__ab__ 4 !____    ____ ", "A = t");
 t("                    nnnn 4   !   ", "X = t// ldx, dex, tax, inx, tsx,lax,las,sbx");
 t("                 !  9988 !       ", "Y = t// ldy, dey, tay, iny");
@@ -100,11 +100,11 @@ t("                   4   0         ", "S = t// txs, las, shs");
 t("!  ! ! !!  !   !       !   !   !/", "P.raw = t & ~0x30// plp, rti, flag set/clear");
 t("wwwvwwwvwwwvwxwv 5 !}}||{}wv{{wv ", "P.N = t & 0x80");
 t("wwwv||wvwwwvwxwv 5 !}}||{}wv{{wv ", "P.Z = u8(t) == 0");
-//t("             0                   ", "P.V = (((t >> 5)+1)&2)// [arr]");
+t("             0                   ", "P.V = (((t >> 5)+1)&2)// [arr]"); // useless
 a.innerHTML = out;
 bytes = {};
 taskperopslite = []
-out = "<table border style='width:1700px'><tr><th>Opcode<th colspan=52>Tasks<th>Hex<th>8 ASCII chars";
+out = "<table border style='width:1700px'><tr><th>Opcode<th colspan=56>Tasks<th>Hex<th>8 ASCII chars";
 for(i = 0; i < 259; i++){
   //if(i%4 == 1) continue;
   if([0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(i) || (i < 256 && ((i & 0b11) == 0b11))){
@@ -114,7 +114,7 @@ for(i = 0; i < 259; i++){
   }
   else {
     taskperopslite.push(taskperops[i]);
-    out += "<tr><td>" + ("000" + i.toString(16)).slice(-3).replace(/^0/,'&nbsp;') + " " + ops[i] + "<td>" + taskperops[i].join('<td>').replace(/0/g,' ').replace(/1/g,'<b>⬤<b/>') + "<th>";
+    out += "<tr><td>" + ("000" + i.toString(16)).slice(-3).replace(/^0/,'&nbsp;') + " " + ops[i] + "<td>" + taskperops[i].join('<td>').replace(/0/g,'&nbsp;').replace(/1/g,'<b>⬤<b/>') + "<th>";
     
     arr = [];
     /*
@@ -253,7 +253,11 @@ b.innerHTML = out;
 // Golf
 z=d=>(o="C]]$lr$!=^S##'3!!!3+S##'3!3#4qd##!##]$f##!#+K##'3!#+$pd#3!!4iS##'3!4d4qd##!3#]#$~]!7cS##'3!!!=+S##'3!=#4qd##!##]$ej$!8sS##'3!!!<sS##'3!<m4qd##!4d#$k##!=^S##%3!!3+W##%#!3+S##%3!3#6qd##!###$y#$!#+K##%3!#+&pd#3!4iW##%#!4iS##%3!4d6qd##!3#]#$d!7cS##%3!!!=+S##%3!=#6qd##!##]$eh$!8sS##%3!!!<sS##%3!<m6qd##!####b#$!=^S###3!!!3+S###3!3#3`d##!#+#$f##!#+K###3!#+#_d#3!4d##'##!4iS###3!4d3`d##!3#]#$v]!7cS###3!!!=+S###3!=#3`d##!##]$et$!8sS###3!!!<sS###3!<m3`d##!###$u##!=]3###3!!!3#3###3!3#5`d##!###$y#3!##+###3!#+%_d#3!4y##'##!4d3###3!4d5`d##!3#]#$wd!7b3###3!!!=#3###3!=#5`d##!##]$er$!8o3###3!!!<o3###3!<m5`d##!!=^#%###!!3%#%###!3+#%###!3'#%###!#%#,d#'!!#'#$d#3!4f#%###!4i#%###!4h#%###!3#]#$f]!7a#%###!!=%#%###!=+#%###!9'#%###!#%#$d#3!8n#%###!#'#$d#%!!<n#%###!!##+###'!=]3###3!##+###+!3#3###'!3#3###3!3#3###+!#+#$d#'!##+###3!#+#$d#+!4d3###'!4d3###3!4d3###+!3#]#$gd!7b3###3!!=#3###'!=#3###3!9#3###+!##]$ex$!8o3###3!#$d$d#+!<o3###'!<o3###3!8o3###+!#%K###C!=^S###C!!3%S###C!3+S###C!3#3.d##!#%#(d#'!#+K###C!#'#,d#+!4fS###C!4iS###C!4d3.d##!3#]#$z]!7cS###C!!!=+S###C!=#3.d##!##]$e}$!8sS###C!!!<sS###C!<m3.d##!#'K###C!=]3##+3!!3'S###C!3#3##+3!3#3*d##!#'#(d#+!##+##+3!###$d##!4hS###C!4d3##+3!4d3*d##!3#]#${d!7b3##+3!!!=#3##+3!=#3*d##!##]$e|$!8o3##+3!!!<o3##+3!<m3*d##!d]]$lr$!]]]$lr$!C]]$lr$".split("!"),s=[64,72,81,83,88,96,104,128,129,130,131,132,136,138,140,143,144,152,160,161,163,164,168,170,176,178,179,186,192,194,195,228,234,242,243],o[d-~~(d/4)].replace(/./g,d=>((d=d.charCodeAt()-35)<58?d:s[d-58]).toString(16).padStart(2,0)))
 
+// 52 tasks only (627b)
 z=(w,O)=>!("o__8-?r[g}wO!!w{g}wOww.?O_>{k}wO{/?wO!w;g}wOw?w.?Ow__uKg}wO!!r{g}wOrw.?O_?:?u+g}wO!!s+g}wOs7w.?Ow?9r[g~wO!w{e~ow{g~wOwv.?O?{k~wO{~/?wOw;e~ow;g~wOw?v.?Ow_?uKg~wO!!r{g~wOrv.?O_?=?u+g~wO!!s+g~wOs7v.?OO?r[gwO!!w{gwOwwV?O{>{kwO{W?wOw?}w;gwOw?wV?Ow_&_uKgwO!!r{gwOrwV?O_?*?u+gwO!!s+gwOs7wV?O'r_wwO!!wwwOwvV?OwO{wO{~W?wOw}w?wwOw?vV?Ow_&?uOwwO!!rwwOrvV?O_?-?u/wwO!!s/wwOs7vV?O!r[~!w~~w{~w}~~{?}O!}?wOw>~w;~w=~w_>_uS~!r~~r{~t}~~?wOu3~}?~!s3~!{}Or_wwO{{Oww}OwwwOww{O{?}O{wO{?{Ow?w}Ow?wwOw?w{Ow_>?uOwwO!rw}OrwwOtw{O_?\"?u/wwO??{Os/w}Os/wwOu/w{O~koOr[goO!w~goOw{goOwwz?O~}?}O{koO}{?{Ow>goOw;goOw?wz?Ow__uKgoO!!r{goOrwz?O_? ?u+goO!!s+goOs7wz?O}koOr_w{wO!w}goOww{wOww|?O}}?{O{{wO?w=goOw?w{wOw?w|?Ow_?uOw{wO!!rw{wOrw|?O_? ?u/w{wO!!s/w{wOs7w|?O?__8-?___8-?o__8-?".match(/!|.{8}/g)[w-~~(w/4)].charCodeAt(O/7)>>6-O%7&1)
+
+// All tasks (643b)
+z=(w,O)=>!("o__\\wr[g~~y!!w{g~~yww._y__?{k~~y{/_~y!w;g~~yw?w._yw_C7uKg~~y!!r{g~~yrw._y__]?wu+g~~y!!s+g~~ys7w._yw?\\r[g>y!w{e?}w{g>ywv._yOw{k>y{~/_~yw;e?}w;g>yw?v._yw_C/uKg>y!!r{g>yrv._y__^wu+g>y!!s+g>ys7v._ygwr[g^y!!w{g^ywwV_y{_?{k^y{W_~yw?~w;g^yw?wV_yw_S7uKg^y!!r{g^yrwV_y__U?wu+g^y!!s+g^ys7wV_ySr_wzy!!wwzywvV_yO~y{zy{~W_~yw~w?wzyw?vV_yw_S/uOwzy!!rwzyrvV_y__Vwu/wzy!!s/wzys7vV_y!r[~!w~~w{~w}~~{_Y!}_~yw>~w;~w=~w__7uS~!r~~r{~t}~~_~yu3~}_o!s3~!{Yr_w~y{9wwYww~yww9{_Y{~y{_9w?wYw?w~yw?w9w__/uOw~y!rwYrw~ytw9__Q?wu/w~y?_9s/wYs/w~yu/w9~k}yr[g}y!w~g}yw{g}ywwz_y~}_Y{k}y}{_9w>g}yw;g}yw?wz_yw_O7uKg}y!!r{g}yrwz_y__E?wu+g}y!!s+g}ys7wz_y}k}yr_w}zy!w}g}yww}zyww|_y}}_9{}zy_w=g}yw?w}zyw?w|_yw_O/uOw}zy!!rw}zyrw|_y__Fwu/w}zy!!s/w}zys7w|_y?__\\w___\\wo__\\w".match(/!|.{8}/g)[w-~~(w/4)].charCodeAt(O/7)>>6-O%7&1)
 
 
 </script>
