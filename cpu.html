@@ -1,90 +1,353 @@
-Opcode: <input id=op placeholder=00-FF>
-<br>
-Operands: <input id=o1 placeholder=00-FF> <input id=o2 placeholder=00-FF>
-<br>
+<p>
+Opcode: <input id=m0 size=2 value=00> <input id=m1 size=2 value=00> <input id=m2 size=2 value=00>
+<p>
+A: <input id=rA value=00 size=2> X: <input id=rX value=00 size=2> Y: <input id=rY value=00 size=2> PC: <input id=rPC value=8000 size=4> S: <input id=rS value=200 size=4> P: <input id=rP value=34 size=2>
+<p>
 <button id=run>run</button>
 
 <script>
-// Init CPU
-m=[],A=X=Y=0,S=511,PC=32767,P=52,C=Z=I=D=B=V=N=0,
-o=[],
-O="o__\\wr[g~~y!!w{g~~yww._y__?{k~~y{/_~y!w;g~~yw?w._yw_C7uKg~~y!!r{g~~yrw._y__]?wu+g~~y!!s+g~~ys7w._yw?\\r[g>y!w{e?}w{g>ywv._yOw{k>y{~/_~yw;e?}w;g>yw?v._yw_C/uKg>y!!r{g>yrv._y__^wu+g>y!!s+g>ys7v._ygwr[g^y!!w{g^ywwV_y{_?{k^y{W_~yw?~w;g^yw?wV_yw_S7uKg^y!!r{g^yrwV_y__U?wu+g^y!!s+g^ys7wV_ySr_wzy!!wwzywvV_yO~y{zy{~W_~yw~w?wzyw?vV_yw_S/uOwzy!!rwzyrvV_y__Vwu/wzy!!s/wzys7vV_y!r[~!w~~w{~w}~~{_Y!}_~yw>~w;~w=~w__7uS~!r~~r{~t}~~_~yu3~}_o!s3~!{Yr_w~y{9wwYww~yww9{_Y{~y{_9w?wYw?w~yw?w9w__/uOw~y!rwYrw~ytw9__Q?wu/w~y?_9s/wYs/w~yu/w9~k}yr[g}y!w~g}yw{g}ywwz_y~}_Y{k}y}{_9w>g}yw;g}yw?wz_yw_O7uKg}y!!r{g}yrwz_y__E?wu+g}y!!s+g}ys7wz_y}k}yr_w}zy!w}g}yww}zyww|_y}}_9{}zy_w=g}yw?w}zyw?w|_yw_O/uOw}zy!!rw}zyrw|_y__Fwu/w}zy!!s/w}zys7w|_y?__\\w___\\wo__\\w".match(/!|.{8}/g),
-u=[
-"a=65530",
-"a=65532",
-"a=65534",
-"a=m[PC++]",
-"d=X",
-"d=Y",
-"a=b(a+d),d=0,T()",
-"a=b(a),a+=256*r(PC++)",
-"a=r(c=a),a+=256*r(W(c,c+1))",
-"M(a,a+d)",
-"r(W(a,a+d))",
-"t&=A",
-"t&=X",
-"t&=Y",
-"t&=S",
-"t&=g()|p,c=t",
-"c=t,t=255",
-"t&=r(a+d)",
-"t&=r(PC++)",
-"V=64&t,N=128&t",
-"sb=C",
-"C=128&t",
-"C=1&t",
-"t=t<<1|1*sb",
-"t=t>>1|128*sb",
-"t=b(t-1)",
-"t=b(t+1)",
-"w(a+d,t)",,
-"T()",
-"T(),t=y()",
-"r(PC++),PC=y(),PC|=y()<<8",
-"r(PC++)",
-"d=PC+(op?-1:1),z(d>>8),z(d)",
-"PC=a",
-"z(t)",
-"t=1",
-"t<<=1",
-"t<<=2",
-"t<<=4",
-"t=b(~t)",
-"t=c|t",
-"t=c&t",,
-"t&&(T(),M(PC,a=s8(a)+PC),PC=a)",
-"t||(T(),M(PC,a=s8(a)+PC),PC=a)",
-"c=t,t+=A+C,V=(c^t)&(A^t)&128,C=256&t",,
-"A=t",
-"X=t",
-"Y=t",
-"S=t",
-"s(-49&t)",
-"N=128&t",
-"Z=0==b(t)"];
-for(i=0;i<259;i++){
-  o[i]=[];
-  if(i%4 == 1 || [0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(i)){o[i]=[];}
-  else{
-    for(j=0;j<56;j++){
-      O[i-~~(i/4)].charCodeAt(j/7)>>6-j%7&1||(o[i].push(u[j]));
-    }
-  }
+
+// Memory
+// ======
+
+// 16kb memory
+m = [],
+
+// Read a byte from memory. Costs 1 cycle.
+r = v => {
+  c++;
+  return m[v];
 }
 
-e=()=>{for(i of(p=m[PC]<256?48:32,a=d=c=sb=0,t=255,o[m[PC]]))console.log(i),eval(i)};
+// Write a byte in memory. Costs 1 cycle.
+w = (v, w) => {
+  c++;
+  m[v] = w;
+}
 
-//e=()=>{p=m[PC]<256?48:32,a=0,d=0,t=255,c=0,sb=0,eval(o[m[PC]])}
 
-b=w=>255&w
-W=(w,y)=>(65280&w)+b(y)
-M=(w,y)=>{q=W(w,y),q!=y&&r(q)}
-y=()=>r(256|b(++S))
-z=y=>{w(256|b(S--),y)}
-r=w=>m[w]
-w=(w,y)=>m[w]=y
-g=()=>C|Z<<1|I<<2|D<<3|B<<4|32|V<<6|N<<7
-s=w=>{C=1&w,Z=w>>1&1,I=w>>2&1,D=w>>3&1,B=w>>4&1,V=w>>6&1,N=w>>7&1}
+// CPU
+// ===
+
+// Registers
+A = X = Y = 0;
+S = 512;
+PC = 0x8000;
+P = 0x34;
+
+// Flags
+// (bits 0, 1, 2, 3, 4, 6 and 7 of P)
+C = 0;
+Z = 0;
+I = 1;
+D = 0;
+B = 1;
+V = 0;
+N = 0;
+
+// Update Z
+z = v => {
+  Z = (v & 255) > 0;
+}
+
+// Update N, Z
+y = v => {
+  z(v);
+  N = (v >> 7) & 1;
+}
+
+// Update N, Z, C
+x = v => {
+  y(v);
+  C = v > 255;
+  return v & 255;
+}
+
+// Set all flags
+F = v => {
+  C = v & 1;
+  Z = (v >> 1) & 1;
+  I = (v >> 2) & 1;
+  D = (v >> 3) & 1;
+  B = (v >> 4) & 1;
+  V = (v >> 6) & 1;
+  N = (v >> 7) & 1;
+}
+
+// Stack (wraps between $100 and $1FF)
+
+// Push
+e = v => {w(S--, n), S = 256 + (255 & S)},
+
+// Pop
+f = v => r(S = 256 + (255 & S++)),
+
+// Emulation
+// =========
+
+// Execute the next opcode, at the address pointed by the PC register
+i = v => {
+  
+  // Reset the cycle counter
+  c = 0;
+  
+  // Save opcode address in O
+  O = PC;
+  
+  // Fetch opcode (costs 1 cycle), save it in o, increment PC
+  o = r(PC++);
+  
+  // Fetch opcode operand at address PC = O + 1 (costs 1 cycle), save it in p
+  p = m[PC];
+  
+  // Temp var
+  t = 0;
+  
+  // Interrupts (ignored here) set B to 0 and execut a routine before resuming the opcode's execution
+  
+  // Addressing modes (different ways to indicate an address in memory)
+  // The resulting address is saved in a
+  // If the opcode has no operand, PC is not incremented 
+  a = eval(
+    [
+      // Immediate: address = O + 1. Increment PC 
+      "(PC++)",
+
+      // Zero page: address (between $00 and $FF) is stored at O + 1. Increment PC
+      "(PC++,p)",
+
+      // Relative: address (between PC - 128 and PC + 127) = PC + signed offset stored at address O + 1. Increment PC
+      "(PC++,PC+p-256*(p>127))",
+
+      // Absolute: address is stored at O + 1 (low byte) and O + 2 (high byte). Increment PC twice
+      "(PC++,p+256*r(PC++))",
+
+      // Zero page X: address is equal to zero page (at O + 1) + X, wrapping between $00 and $FF. Increment PC
+      "(PC++,p+X&255)",
+
+      // Zero page Y: address is equal to zero page (at O + 1) + Y, wrapping between $00 and $FF. Increment PC
+      "(PC++,p+Y&255)",
+
+      // Absolute X: address is equal to absolute (at O + 1 and O + 2) + X. Cross-page costs 1 cycle. Increment PC twice
+      "(PC++,t=p+256*r(PC++),c+=t>>8!=t+X>>8,t+X)",
+
+      // Absolute Y: address is equal to absolute (at O + 1 and O + 2) + Y. Cross-page costs 1 cycle. Increment PC twice
+      "(PC++,t=p+256*r(PC++),c+=t>>8!=t+Y>>8,t+Y)",
+
+      // Indexed indirect X: absolute address is stored at zero page address stored at O + 1 + X. Zero page wrap costs 1 cycle. Increment PC
+      "(PC++,c+=p>>8!=p+X>>8,r(p+X&255)+256*r(p+X+1&255))",
+
+      // Indirect indexed Y: absolute address is stored at zero page address stored at O + 1, and Y is added to it. Zero page wrap costs 1 cycle. Increment PC
+      "(PC++,t=r(p)+256*r(p+1),c+=t>>8!=t+Y>>8,t+Y)",
+    ]
+    [
+      "08ZZ11Z00Z3329ZZ44Z7ZZ6608Z111Z0033329ZZ44Z7ZZ66Z8ZZ11Z0003329ZZ44Z7ZZ66Z8ZZ11Z00Z3329ZZ44Z7ZZ66Z8Z111ZZZ33329Z445Z7ZZ6Z080111Z0Z33329Z445Z7Z66708Z411Z0Z33329ZZ44Z7ZZ6608Z111Z0Z33329ZZ44Z7ZZ66"[o-~~(o/4)]
+    ]
+  );
+
+  // Instructions:
+  // 0 ADC // 1 AND // 2 ASL // 3 BCC // 4 BCS // 5 BEQ // 6 BIT // 7 BMI
+  // 8 BNE // 9 BPL // a BRK // b BVC // c BVS // d CLC // e CLD // f CLI
+  // g CLV // h CMP // i CPX // j CPY // k DEC // l DEX // m DEY // n EOR
+  // o INC // p INX // q INY // r JMP // s JSR // t LDA // u LDX // v LDY
+  // w LSR // x NOP // y ORA // z PHA // A PHP // B PLA // C PLP // D ROL
+  // E ROR // F RTI // G RTS // H SBC // I SEC // J SED // K SEI // L STA
+  // M STX // N STY // O TAX // P TAY // Q TSX // R TXA // S TXS // T TYA // Z invaid
+  
+  // Byte at address a is stored in p (costs 1 cycle)
+  p = r(a);
+  
+  
+  
+  // Instruction
+  eval(
+    {
+      // ADC (add with carry): A = A + p + C. Flags: N, Z, C, V. Cxles: 2/3/4/4/4*/4*/6/5*
+      0: "t=A+p+C,V=128&!(A^p)&&128&(A^t),A=x(t)",
+      
+      // AND: (and operator): A = A AND p. Flags: N, Z. Cxles: 2/3/4/4/4*/4*/6/5*
+      1: "A=y(A&p)",
+      
+      // ASL (shift left): A or byte in memory <<= 1. Flags: N, Z, C. Cxles: 2/5/6/6/7
+      2: "10==(15&o)?A=x(2*A):w(a,x(2*r(a))",
+      
+      // BCC (branch on carry clear): PC = address if C is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      3: "C||(PC=a,c+=1+(0<a>>8))",
+      
+      // BCS (branch on carry set): PC = address if C is 1. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      4: "C&&(PC=a,c+=1+(0<a>>8))",
+      
+      // BEQ (branch if equal): PC = address if Z is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      5: "Z&&(PC=a,c+=1+(0<a>>8))",
+      
+      // BIT (test bits in memory): N, V = bit 7 and 6 of operand. Z = operand & A. Flags: N, Z, V. Cxles: 3/4.
+      6: "N=p>>7&1,V=p>>6&1,z(p&A)",
+      
+      // BMI (branch on minus): PC = address if N is 1. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      7: "N&&(PC=a,c+=1+(0<a>>8))",
+      
+      // BNE (branch if not equal): PC = address if Z is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      8: "Z||(PC=a,c+=1+(0<a>>8))",
+      
+      // BPL (branch on plus): PC = address if N is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      9: "N||(PC=a,c+=1+(0<a>>8))",
+      
+      // BRK: 
+      a: "PC+=2,e(PC>>8),e(255&PC),B=1,e(P),I=1,PC=r(65534)+256*r(65535)",
+      
+      // BVC: 
+      b: "V||(PC=a,c+=1+(0<a>>8))",
+      
+      // BVS:
+      c: "V&&(PC=a,c+=1+(0<a>>8))",
+      
+      // CLC:
+      d: "C=0",
+      
+      // CLD:
+      e: "D=0",
+      
+      // CLI:
+      f: "I=0",
+      
+      // CLV:
+      g: "V=0",
+      
+      // CMP:
+      h: "x(A-p)",
+      
+      // CPX
+      i: "x(X-p)",
+      
+      // CPY
+      j: "x(Y-p)",
+      
+      // DEC
+      k: "w(a,y(m[a]-1))",
+      
+      // DEX
+      l: "y(--X)",
+      
+      // DEY
+      m: "y(--Y)",
+      
+      // EOR
+      n: "A=y(p^A)",
+      
+      // INC
+      o: "w(a,y(r(a)+1))",
+      
+      // INX
+      p: "y(++X)",
+      
+      // INY
+      q: "y(++Y)",
+      
+      // JMP
+      r: "o>>8==6&&(PC++,a=r(PC++)+(r(PC)<<8)),PC=a",
+      
+      // JSR
+      s: "e(PC>>8),e(PC&255),PC=a",
+      
+      // LDA
+      t: "A=y(p)",
+      
+      // LDX
+      u: "X=y(p)",
+      
+      // LDY
+      v: "Y=y(p)",
+      
+      // LSR
+      w: "10==(15&o)?A=x(A>>1):w(a,x(r(a)>>1))",
+      
+      // NOP
+      //x: "",
+      
+      // ORA
+      y: "A=y(p|A)",
+      
+      // PHA
+      z: "e(A)",
+      
+      // PHP
+      A: "e(P)",
+      
+      // PLA
+      B: "A=y(f())",
+      
+      // PLP
+      C: "F(f())",
+      
+      // ROL
+      D: "10==(15&o)?A=x(2*A+C):w(a,x(2*r(a)+C))",
+      
+      // ROR
+      E: "10==(15&o)?A=x(A>>1+128*C):w(a,x(r(a)>>1+128*C))",
+      
+      // RTI
+      F: "F(f()),PC=f()+256*f()",
+      
+      // RTS
+      G: "PC=f()+256*f()",
+      
+      // SBC
+      H: "t=A-p-(1-C),V=128&(A^p)&&128&(A^t),A=x(t)",
+      
+      // SEC
+      I: "C=1",
+      
+      // SED
+      J: "D=1",
+      
+      // SEI
+      K: "I=1",
+      
+      // STA
+      L: "w(a,A)",
+      
+      // STX
+      M: "w(a,X)",
+      
+      // STY
+      N: "w(a,Y)",
+      
+      // TAX
+      O: "X=y(A)",
+      
+      // TAY
+      P: "Y=y(A)",
+      
+      // TSX
+      Q: "X=y(S-256)",
+      
+      // TXA
+      R: "A=y(X)",
+      
+      // TXS
+      S: "S=X+256",
+      
+      // TYA
+      T: "A=y(Y)",
+      
+    }
+    [
+      "ayZZy2Ay2Zy29yZZy2dyZZy2s1Z61DC1D61D71ZZ1DI1ZZ1DFnZZnwznwrnwbnZZnwfnZZnwG0ZZ0EB0Er0Ec0ZZ0EK0ZZ0EZLZNLMmZRNLM3LZNLMTLSZLZvtuvtuPtOvtu4tZvtugtQvtujhZjhkqhljhk8hZZhkehZZhkiHZiHopHxiHo5HZZHoJHZZHo"[o-~~(o/4)]
+    ]
+  );
+  
+  // Update flags register with updated flags values
+  P = C
+    + (Z * 2)
+    + (I * 4)
+    + (D * 8)
+    + (B * 16)
+    + (1 * 32)
+    + (V * 64)
+    + (N * 128);
+}
+
+
 
 // Demo
 
@@ -95,7 +358,7 @@ run.onclick = () => {
   m[PC+1] = parseInt(o1.value, 16) || 0;
   m[PC+1] = parseInt(o2.value, 16) || 0;
   console.log(m[PC]);
-  e();
+  op();
   console.log({A,X,Y,S,P,PC,C,Z,I,D,B,V,N})
 }
 </script>

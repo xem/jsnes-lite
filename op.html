@@ -44,7 +44,7 @@ decode = o => {
       "ROR", // a == 3
       [,,"TXA",,,,"TXS"][b] || "STX", // a == 4
       [,,"TAX",,,,"TSX"][b] || "LDX", // a == 5
-      "DEC", // a == 6
+      b % 2 ? "DEC" : "DEX", // a == 6
       b % 2 ? "INC" : "NOP", // a == 7
     ],
     
