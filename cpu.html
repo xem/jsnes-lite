@@ -7,27 +7,14 @@ A: <input id=rA value=00 size=2> X: <input id=rX value=00 size=2> Y: <input id=r
 
 <script>
 
-// Memory
-// ======
+// Mini 6502 simulator
+// ===================
+
+// Globals
+// -------
 
 // 16kb memory
-m = [],
-
-// Read a byte from memory. Costs 1 cycle.
-r = v => {
-  c++;
-  return m[v];
-}
-
-// Write a byte in memory. Costs 1 cycle.
-w = (v, w) => {
-  c++;
-  m[v] = w;
-}
-
-
-// CPU
-// ===
+m = [];
 
 // Registers
 A = X = Y = 0;
@@ -35,52 +22,49 @@ S = 512;
 PC = 0x8000;
 P = 0x34;
 
-// Flags
-// (bits 0, 1, 2, 3, 4, 6 and 7 of P)
-C = 0;
-Z = 0;
-I = 1;
-D = 0;
-B = 1;
-V = 0;
-N = 0;
+// Helpers
+// -------
+
+// Read a byte from memory. Costs 1 cycle.
+r = v => {
+  c++;
+  return m[v];
+},
+
+// Write a byte in memory. Costs 1 cycle.
+w = (v, w) => {
+  c++;
+  m[v] = w;
+},
 
 // Update Z
 z = v => {
-  Z = (v & 255) > 0;
-}
+  P |= 2 * ((v & 255) > 0);
+},
 
 // Update N, Z
 y = v => {
   z(v);
-  N = (v >> 7) & 1;
-}
+  P |= (128 & v);
+},
 
 // Update N, Z, C
 x = v => {
   y(v);
-  C = v > 255;
+  P |= (v > 255);
   return v & 255;
-}
+},
 
-// Set all flags
-F = v => {
-  C = v & 1;
-  Z = (v >> 1) & 1;
-  I = (v >> 2) & 1;
-  D = (v >> 3) & 1;
-  B = (v >> 4) & 1;
-  V = (v >> 6) & 1;
-  N = (v >> 7) & 1;
-}
+// Push on Stack (wraps between $100 and $1FF)
+e = v => {
+  w(S--, n),
+  S = 256 + (255 & S)
+},
 
-// Stack (wraps between $100 and $1FF)
-
-// Push
-e = v => {w(S--, n), S = 256 + (255 & S)},
-
-// Pop
-f = v => r(S = 256 + (255 & S++)),
+// Pull from stack
+f = v => {
+  return r(S = 256 + (255 & S++))
+},
 
 // Emulation
 // =========
@@ -104,6 +88,7 @@ i = v => {
   t = 0;
   
   // Interrupts (ignored here) set B to 0 and execut a routine before resuming the opcode's execution
+  // B = 1;
   
   // Addressing modes (different ways to indicate an address in memory)
   // The resulting address is saved in a
@@ -157,61 +142,59 @@ i = v => {
   // Byte at address a is stored in p (costs 1 cycle)
   p = r(a);
   
-  
-  
   // Instruction
   eval(
     {
-      // ADC (add with carry): A = A + p + C. Flags: N, Z, C, V. Cxles: 2/3/4/4/4*/4*/6/5*
-      0: "t=A+p+C,V=128&!(A^p)&&128&(A^t),A=x(t)",
+      // ADC (add with carry): A = A + p + C. Flags: N, Z, C, V. cycles: 2/3/4/4/4*/4*/6/5*
+      0: "t=A+p+(1&P),P|=(128&!(A^p)&&(A,t))*64,A=x(t)",
       
-      // AND: (and operator): A = A AND p. Flags: N, Z. Cxles: 2/3/4/4/4*/4*/6/5*
+      // AND: (and operator): A = A AND p. Flags: N, Z. cycles: 2/3/4/4/4*/4*/6/5*
       1: "A=y(A&p)",
       
-      // ASL (shift left): A or byte in memory <<= 1. Flags: N, Z, C. Cxles: 2/5/6/6/7
+      // ASL (shift left): A or byte in memory <<= 1. Flags: N, Z, C. cycles: 2/5/6/6/7
       2: "10==(15&o)?A=x(2*A):w(a,x(2*r(a))",
       
-      // BCC (branch on carry clear): PC = address if C is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
-      3: "C||(PC=a,c+=1+(0<a>>8))",
+      // BCC (branch on carry clear): PC = address if C is 0. cycles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      3: "(1&P)||(PC=a,c+=1+(0<a>>8))",
       
-      // BCS (branch on carry set): PC = address if C is 1. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
-      4: "C&&(PC=a,c+=1+(0<a>>8))",
+      // BCS (branch on carry set): PC = address if C is 1. cycles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      4: "(1&P)&&(PC=a,c+=1+(0<a>>8))",
       
-      // BEQ (branch if equal): PC = address if Z is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
-      5: "Z&&(PC=a,c+=1+(0<a>>8))",
+      // BEQ (branch if equal): PC = address if Z is 0. cycles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      5: "(2&P)&&(PC=a,c+=1+(0<a>>8))",
       
-      // BIT (test bits in memory): N, V = bit 7 and 6 of operand. Z = operand & A. Flags: N, Z, V. Cxles: 3/4.
-      6: "N=p>>7&1,V=p>>6&1,z(p&A)",
+      // BIT (test bits in memory): N, V = bit 7 and 6 of operand. Z = operand & A. Flags: N, Z, V. cycles: 3/4.
+      6: "P|=192&p,z(p&A)",
       
-      // BMI (branch on minus): PC = address if N is 1. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
-      7: "N&&(PC=a,c+=1+(0<a>>8))",
+      // BMI (branch on minus): PC = address if N is 1. cycles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      7: "(128&P)&&(PC=a,c+=1+(0<a>>8))",
       
-      // BNE (branch if not equal): PC = address if Z is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
-      8: "Z||(PC=a,c+=1+(0<a>>8))",
+      // BNE (branch if not equal): PC = address if Z is 0. cycles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      8: "(2&P)||(PC=a,c+=1+(0<a>>8))",
       
-      // BPL (branch on plus): PC = address if N is 0. Cxles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
-      9: "N||(PC=a,c+=1+(0<a>>8))",
+      // BPL (branch on plus): PC = address if N is 0. cycles: 2/3/4 (Same-page branch costs 1 cycle. Cross-page branch costs 2 cycles)
+      9: "(128&P)||(PC=a,c+=1+(0<a>>8))",
       
       // BRK: 
-      a: "PC+=2,e(PC>>8),e(255&PC),B=1,e(P),I=1,PC=r(65534)+256*r(65535)",
+      a: "PC+=2,e(PC>>8),e(255&PC),e(P),P|=4,PC=r(65534)+256*r(65535)",
       
       // BVC: 
-      b: "V||(PC=a,c+=1+(0<a>>8))",
+      b: "(64&P)||(PC=a,c+=1+(0<a>>8))",
       
       // BVS:
-      c: "V&&(PC=a,c+=1+(0<a>>8))",
+      c: "(64&P)&&(PC=a,c+=1+(0<a>>8))",
       
       // CLC:
-      d: "C=0",
+      d: "P&=254",
       
       // CLD:
-      e: "D=0",
+      e: "P&=247",
       
       // CLI:
-      f: "I=0",
+      f: "P&=251",
       
       // CLV:
-      g: "V=0",
+      g: "P&=191",
       
       // CMP:
       h: "x(A-p)",
@@ -277,31 +260,31 @@ i = v => {
       B: "A=y(f())",
       
       // PLP
-      C: "F(f())",
+      C: "P=f()",
       
       // ROL
-      D: "10==(15&o)?A=x(2*A+C):w(a,x(2*r(a)+C))",
+      D: "10==(15&o)?A=x(2*A+(1&P)):w(a,x(2*r(a)+(1&P)))",
       
       // ROR
-      E: "10==(15&o)?A=x(A>>1+128*C):w(a,x(r(a)>>1+128*C))",
+      E: "10==(15&o)?A=x(A>>1+128*(1&P)):w(a,x(r(a)>>1+128*(1&P)))",
       
       // RTI
-      F: "F(f()),PC=f()+256*f()",
+      F: "P=f(),PC=f()+256*f()",
       
       // RTS
       G: "PC=f()+256*f()",
       
       // SBC
-      H: "t=A-p-(1-C),V=128&(A^p)&&128&(A^t),A=x(t)",
+      H: "t=A-p-(1-(P&1)),P|=64*(128&(A^p)&&128&(A^t)),A=x(t)",
       
       // SEC
-      I: "C=1",
+      I: "P|=1",
       
       // SED
-      J: "D=1",
+      J: "P|=8",
       
       // SEI
-      K: "I=1",
+      K: "P|=4",
       
       // STA
       L: "w(a,A)",
@@ -329,25 +312,12 @@ i = v => {
       
       // TYA
       T: "A=y(Y)",
-      
     }
     [
       "ayZZy2Ay2Zy29yZZy2dyZZy2s1Z61DC1D61D71ZZ1DI1ZZ1DFnZZnwznwrnwbnZZnwfnZZnwG0ZZ0EB0Er0Ec0ZZ0EK0ZZ0EZLZNLMmZRNLM3LZNLMTLSZLZvtuvtuPtOvtu4tZvtugtQvtujhZjhkqhljhk8hZZhkehZZhkiHZiHopHxiHo5HZZHoJHZZHo"[o-~~(o/4)]
     ]
   );
-  
-  // Update flags register with updated flags values
-  P = C
-    + (Z * 2)
-    + (I * 4)
-    + (D * 8)
-    + (B * 16)
-    + (1 * 32)
-    + (V * 64)
-    + (N * 128);
 }
-
-
 
 // Demo
 
@@ -359,6 +329,6 @@ run.onclick = () => {
   m[PC+1] = parseInt(o2.value, 16) || 0;
   console.log(m[PC]);
   op();
-  console.log({A,X,Y,S,P,PC,C,Z,I,D,B,V,N})
+  console.log({A,X,Y,S,P,PC})
 }
 </script>
