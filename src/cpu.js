@@ -1,6 +1,7 @@
 // CPU
 // ===
-
+logs = 10;
+log = 0;
 var CPU = {
 
   // Interrupt types
@@ -23,7 +24,7 @@ var CPU = {
     CPU.A = 0;            // Accumulator
     CPU.X = 0;            // Address index X
     CPU.Y = 0;            // Address index Y
-    CPU.S = 0x01ff;       // Stack pointer
+    CPU.S = 0x01fd;       // Stack pointer
     CPU.PC = 0x8000 - 1;  // Program counter
 
     // 8 bit flags form the Status Register (P)
@@ -64,18 +65,22 @@ var CPU = {
 
   // Emulates a single CPU instruction, returns the number of cycles
   emulate: () => {
+    
     var temp;
     var add;
 
     // Check interrupts:
     if(CPU.interrupt_requested){
+      
+      //console.log(CPU.getStatus(), P);
+      
       temp =
         CPU.C |
-        ((CPU.Z === 0 ? 1 : 0) << 1) |
+        (CPU.Z<< 1)  |
         (CPU.I << 2) |
         (CPU.D << 3) |
         (CPU.B << 4) |
-        (1 << 5) |
+        (1 << 5)     |
         (CPU.V << 6) |
         (CPU.N << 7);
 
@@ -86,31 +91,39 @@ var CPU = {
           // Normal IRQ:
           if(CPU.I !== 0){
             // console.log("Interrupt was masked.");
+            console.log("irq")
             break;
           }
           CPU.doIrq(temp);
           // console.log("Did normal IRQ. I="+CPU.I);
-          break;
+          myop(3);break;
         }
         case 1: {
           // NMI:
+          console.log("nmi")
           CPU.doNonMaskableInterrupt(temp);
+          myop(1)
           break;
         }
         case 2: {
           // Reset:
+          console.log("reset")
           CPU.doResetInterrupt();
+          myop(2);
           break;
         }
       }
 
       CPU.PC = CPU.PC_NEW;
-      CPU.I = CPU.I_NEW;
-      CPU.B = CPU.B_NEW;
+      //CPU.I = CPU.I_NEW;
+      //CPU.B = CPU.B_NEW;
       CPU.interrupt_requested = false;
+      //console.log(CPU.getStatus(), P);
     }
 
+    //if(log == 0) console.log("PC", PC, CPU.PC+1)
     var op = CPU.load(CPU.PC + 1);
+
     
     // Separate opcode in 3 parts (aaa-bbb-cc)
     var a = op >> 5;
@@ -194,6 +207,7 @@ var CPU = {
       case "r": {
         // Relative mode.
         addr = CPU.load(opaddr + 2);
+        //console.log(addr);
         if(addr < 0x80){
           addr += CPU.PC;
         } else {
@@ -402,6 +416,7 @@ var CPU = {
         if(CPU.Z === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           CPU.PC = addr;
+          //console.log(addr)
         }
         break;
       }
@@ -689,6 +704,7 @@ var CPU = {
         CPU.N = (CPU.A >> 7) & 1;
         CPU.Z = CPU.A;
         cycleCount += cycleAdd;
+        //console.log(CPU.getStatus())
         break;
       }
       case 30: {
@@ -701,6 +717,8 @@ var CPU = {
         CPU.N = (CPU.X >> 7) & 1;
         CPU.Z = CPU.X;
         cycleCount += cycleAdd;
+        
+        //console.log(CPU.getStatus())
         break;
       }
       case 31: {
@@ -1031,6 +1049,7 @@ var CPU = {
         // Transfer index X to stack pointer:
         CPU.S = CPU.X + 0x0100;
         CPU.stackWrap();
+        //console.log(CPU.getStatus())
         break;
       }
       case 55: {
@@ -1280,7 +1299,56 @@ var CPU = {
       }
     } // end of switch
 
-    return cycleCount;
+    // Log
+  if(log<logs){
+    
+    console.log(log, 
+[["brk","imm"],["ora","iix"],["   ","   "],["   ","   "],["   ","   "],["ora","zpg"],["asl","zpg"],["   ","   "],  // 00
+ ["php","   "],["ora","imm"],["asl","acc"],["   ","   "],["   ","   "],["ora","abs"],["asl","abs"],["   ","   "],  // 08
+ ["bpl","rel"],["ora","iiy"],["   ","   "],["   ","   "],["   ","   "],["ora","zpx"],["asl","zpx"],["   ","   "],  // 10
+ ["clc","   "],["ora","aby"],["   ","   "],["   ","   "],["   ","   "],["ora","abx"],["asl","abx"],["   ","   "],  // 18
+ ["jsr","adr"],["and","iix"],["   ","   "],["   ","   "],["bit","zpg"],["and","zpg"],["rol","zpg"],["   ","   "],  // 20
+ ["plp","   "],["and","imm"],["rol","acc"],["   ","   "],["bit","abs"],["and","abs"],["rol","abs"],["   ","   "],  // 28
+ ["bmi","rel"],["and","iiy"],["   ","   "],["   ","   "],["   ","   "],["and","zpx"],["rol","zpx"],["   ","   "],  // 30
+ ["sec","   "],["and","aby"],["   ","   "],["   ","   "],["   ","   "],["and","abx"],["rol","abx"],["   ","   "],  // 38
+ ["rti","   "],["eor","iix"],["   ","   "],["   ","   "],["   ","   "],["eor","zpg"],["lsr","zpg"],["   ","   "],  // 40
+ ["pha","   "],["eor","imm"],["lsr","acc"],["   ","   "],["jmp","adr"],["eor","abs"],["lsr","abs"],["   ","   "],  // 48
+ ["bvc","rel"],["eor","iiy"],["   ","   "],["   ","   "],["   ","   "],["eor","zpx"],["lsr","zpx"],["   ","   "],  // 50
+ ["cli","   "],["eor","aby"],["   ","   "],["   ","   "],["   ","   "],["eor","abx"],["lsr","abx"],["   ","   "],  // 58
+ ["rts","   "],["adc","iix"],["   ","   "],["   ","   "],["   ","   "],["adc","zpg"],["ror","zpg"],["   ","   "],  // 60
+ ["pla","   "],["adc","imm"],["ror","acc"],["   ","   "],["jmp","ind"],["adc","abs"],["ror","abs"],["   ","   "],  // 68
+ ["bvs","rel"],["adc","iiy"],["   ","   "],["   ","   "],["   ","   "],["adc","zpx"],["ror","zpx"],["   ","   "],  // 70
+ ["sei","   "],["adc","aby"],["   ","   "],["   ","   "],["   ","   "],["adc","abx"],["ror","abx"],["   ","   "],  // 78
+ ["   ","   "],["sta","iix"],["   ","   "],["   ","   "],["sty","zpg"],["sta","zpg"],["stx","zpg"],["   ","   "],  // 80
+ ["dey","   "],["   ","   "],["txa","   "],["   ","   "],["sty","abs"],["sta","abs"],["stx","abs"],["   ","   "],  // 88
+ ["bcc","rel"],["sta","iiy"],["   ","   "],["   ","   "],["sty","zpx"],["sta","zpx"],["stx","zpy"],["   ","   "],  // 90
+ ["tya","   "],["sta","aby"],["txs","   "],["   ","   "],["   ","   "],["sta","abx"],["   ","   "],["   ","   "],  // 98
+ ["ldy","imm"],["lda","iix"],["ldx","imm"],["   ","   "],["ldy","zpg"],["lda","zpg"],["ldx","zpg"],["   ","   "],  // A0
+ ["tay","   "],["lda","imm"],["tax","   "],["   ","   "],["ldy","abs"],["lda","abs"],["ldx","abs"],["   ","   "],  // A8
+ ["bcs","rel"],["lda","iiy"],["   ","   "],["   ","   "],["ldy","zpx"],["lda","zpx"],["ldx","zpy"],["   ","   "],  // B0
+ ["clv","   "],["lda","aby"],["tsx","   "],["   ","   "],["ldy","abx"],["lda","abx"],["ldx","aby"],["   ","   "],  // B8
+ ["cpy","imm"],["cmp","iix"],["   ","   "],["   ","   "],["cpy","zpx"],["cmp","zpg"],["dec","zpg"],["   ","   "],  // C0
+ ["iny","   "],["cmp","imm"],["dex","   "],["   ","   "],["cpy","abs"],["cmp","abs"],["dec","abs"],["   ","   "],  // C8
+ ["bne","rel"],["cmp","iiy"],["   ","   "],["   ","   "],["   ","   "],["cmp","zpx"],["dec","zpx"],["   ","   "],  // D0
+ ["cld","   "],["cmp","aby"],["   ","   "],["   ","   "],["   ","   "],["cmp","abx"],["dec","abx"],["   ","   "],  // D8
+ ["cpx","imm"],["sbc","iix"],["   ","   "],["   ","   "],["cpx","zpg"],["sbc","zpg"],["inc","zpg"],["   ","   "],  // E0
+ ["inx","   "],["sbc","imm"],["nop","   "],["   ","   "],["cpx","abs"],["sbc","abs"],["inc","abs"],["   ","   "],  // E8
+ ["beq","rel"],["sbc","iiy"],["   ","   "],["   ","   "],["   ","   "],["sbc","zpx"],["inc","zpx"],["   ","   "],  // F0
+ ["sed","   "],["sbc","aby"],["   ","   "],["   ","   "],["   ","   "],["sbc","abx"],["inc","abx"],["   ","   "]][op].join(' ')), 
+ 
+    console.log("theirs: " + (theirs = `Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} PC: ${(CPU.PC+1).toString(16).padStart(4,0)} czidbxvn: ${+!!CPU.C + " " + +!!CPU.Z + " " + CPU.I + " " + CPU.D + " " + CPU.B + " 1 " + CPU.V + " " + CPU.N} cycles: ${cycleCount}`));
+    
+    myop();
+    
+        
+    //if(log == 0) console.log("op", op, o)
+  
+    console.log("mine:   " + (mine = `Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} PC: ${PC.toString(16).padStart(4,0)} czidbxvn: ${P.toString(2).padStart(8,0).split('').reverse().join(' ')} cycles: ${top.c}`));
+  
+    log++;
+  }
+  
+  return cycleCount;
   },
 
   load16bit: addr => {
@@ -1362,6 +1430,7 @@ var CPU = {
   },
 
   getStatus: () => {
+    //console.log(CPU.C, CPU.Z, CPU.I, CPU.D, CPU.B, CPU.V, CPU.N)
     return (
       CPU.C |
       (CPU.Z << 1) |

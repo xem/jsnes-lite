@@ -52,6 +52,7 @@ var Mapper = {
   load_prg_rom_bank: (bank, address) => {
     //bank %= ROM.prg_rom_count; // why JSNES does it?
     Mapper.copy_array(ROM.prg_rom[bank], CPU.mem, address);
+    Mapper.copy_array(ROM.prg_rom[bank], m, address);
   },
 
   // Load a CHR-ROM page in PPU memory + the corresponding tiles

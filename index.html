@@ -6,7 +6,6 @@
 <button id=smb onclick='play("roms/smb.nes")'>SMB</button>
 <button id=ic onclick='play("roms/ic.nes")'>IC</button>
 <button onclick='play("roms/nestest.nes")'>nestest</button>
-<button onclick='play("roms/ppu.nes")'>ppu</button>
 <input type=file id=fileInput>
 <style>
 body { font: 14px Arial }
@@ -19,6 +18,7 @@ canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 
 <script src="src/mappers.js"></script>
 <script src="src/controller.js"></script>
 <script src="src/cpu.js"></script>
+<script src="src/mycpu.js"></script>
 <script src="src/papu.js"></script>
 <script src="src/ppu.js"></script>
 <script src="src/tile.js"></script>
@@ -98,7 +98,12 @@ start = file => {
   // Send ROM to emulator
   NES.load_rom(file);
   
-  // First 10 frames are garbage
+  // Run
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
   /*NES.frame();
   NES.frame();
   NES.frame();
@@ -108,12 +113,25 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
-  NES.frame();*/
-
-  // 60 fps loop
   NES.frame();
-  clearInterval(interval);
-  interval = setInterval(NES.frame, 16);
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();
+  NES.frame();*/
   
   // Controller #1 keys listeners
   onkeydown = e => {
