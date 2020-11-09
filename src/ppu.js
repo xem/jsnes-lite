@@ -596,14 +596,23 @@ var PPU = {
 
   // CPU Register $2002:
   // Read the Status Register.
+  // TMP: twice
+  readSRcount: 0,
   readStatusRegister: () => {
     var tmp = CPU.mem[0x2002];
+    CPU.readSRcount ++;
+    
+    if(CPU.readSRcount == 2){
 
     // Reset scroll & VRAM Address toggle:
     PPU.firstWrite = true;
 
     // Clear VBlank flag:
     PPU.setStatusFlag(PPU.STATUS_VBLANK, false);
+    
+    CPU.readSRcount = 0;
+    
+    }
 
     // Fetch status data:
     return tmp;

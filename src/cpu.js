@@ -1,7 +1,11 @@
 // CPU
 // ===
-logs = 10;
+logs = 100000000;
 log = 0;
+ko = 0;
+theirs = "";
+mine = "";
+opname = "";
 var CPU = {
 
   // Interrupt types
@@ -91,23 +95,24 @@ var CPU = {
           // Normal IRQ:
           if(CPU.I !== 0){
             // console.log("Interrupt was masked.");
-            console.log("irq")
+            console.log(log, "irq")
             break;
           }
           CPU.doIrq(temp);
+          //myop(3);
           // console.log("Did normal IRQ. I="+CPU.I);
-          myop(3);break;
+          break;
         }
         case 1: {
           // NMI:
-          console.log("nmi")
+          console.log(log, "nmi")
           CPU.doNonMaskableInterrupt(temp);
-          myop(1)
+          //myop(1)
           break;
         }
         case 2: {
           // Reset:
-          console.log("reset")
+          console.log(log, "reset")
           CPU.doResetInterrupt();
           myop(2);
           break;
@@ -115,11 +120,14 @@ var CPU = {
       }
 
       CPU.PC = CPU.PC_NEW;
-      //CPU.I = CPU.I_NEW;
+      
+      CPU.I = CPU.I_NEW;
       //CPU.B = CPU.B_NEW;
       CPU.interrupt_requested = false;
       //console.log(CPU.getStatus(), P);
     }
+    
+    CPU.PCback = CPU.PC;
 
     //if(log == 0) console.log("PC", PC, CPU.PC+1)
     var op = CPU.load(CPU.PC + 1);
@@ -130,7 +138,7 @@ var CPU = {
     var b = op >> 2 & 0b111;
     var c = op & 0b11;
     if([0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(op) || c==3){
-      console.log(op.toString(16));
+      //console.log(op.toString(16));
       CPU.stop();
     }
     
@@ -194,6 +202,8 @@ var CPU = {
 
     // Increment PC by number of op bytes:
     var opaddr = CPU.PC;
+    //(log==9929)&&console.log("PC",CPU.PC)
+    
     CPU.PC += (opinf >> 16) & 0xff;
 
     var addr = 0;
@@ -206,6 +216,7 @@ var CPU = {
       }
       case "r": {
         // Relative mode.
+        
         addr = CPU.load(opaddr + 2);
         //console.log(addr);
         if(addr < 0x80){
@@ -213,6 +224,7 @@ var CPU = {
         } else {
           addr += CPU.PC - 256;
         }
+        //if(log==9929) console.log(CPU.load(opaddr + 2),addr);
         break;
       }
       case "im": {
@@ -416,7 +428,7 @@ var CPU = {
         if(CPU.Z === 0){
           cycleCount += (opaddr & 0xff00) !== (addr & 0xff00) ? 2 : 1;
           CPU.PC = addr;
-          //console.log(addr)
+          //if(log==9929)console.log(addr)
         }
         break;
       }
@@ -700,6 +712,7 @@ var CPU = {
         // *******
 
         // Load accumulator with memory:
+        //(log==9930)&&console.log('it',addr.toString(16),CPU.load(addr));
         CPU.A = CPU.load(addr);
         CPU.N = (CPU.A >> 7) & 1;
         CPU.Z = CPU.A;
@@ -713,9 +726,11 @@ var CPU = {
         // *******
 
         // Load index X with memory:
+        //console.log(addr, CPU.load(addr));
         CPU.X = CPU.load(addr);
         CPU.N = (CPU.X >> 7) & 1;
         CPU.Z = CPU.X;
+        //console.log(CPU.N, CPU.Z);
         cycleCount += cycleAdd;
         
         //console.log(CPU.getStatus())
@@ -1300,10 +1315,12 @@ var CPU = {
     } // end of switch
 
     // Log
-  if(log<logs){
+  
+    oldtheirs = theirs;
+    oldmine = mine;
+    oldopname = opname;
     
-    console.log(log, 
-[["brk","imm"],["ora","iix"],["   ","   "],["   ","   "],["   ","   "],["ora","zpg"],["asl","zpg"],["   ","   "],  // 00
+    opname = [["brk","imm"],["ora","iix"],["   ","   "],["   ","   "],["   ","   "],["ora","zpg"],["asl","zpg"],["   ","   "],  // 00
  ["php","   "],["ora","imm"],["asl","acc"],["   ","   "],["   ","   "],["ora","abs"],["asl","abs"],["   ","   "],  // 08
  ["bpl","rel"],["ora","iiy"],["   ","   "],["   ","   "],["   ","   "],["ora","zpx"],["asl","zpx"],["   ","   "],  // 10
  ["clc","   "],["ora","aby"],["   ","   "],["   ","   "],["   ","   "],["ora","abx"],["asl","abx"],["   ","   "],  // 18
@@ -1334,17 +1351,36 @@ var CPU = {
  ["cpx","imm"],["sbc","iix"],["   ","   "],["   ","   "],["cpx","zpg"],["sbc","zpg"],["inc","zpg"],["   ","   "],  // E0
  ["inx","   "],["sbc","imm"],["nop","   "],["   ","   "],["cpx","abs"],["sbc","abs"],["inc","abs"],["   ","   "],  // E8
  ["beq","rel"],["sbc","iiy"],["   ","   "],["   ","   "],["   ","   "],["sbc","zpx"],["inc","zpx"],["   ","   "],  // F0
- ["sed","   "],["sbc","aby"],["   ","   "],["   ","   "],["   ","   "],["sbc","abx"],["inc","abx"],["   ","   "]][op].join(' ')), 
- 
-    console.log("theirs: " + (theirs = `Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} PC: ${(CPU.PC+1).toString(16).padStart(4,0)} czidbxvn: ${+!!CPU.C + " " + +!!CPU.Z + " " + CPU.I + " " + CPU.D + " " + CPU.B + " 1 " + CPU.V + " " + CPU.N} cycles: ${cycleCount}`));
+ ["sed","   "],["sbc","aby"],["   ","   "],["   ","   "],["   ","   "],["sbc","abx"],["inc","abx"],["   ","   "]][op].join(' ');
     
-    myop();
+    theirs = `PC: ${(CPU.PCback+1).toString(16).padStart(4,0)} Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} new PC: ${(CPU.PC+1).toString(16).padStart(4,0)} czidbxvn: ${+!!CPU.C + " " + +!!CPU.Z + " " + CPU.I + " " + CPU.D + " " + CPU.B + " 1 " + CPU.V + " " + CPU.N} cycles: ${cycleCount}`
+    
+    
+  PCback = PC;
+  myop();
     
         
-    //if(log == 0) console.log("op", op, o)
+  //if(log == 0) console.log("op", op, o)
   
-    console.log("mine:   " + (mine = `Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} PC: ${PC.toString(16).padStart(4,0)} czidbxvn: ${P.toString(2).padStart(8,0).split('').reverse().join(' ')} cycles: ${top.c}`));
+  mine = `PC: ${PCback.toString(16).padStart(4,0)} Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} new PC: ${PC.toString(16).padStart(4,0)} czidbxvn: ${P.toString(2).padStart(8,0).split('').reverse().join(' ')} cycles: ${top.c}`
   
+  
+  
+  if(log<logs){
+    
+    if(theirs != mine && !ko){
+      if(log > 0){
+        console.log(log-1, oldopname),
+        console.log("theirs: "+ oldtheirs);
+        console.log("mine:   "+ oldmine);
+      }
+      
+      console.log(log, opname),
+      console.log("theirs: " + theirs);
+      console.log("mine:   " + mine);
+      ko = 1;
+    }
+    
     log++;
   }
   

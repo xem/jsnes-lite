@@ -18,7 +18,7 @@ m = [],
 
 // Registers
 A = X = Y = 0, // general purpose
-S = 253,       // stack pointer
+S = 0,       // stack pointer
 PC = 0x8000,   // program counter (addres of next instruction)
 P = 0x34,      // status register (contains the flags below)
 
@@ -36,7 +36,7 @@ t = o = a = p = 0,
 // The mapper simulators will handle mirror areas, bank switches, save slot persistence, etc
 r = v => {
   ++c;
-  return m[v] || 0;
+  return (m[v] = CPU.load(v)) || 0;
 },
 
 // Write a byte in memory. Costs 1 cycle.
@@ -47,13 +47,13 @@ w = (v, w) => {
 
 // Update N, Z flags
 // - the value v is clamped on 8 bits
-// - Zero flag (byte 1 of P) is set if v is zero, otherwise it's cleared
+// - Zero flag (byte 1 of P) is set if v is non-zero, otherwise it's cleared
 // - Negative flag (byte 7 of P) is set if byte 7 of v is 1, otherwise it's cleared
 // Opcode BIT sets the N flag directly, and doesn't use this function
 // Other flags (C, I, D, B, V) are set individually by each concerned opcode
 NZ = v => {
   Z = ((v &= 255) > 0);
-  C = (v >> 7);
+  N = (v >> 7);
   return v;
 },
 
@@ -726,6 +726,8 @@ myop = v => {
   o = r(PC);
   //console.log("o = r(PC);");
   
+  //(log==9929)&&console.log("PC",PC)
+  
   // Fetch the byte after the opcode (costs 1 cycle), save its address in a and its value in p
   p = r(a = PC+1);
   //console.log("p = r(a = PC+1);");
@@ -747,14 +749,15 @@ myop = v => {
     // Then jump to address stored at $FFFE-$FFFF
     // This costs 7 cycles
     
-    if(v != 2){
-      PC++;
-      push(PC >> 8);
-      push(255 & PC);
-      push(239 & P);
-      I = 1;
+    if(v < 2 && (r(0x2000)&128 === 0)){
+      return;
     }
     
+    PC++;
+    push(PC >> 8);
+    push(255 & PC);
+    push(239 & P);
+    I = 1;
     PC = r(65528 + v * 2) + 256 * r(65528 + v * 2 + 1);
   }
   
@@ -792,7 +795,7 @@ myop = v => {
     );
     
     PC++;
-    //console.log("PC++;");
+    //(log==9928)&&(console.log(PC.toString(16)))    //console.log("PC++;");
   }
   
   // Update status register using flags values
