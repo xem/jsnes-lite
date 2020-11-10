@@ -18,13 +18,13 @@ m = [],
 
 // Registers
 A = X = Y = 0, // general purpose
-S = 0,       // stack pointer
+S = 0,         // stack pointer
 PC = 0x8000,   // program counter (addres of next instruction)
-P = 0x34,      // status register (contains the flags below)
+P = 0x16,      // status register (contains the flags below)
 
 // Flags
-C = Z = D = V = N = 0,
-I = B = 1,
+C = Z = I = D = V = N = 0,
+B = 1,
 
 // Temp vars
 t = o = a = p = 0,
@@ -36,7 +36,12 @@ t = o = a = p = 0,
 // The mapper simulators will handle mirror areas, bank switches, save slot persistence, etc
 r = v => {
   ++c;
-  return (m[v] = CPU.load(v)) || 0;
+  return m[v] = 
+  (
+    (v==0x2002 || v==0x4016 || v==0x4017 || v>0xC000)
+    ? CPU.load(v)
+    : m[v]
+  ) || 0;
 },
 
 // Write a byte in memory. Costs 1 cycle.
@@ -52,20 +57,23 @@ w = (v, w) => {
 // Opcode BIT sets the N flag directly, and doesn't use this function
 // Other flags (C, I, D, B, V) are set individually by each concerned opcode
 NZ = v => {
-  Z = ((v &= 255) > 0);
-  N = (v >> 7);
-  return v;
+  Z = +((v & 255) == 0);
+  N = +((v & 255) >> 7);
+  
+  //if(log == 14556) console.log(v, C, Z, CPU.C, CPU.Z);
+  return v & 255;
 },
 
 // Update flags value using status register
 f = v => (
-  C = P&1,
-  Z = (P>>1) & 1,
-  I = (P>>2) & 1,
-  D = (P>>3) & 1,
-  B = (P>>4) & 1,
-  V = (P>>6) & 1,
-  N = (P>>7) & 1
+  //(log==32353)&&(console.log("I flag " + v.toString(2).padStart(8,0))),
+  C = v&1,
+  Z = (v>>1) & 1,
+  I = (v>>2) & 1,
+  D = (v>>3) & 1,
+  B = (v>>4) & 1,
+  V = (v>>6) & 1,
+  N = (v>>7) & 1
 ),
 
 // Push on Stack
@@ -76,8 +84,11 @@ push = v => {
 },
 
 // Pull from stack
+// Increment S, wrap it between $00 and $FF, read at address $100 + S
 pull = v => {
-  return r(256 + (S = (255 & (S+1))))
+  v = r(256 + (S = (255 & (S+1))));
+  //if(log==32353)console.log(//"I pull " + v.toString(2).padStart(8,0) + " from " + S.toString(16));
+  return v
 },
 
 // Addressing modes
@@ -109,7 +120,7 @@ E = (
 // Opcode size: 2 bytes
 // Total cycles: 2 (no branch) / 3 (branch on same page) / 4 (branch on another page)
 // Cycles used to get the address: 0
-+ "a=PC+p-256*(p>127)+1 "
++ "a=PC+p-256*(p>127)+1,PC++ "
 
 // "3": Absolute
 // Target address is stored at PC + 1 (low byte) and PC + 2 (high byte)
@@ -155,18 +166,17 @@ E = (
 // Target address is absolute and stored at a zero page address which is stored at PC + 1 + X
 // Opcode size: 2 bytes
 // Total cycles: 6 (read or write)
-// (Zero page wrap doesn't seem to cost an extra cycle)
 // Cycles used to get the address: 3
-+ "a=r(a+X&255)+256*r(a+X+1&255),c++,PC++ "
++ "a=r(a+X&255)+256*r(a+X+1&255),PC++,c++ "
 
 // "9": Indirect indexed Y
 // Target address is absolute and stored at a zero page address which is stored at PC + 1, then Y is added to it
 // Opcode size: 2 bytes
 // Total cycles: 5* (read) / 6 (write)
-// * Zero page wrap cost 1 extra cycle
+// * Cross-page between absolute address and absolute address + Y cost 1 extra cycle
 // Opcode 91 writes in memory
 // Cycles used to get the address: 3 / 4
-+ "t=p+256*r(PC+2&255),c+=t>>8<t+Y>>8||o>>4==9,a=t+Y,c++,PC++"
++ "a=r(p)+256*r((p+1)&255)+Y,c+=(((a-Y)>>8)<(a>>8)||o>>4==9),PC++ "
 
 // "Z": implicit or Accumulator
 // Keep a and p as-is
@@ -196,7 +206,7 @@ F = (
 // Cycles addr: 0,   0,   1,    1,   2
 // Cycles opc:  0,   3,   3,    3,   3 (***)
 "C=A>>7,A=NZ(2*A) "
-+ "C=p>>7,w(a,NZ(2*p)),c+=2 "
++ "p=r(a),C=p>>7,w(a,NZ(2*p)),c++ "
 
 // """: ROL A / "#": ROL (rotate left)
 // Rotate left A or a byte in memory. Same as left shift but C flag is put into bit 0. Flags: N, Z, C
@@ -207,7 +217,7 @@ F = (
 // Cycles addr: 0,   0,   1,    1,   2
 // Cycles opc:  0,   3,   3,    3,   3 (***)
 + "C=A>>7,A=NZ(2*A+(1&P)) "
-+ "C=p>>7,w(a,NZ(2*p+(1&P))),c+=2 "
++ "p=r(a),C=p>>7,w(a,NZ(2*p+(1&P))),c++ "
 
 // "$": LSR A / "%": LSR (shift right)
 // A or a byte in memory is shifted right. Flags: N, Z, C
@@ -218,7 +228,7 @@ F = (
 // Cycles addr: 0,   0,   1,    1,   2
 // Cycles opc:  0,   3,   3,    3,   3 (***)
 + "C=1&A,A=NZ(A>>1) "
-+ "C=1&p,w(a,NZ(p>>1)),c+=2 "
++ "p=r(a),C=1&p,w(a,NZ(p>>1)),c++ "
 
 // "&": ROR A / "'": ROR (rotate right)
 // Rotate right A or a byte in memory. Same as left shift but C flag is put into bit 7. Flags: N, Z, C
@@ -228,8 +238,8 @@ F = (
 // Cycles:      2,   5,   6,    6,   7
 // Cycles addr: 0,   0,   1,    1,   2
 // Cycles opc:  0,   3,   3,    3,   3 (***)
-+ "C=1&A,A=NZ(A>>1+128*(1&P)) "
-+ "C=1&p,w(a,NZ(p>>1+128*(1&P))),c+=2 "
++ "C=1&A,A=NZ((A>>1)+128*(1&P)) "
++ "p=r(a),C=1&p,w(a,NZ((p>>1)+128*(1&P))),c++ "
 
 // "(": AND: (AND memory and accumulator)
 // A = A AND a byte in memory. Flags: N, Z
@@ -287,7 +297,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ "Z||(c+=1+(a>>8!=PC-2>>8),PC=a) "
++ "Z&&(c+=1+(a>>8!=PC-2>>8),PC=a) "
 
 // ".": BMI (branch on minus)
 // PC = address if N is 1
@@ -323,7 +333,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ "Z&&(c+=1+(a>>8!=PC-2>>8),PC=a) "
++ "Z||(c+=1+(a>>8!=PC-2>>8),PC=a) "
 
 // "2": BPL (branch on plus)
 // PC = address if N is 0
@@ -416,7 +426,7 @@ F = (
 // Cycles:      5,   6,    6,   7
 // Cycles addr: 0,   1,    1,   2
 // Cycles opc:  3,   3,    3,   3 (***)
-+ "w(a,NZ(r(a)-1)),c++ "
++ "w(a,NZ((r(a)-1)&255)),c++ "
 
 // "<": DEX (decrement X)
 // X is decremented. Flags: N, Z
@@ -425,7 +435,7 @@ F = (
 // Cycles:      2
 // Cycles addr: 0
 // Cycles opc:  0
-+ "NZ(--X) "
++ "X=NZ(X-1) "
 
 // "=": DEY (decrement Y)
 // Y is decremented. Flags: N, Z
@@ -434,7 +444,7 @@ F = (
 // Cycles:      2
 // Cycles addr: 0
 // Cycles opc:  0
-+ "NZ(--Y) "
++ "Y=NZ(Y-1) "
 
 // ">": INX (increment X)
 // X is incremented. Flags: N, Z
@@ -443,7 +453,7 @@ F = (
 // Cycles:      2
 // Cycles addr: 0
 // Cycles opc:  0
-+ "NZ(++X) "
++ "X=NZ(X+1) "
 
 // "?": INY (increment Y)
 // Y is incremented. Flags: N, Z
@@ -452,7 +462,7 @@ F = (
 // Cycles:      2
 // Cycles addr: 0
 // Cycles opc:  0
-+ "NZ(++Y) "
++ "Y=NZ(Y+1) "
 
 // "@": EOR (exclusive-or memory and accumulator)
 // A = A XOR a byte in memory. Flags: N, Z
@@ -490,7 +500,7 @@ F = (
 // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
 // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
 // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-+ "A=NZ(r(a)) "
++ "(log==263706)&&(console.log(a.toString(16))),A=NZ(r(a)) "
 
 // "D": LDX (load X with memory)
 // X = a byte from memory. Flags: N, Z
@@ -526,7 +536,7 @@ F = (
 // Cycles:      6
 // Cycles addr: 1
 // Cycles opc:  3 (***)
-+ "push(PC>>8),push(255&PC),c++,PC=a-1 "
++ "push(PC>>8),push(255&PC),PC=a-1,c++ "
 
 // "H": PHA (push accumulator)
 // Push A
@@ -562,7 +572,7 @@ F = (
 // Cycles:      3
 // Cycles addr: 0
 // Cycles opc:  1
-+ "f(P=pull()) "
++ "f(pull()) "
 
 // "L": RTI (return from interrupt)
 // Pull P, set all flags, pull PC
@@ -571,7 +581,7 @@ F = (
 // cycles:      6
 // Cycles addr: 0
 // Cycles opc:  4 (***)
-+ "f(P=pull()),c++,PC=pull()+256*pull()-1 "
++ "f(pull()),PC=pull()+256*pull()-2,c++ "
 
 // "M": SEC (set carry flag)
 // C is set to 1
@@ -697,7 +707,7 @@ F = (
 // Cycles:      7
 // Cycles addr: 0
 // Cycles opc:  5
-+ "PC++,push(PC>>8),push(255&PC),push(P|16),I=1,PC=r(65534)+256*r(65535)-1"
++ "PC++,push(PC>>8),push(255&PC),console.log(log,P|16),push(P|16),I=1,PC=r(65534)+256*r(65535)-1"
 
 // "[": NOP (no operation) / illegal opcodes
 // Addressing: imp
@@ -737,26 +747,38 @@ myop = v => {
   // Execute an interrupt if v is set
   if(v){
   
-    // v == 1: NMI: if VBlank is enabled (PPU register $2000),
-    // Push PC and P with B flag set to 0,  then set I to 1,
-    // Then jump to address stored at $FFFA-$FFFB
-    // This costs 7 cycles
+    // 1: NMI:
+    // Only if VBlank is enabled (byte 7 of PPU register $2000),
+    // Push PC and P with B flag set to 0, then set I to 1,
+    // then jump to address stored at $FFFA-$FFFB
+    // This costs 7 cycles (or 2 if skipped)
     
-    // v == 2: Reset: jump to address stored at $FFFC-$FFFD, and reset PPU (not shown here)
+    // 2: Reset:
+    // Push PC and P with B flag set to 0, then set I to 1 and reset PPU (not shown here),
+    // then jump to address stored at $FFFC-$FFFD
     // This costs 8 cycles
     
-    // v == 3: IRQ: push PC and P with B flag set to 0, then set I to 1,
+    // 3: IRQ:
+    //push PC and P with B flag set to 0, then set I to 1,
     // Then jump to address stored at $FFFE-$FFFF
     // This costs 7 cycles
     
-    if(v < 2 && (r(0x2000)&128 === 0)){
+    if(v < 2 && !(r(0x2000) >> 7)){
+      //S = (S-3)&255;
       return;
     }
     
-    PC++;
-    push(PC >> 8);
-    push(255 & PC);
-    push(239 & P);
+    else if(v == 2){
+      S = (S-3)&255;
+    }
+    
+    else {    
+      PC++;
+      push(PC >> 8);
+      push(255 & PC);
+      push(239 & P);
+    }
+
     I = 1;
     PC = r(65528 + v * 2) + 256 * r(65528 + v * 2 + 1);
   }
@@ -771,6 +793,8 @@ myop = v => {
         "Z8Z111Z0Z33329Z444Z7Z66638Z111Z0Z33329Z444Z7Z666Z8Z111Z0Z33329Z444Z7Z666Z8Z111Z0Z33329Z444Z7Z666080111Z0Z33329Z445Z7Z667080111Z0Z33329Z445Z7Z667080111Z0Z33329Z444Z7Z666080111Z0Z33329Z444Z7Z666"[o - (o >> 2)]
       ]
     );*/
+    
+    //console.log(o);
     
     eval(
       E [

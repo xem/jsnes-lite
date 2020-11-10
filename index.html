@@ -8,7 +8,7 @@
 <button onclick='play("roms/nestest.nes")'>nestest</button>
 <input type=file id=fileInput>
 <style>
-body { font: 14px Arial }
+body { font: 14px Arial;background:#888; }
 canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * 1.067); image-rendering: crisp-edges; image-rendering: pixelated; }
 #dk, #smb, #ic { display: none; }
 .local #dk, .local #smb, .local #ic { display: inline; }
@@ -104,7 +104,6 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
-  /*NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
@@ -131,7 +130,8 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
-  NES.frame();*/
+  NES.frame();
+  NES.frame();
   
   // Controller #1 keys listeners
   onkeydown = e => {

@@ -1,6 +1,5 @@
 // CPU
 // ===
-logs = 100000000;
 log = 0;
 ko = 0;
 theirs = "";
@@ -38,7 +37,7 @@ var CPU = {
     //CPU.P = 0x0010100;
     
     CPU.C = 0;  // Bit 0: Carry
-    CPU.Z = 0;  // Bit 1: Zero
+    CPU.Z = 1;  // Bit 1: Zero
     CPU.I = 1;  // Bit 2: Interrupt disable
     CPU.D = 0;  // Bit 3: Decimal
     CPU.B = 1;  // Bit 4: B flag (PHP/BRK set it to 1, IRQ/NMI set it to 0)
@@ -80,7 +79,7 @@ var CPU = {
       
       temp =
         CPU.C |
-        (CPU.Z<< 1)  |
+        ((CPU.Z == 0 ? 1 : 0) << 1)  |
         (CPU.I << 2) |
         (CPU.D << 3) |
         (CPU.B << 4) |
@@ -99,7 +98,7 @@ var CPU = {
             break;
           }
           CPU.doIrq(temp);
-          //myop(3);
+          myop(3);
           // console.log("Did normal IRQ. I="+CPU.I);
           break;
         }
@@ -128,6 +127,7 @@ var CPU = {
     }
     
     CPU.PCback = CPU.PC;
+    PCback = PC;
 
     //if(log == 0) console.log("PC", PC, CPU.PC+1)
     var op = CPU.load(CPU.PC + 1);
@@ -307,6 +307,7 @@ var CPU = {
           cycleAdd = 1;
         }
         addr += CPU.Y;
+        //if(log==10703)console.log(10703,addr.toString(16));
         break;
       }
       case "in": {
@@ -613,6 +614,7 @@ var CPU = {
         temp = (CPU.load(addr) - 1) & 0xff;
         CPU.N = (temp >> 7) & 1;
         CPU.Z = temp;
+        //if(log==14556)console.log(addr,CPU.load(addr),temp);
         CPU.write(addr, temp);
         break;
       }
@@ -906,6 +908,7 @@ var CPU = {
         // Return from interrupt. Pull status and PC from stack.
 
         temp = CPU.pull();
+        //console.log(log,temp);
         CPU.C = temp & 1;
         CPU.Z = ((temp >> 1) & 1) === 0 ? 1 : 0;
         CPU.I = (temp >> 2) & 1;
@@ -1315,76 +1318,60 @@ var CPU = {
     } // end of switch
 
     // Log
-  
-    oldtheirs = theirs;
-    oldmine = mine;
-    oldopname = opname;
+    //myop();
     
-    opname = [["brk","imm"],["ora","iix"],["   ","   "],["   ","   "],["   ","   "],["ora","zpg"],["asl","zpg"],["   ","   "],  // 00
- ["php","   "],["ora","imm"],["asl","acc"],["   ","   "],["   ","   "],["ora","abs"],["asl","abs"],["   ","   "],  // 08
- ["bpl","rel"],["ora","iiy"],["   ","   "],["   ","   "],["   ","   "],["ora","zpx"],["asl","zpx"],["   ","   "],  // 10
- ["clc","   "],["ora","aby"],["   ","   "],["   ","   "],["   ","   "],["ora","abx"],["asl","abx"],["   ","   "],  // 18
- ["jsr","adr"],["and","iix"],["   ","   "],["   ","   "],["bit","zpg"],["and","zpg"],["rol","zpg"],["   ","   "],  // 20
- ["plp","   "],["and","imm"],["rol","acc"],["   ","   "],["bit","abs"],["and","abs"],["rol","abs"],["   ","   "],  // 28
- ["bmi","rel"],["and","iiy"],["   ","   "],["   ","   "],["   ","   "],["and","zpx"],["rol","zpx"],["   ","   "],  // 30
- ["sec","   "],["and","aby"],["   ","   "],["   ","   "],["   ","   "],["and","abx"],["rol","abx"],["   ","   "],  // 38
- ["rti","   "],["eor","iix"],["   ","   "],["   ","   "],["   ","   "],["eor","zpg"],["lsr","zpg"],["   ","   "],  // 40
- ["pha","   "],["eor","imm"],["lsr","acc"],["   ","   "],["jmp","adr"],["eor","abs"],["lsr","abs"],["   ","   "],  // 48
- ["bvc","rel"],["eor","iiy"],["   ","   "],["   ","   "],["   ","   "],["eor","zpx"],["lsr","zpx"],["   ","   "],  // 50
- ["cli","   "],["eor","aby"],["   ","   "],["   ","   "],["   ","   "],["eor","abx"],["lsr","abx"],["   ","   "],  // 58
- ["rts","   "],["adc","iix"],["   ","   "],["   ","   "],["   ","   "],["adc","zpg"],["ror","zpg"],["   ","   "],  // 60
- ["pla","   "],["adc","imm"],["ror","acc"],["   ","   "],["jmp","ind"],["adc","abs"],["ror","abs"],["   ","   "],  // 68
- ["bvs","rel"],["adc","iiy"],["   ","   "],["   ","   "],["   ","   "],["adc","zpx"],["ror","zpx"],["   ","   "],  // 70
- ["sei","   "],["adc","aby"],["   ","   "],["   ","   "],["   ","   "],["adc","abx"],["ror","abx"],["   ","   "],  // 78
- ["   ","   "],["sta","iix"],["   ","   "],["   ","   "],["sty","zpg"],["sta","zpg"],["stx","zpg"],["   ","   "],  // 80
- ["dey","   "],["   ","   "],["txa","   "],["   ","   "],["sty","abs"],["sta","abs"],["stx","abs"],["   ","   "],  // 88
- ["bcc","rel"],["sta","iiy"],["   ","   "],["   ","   "],["sty","zpx"],["sta","zpx"],["stx","zpy"],["   ","   "],  // 90
- ["tya","   "],["sta","aby"],["txs","   "],["   ","   "],["   ","   "],["sta","abx"],["   ","   "],["   ","   "],  // 98
- ["ldy","imm"],["lda","iix"],["ldx","imm"],["   ","   "],["ldy","zpg"],["lda","zpg"],["ldx","zpg"],["   ","   "],  // A0
- ["tay","   "],["lda","imm"],["tax","   "],["   ","   "],["ldy","abs"],["lda","abs"],["ldx","abs"],["   ","   "],  // A8
- ["bcs","rel"],["lda","iiy"],["   ","   "],["   ","   "],["ldy","zpx"],["lda","zpx"],["ldx","zpy"],["   ","   "],  // B0
- ["clv","   "],["lda","aby"],["tsx","   "],["   ","   "],["ldy","abx"],["lda","abx"],["ldx","aby"],["   ","   "],  // B8
- ["cpy","imm"],["cmp","iix"],["   ","   "],["   ","   "],["cpy","zpx"],["cmp","zpg"],["dec","zpg"],["   ","   "],  // C0
- ["iny","   "],["cmp","imm"],["dex","   "],["   ","   "],["cpy","abs"],["cmp","abs"],["dec","abs"],["   ","   "],  // C8
- ["bne","rel"],["cmp","iiy"],["   ","   "],["   ","   "],["   ","   "],["cmp","zpx"],["dec","zpx"],["   ","   "],  // D0
- ["cld","   "],["cmp","aby"],["   ","   "],["   ","   "],["   ","   "],["cmp","abx"],["dec","abx"],["   ","   "],  // D8
- ["cpx","imm"],["sbc","iix"],["   ","   "],["   ","   "],["cpx","zpg"],["sbc","zpg"],["inc","zpg"],["   ","   "],  // E0
- ["inx","   "],["sbc","imm"],["nop","   "],["   ","   "],["cpx","abs"],["sbc","abs"],["inc","abs"],["   ","   "],  // E8
- ["beq","rel"],["sbc","iiy"],["   ","   "],["   ","   "],["   ","   "],["sbc","zpx"],["inc","zpx"],["   ","   "],  // F0
- ["sed","   "],["sbc","aby"],["   ","   "],["   ","   "],["   ","   "],["sbc","abx"],["inc","abx"],["   ","   "]][op].join(' ');
-    
-    theirs = `PC: ${(CPU.PCback+1).toString(16).padStart(4,0)} Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} new PC: ${(CPU.PC+1).toString(16).padStart(4,0)} czidbxvn: ${+!!CPU.C + " " + +!!CPU.Z + " " + CPU.I + " " + CPU.D + " " + CPU.B + " 1 " + CPU.V + " " + CPU.N} cycles: ${cycleCount}`
-    
-    
-  PCback = PC;
-  myop();
-    
-        
-  //if(log == 0) console.log("op", op, o)
-  
-  mine = `PC: ${PCback.toString(16).padStart(4,0)} Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} new PC: ${PC.toString(16).padStart(4,0)} czidbxvn: ${P.toString(2).padStart(8,0).split('').reverse().join(' ')} cycles: ${top.c}`
-  
-  
-  
-  if(log<logs){
-    
-    if(theirs != mine && !ko){
-      if(log > 0){
-        console.log(log-1, oldopname),
-        console.log("theirs: "+ oldtheirs);
-        console.log("mine:   "+ oldmine);
-      }
-      
-      console.log(log, opname),
-      console.log("theirs: " + theirs);
-      console.log("mine:   " + mine);
-      ko = 1;
+    /*if(log < 10){
+      //console.log(CPU.getP(), P);
     }
-    
-    log++;
-  }
+    if(((CPU.PCback+1) !== PCback || op !== o || CPU.A !== A || CPU.X !== X || CPU.Y !== Y || (CPU.S-0x100) !== S  || (CPU.PC+1) !== PC || cycleCount !== top.c || CPU.getP() !== P) && log < 10) {
+      
+      console.log(log, 
+              [["brk","imm"],["ora","iix"],["   ","   "],["   ","   "],["   ","   "],["ora","zpg"],["asl","zpg"],["   ","   "],  // 00
+               ["php","   "],["ora","imm"],["asl","acc"],["   ","   "],["   ","   "],["ora","abs"],["asl","abs"],["   ","   "],  // 08
+               ["bpl","rel"],["ora","iiy"],["   ","   "],["   ","   "],["   ","   "],["ora","zpx"],["asl","zpx"],["   ","   "],  // 10
+               ["clc","   "],["ora","aby"],["   ","   "],["   ","   "],["   ","   "],["ora","abx"],["asl","abx"],["   ","   "],  // 18
+               ["jsr","adr"],["and","iix"],["   ","   "],["   ","   "],["bit","zpg"],["and","zpg"],["rol","zpg"],["   ","   "],  // 20
+               ["plp","   "],["and","imm"],["rol","acc"],["   ","   "],["bit","abs"],["and","abs"],["rol","abs"],["   ","   "],  // 28
+               ["bmi","rel"],["and","iiy"],["   ","   "],["   ","   "],["   ","   "],["and","zpx"],["rol","zpx"],["   ","   "],  // 30
+               ["sec","   "],["and","aby"],["   ","   "],["   ","   "],["   ","   "],["and","abx"],["rol","abx"],["   ","   "],  // 38
+               ["rti","   "],["eor","iix"],["   ","   "],["   ","   "],["   ","   "],["eor","zpg"],["lsr","zpg"],["   ","   "],  // 40
+               ["pha","   "],["eor","imm"],["lsr","acc"],["   ","   "],["jmp","adr"],["eor","abs"],["lsr","abs"],["   ","   "],  // 48
+               ["bvc","rel"],["eor","iiy"],["   ","   "],["   ","   "],["   ","   "],["eor","zpx"],["lsr","zpx"],["   ","   "],  // 50
+               ["cli","   "],["eor","aby"],["   ","   "],["   ","   "],["   ","   "],["eor","abx"],["lsr","abx"],["   ","   "],  // 58
+               ["rts","   "],["adc","iix"],["   ","   "],["   ","   "],["   ","   "],["adc","zpg"],["ror","zpg"],["   ","   "],  // 60
+               ["pla","   "],["adc","imm"],["ror","acc"],["   ","   "],["jmp","ind"],["adc","abs"],["ror","abs"],["   ","   "],  // 68
+               ["bvs","rel"],["adc","iiy"],["   ","   "],["   ","   "],["   ","   "],["adc","zpx"],["ror","zpx"],["   ","   "],  // 70
+               ["sei","   "],["adc","aby"],["   ","   "],["   ","   "],["   ","   "],["adc","abx"],["ror","abx"],["   ","   "],  // 78
+               ["   ","   "],["sta","iix"],["   ","   "],["   ","   "],["sty","zpg"],["sta","zpg"],["stx","zpg"],["   ","   "],  // 80
+               ["dey","   "],["   ","   "],["txa","   "],["   ","   "],["sty","abs"],["sta","abs"],["stx","abs"],["   ","   "],  // 88
+               ["bcc","rel"],["sta","iiy"],["   ","   "],["   ","   "],["sty","zpx"],["sta","zpx"],["stx","zpy"],["   ","   "],  // 90
+               ["tya","   "],["sta","aby"],["txs","   "],["   ","   "],["   ","   "],["sta","abx"],["   ","   "],["   ","   "],  // 98
+               ["ldy","imm"],["lda","iix"],["ldx","imm"],["   ","   "],["ldy","zpg"],["lda","zpg"],["ldx","zpg"],["   ","   "],  // A0
+               ["tay","   "],["lda","imm"],["tax","   "],["   ","   "],["ldy","abs"],["lda","abs"],["ldx","abs"],["   ","   "],  // A8
+               ["bcs","rel"],["lda","iiy"],["   ","   "],["   ","   "],["ldy","zpx"],["lda","zpx"],["ldx","zpy"],["   ","   "],  // B0
+               ["clv","   "],["lda","aby"],["tsx","   "],["   ","   "],["ldy","abx"],["lda","abx"],["ldx","aby"],["   ","   "],  // B8
+               ["cpy","imm"],["cmp","iix"],["   ","   "],["   ","   "],["cpy","zpx"],["cmp","zpg"],["dec","zpg"],["   ","   "],  // C0
+               ["iny","   "],["cmp","imm"],["dex","   "],["   ","   "],["cpy","abs"],["cmp","abs"],["dec","abs"],["   ","   "],  // C8
+               ["bne","rel"],["cmp","iiy"],["   ","   "],["   ","   "],["   ","   "],["cmp","zpx"],["dec","zpx"],["   ","   "],  // D0
+               ["cld","   "],["cmp","aby"],["   ","   "],["   ","   "],["   ","   "],["cmp","abx"],["dec","abx"],["   ","   "],  // D8
+               ["cpx","imm"],["sbc","iix"],["   ","   "],["   ","   "],["cpx","zpg"],["sbc","zpg"],["inc","zpg"],["   ","   "],  // E0
+               ["inx","   "],["sbc","imm"],["nop","   "],["   ","   "],["cpx","abs"],["sbc","abs"],["inc","abs"],["   ","   "],  // E8
+               ["beq","rel"],["sbc","iiy"],["   ","   "],["   ","   "],["   ","   "],["sbc","zpx"],["inc","zpx"],["   ","   "],  // F0
+               ["sed","   "],["sbc","aby"],["   ","   "],["   ","   "],["   ","   "],["sbc","abx"],["inc","abx"],["   ","   "]][op].join(' ')
+      );
+      
+      theirs = `PC: ${(CPU.PCback+1).toString(16).padStart(4,0)} Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} new PC: ${(CPU.PC+1).toString(16).padStart(4,0)} czidbxvn: ${+!!CPU.C + " " + +!CPU.Z + " " + CPU.I + " " + CPU.D + " " + CPU.B + " 1 " + CPU.V + " " + CPU.N} cycles: ${cycleCount} M[0]: ${CPU.load(0)} M[1]: ${CPU.load(0x1)} M[fb]: ${CPU.load(0x1FB).toString(2)}`
+
+
+      mine = `PC: ${PCback.toString(16).padStart(4,0)} Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} new PC: ${PC.toString(16).padStart(4,0)} czidbxvn: ${P.toString(2).padStart(8,0).split('').reverse().join(' ')} cycles: ${top.c} M[0]: ${top.m[0]||0} M[1]: ${top.m[0x1]||0} M[fb]: ${(top.m[0x1FB]||0).toString(2)}`
+      
+      console.log("theirs: " + theirs)
+      console.log("mine:   " + mine)
+    }
   
-  return cycleCount;
+    */
+    log++;
+    return cycleCount;
   },
 
   load16bit: addr => {
@@ -1437,12 +1424,16 @@ var CPU = {
       CPU.PC_NEW++;
       CPU.push((CPU.PC_NEW >> 8) & 0xff);
       CPU.push(CPU.PC_NEW & 0xff);
-      //CPU.I_NEW = 1;
-      CPU.push(status);
+      CPU.I_NEW = 1;
+      CPU.push(status & 239);
+      
+      //console.log(log, "nmi they push", CPU.Z, status.toString(2).padStart(8,0), (239 & status).toString(2).padStart(8,0))
 
       CPU.PC_NEW =
         CPU.load(0xfffa) | (CPU.load(0xfffb) << 8);
       CPU.PC_NEW--;
+      
+      myop(1)
     }
   },
 
@@ -1470,6 +1461,20 @@ var CPU = {
     return (
       CPU.C |
       (CPU.Z << 1) |
+      (CPU.I << 2) |
+      (CPU.D << 3) |
+      (CPU.B << 4) |
+      (1 << 5) |
+      (CPU.V << 6) |
+      (CPU.N << 7)
+    );
+  },
+  
+  getP: () => {
+    //console.log(CPU.C, CPU.Z, CPU.I, CPU.D, CPU.B, CPU.V, CPU.N)
+    return (
+      CPU.C |
+      ((CPU.Z ? 0 : 1) << 1) |
       (CPU.I << 2) |
       (CPU.D << 3) |
       (CPU.B << 4) |
@@ -1620,7 +1625,7 @@ var CPU = {
           case 0x7:
             // 0x2007:
             // VRAM read:
-            return PPU.vramLoad();
+            return top.m[0x2007] = PPU.vramLoad();
         }
         break;
       case 4:
@@ -1897,7 +1902,7 @@ var OpData = {
     OpData.setOp(OpData.INS_PHP, 0x08, OpData.ADDR_IMP, 1, 3);
 
     // PLA:
-    OpData.setOp(OpData.INS_PLA, 0x68, OpData.ADDR_IMP, 1, 4);
+    OpData.setOp(OpData.INS_PLA, 0x68, OpData.ADDR_IMP, 1, 3);
 
     // PLP:
     OpData.setOp(OpData.INS_PLP, 0x28, OpData.ADDR_IMP, 1, 4);
