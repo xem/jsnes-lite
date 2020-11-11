@@ -590,7 +590,7 @@ var PPU = {
 
   setStatusFlag: (flag, value) => {
     var n = 1 << flag;
-    m[0x2002] = CPU.mem[0x2002] =
+    CPU.mem[0x2002] =
       (CPU.mem[0x2002] & (255 - n)) | (value ? n : 0);
   },
 
