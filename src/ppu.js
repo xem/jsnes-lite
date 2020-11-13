@@ -599,7 +599,7 @@ var PPU = {
   // TMP: twice
   readSRcount: 0,
   readStatusRegister: () => {
-    var tmp = CPU.mem[0x2002];
+    var tmp = m[0x2002] = CPU.mem[0x2002];
     CPU.readSRcount ++;
     
     if(CPU.readSRcount == 2){

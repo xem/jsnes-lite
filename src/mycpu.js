@@ -22,10 +22,10 @@ X = 0,        // X
 Y = 0,        // Y
 S = 0,        // stack pointer                                ~ To test nestest use 0xFD
 PC = 0x8000,  // program counter (addres of next instruction) ~ To test nestest use 0xC000
-P = 0x16,     // status register (contains the flags below)   ~ To test nestest use 0x24
+P = 0x34,     // status register (contains the flags below)   ~ To test nestest use 0x24
 
 // Flags (set by f())
-// C = Z = I = D = V = N = 0, B = 1
+// C, Z, I, D, B, V, N
 
 // Temp vars
 t = o = a = p = c = 0,
@@ -38,7 +38,7 @@ t = o = a = p = c = 0,
 r = v => (c++, CPU.load(v)),
 
 // Write a byte in memory. Costs 1 cycle.
-w = (v, w) => (++c, CPU.write(v)),
+w = (v, w) => (++c, CPU.write(v, w)),
 
 // Update N, Z flags
 // - the value v is clamped on 8 bits
@@ -47,6 +47,7 @@ w = (v, w) => (++c, CPU.write(v)),
 // Opcode BIT sets the N flag directly, and doesn't use this function
 // Other flags (C, I, D, B, V) are set individually by each concerned opcode
 NZ = v => {
+  //console.log(v)
   Z = +((v & 255) < 1);
   N = +((v & 255) >> 7);
   return v & 255;
@@ -66,10 +67,14 @@ f = v => (
 // Set flags on load
 f(P),
 
+//console.log(P.toString(2),C,Z,I,D,B,V,N);
+
 // Push on Stack
 // write at address $100 + S, decrement S, wrap it between $00 and $FF
 push = v => {
+  //ko || console.log("I push " + v.toString(16) + " at " + (0x100+S).toString(16));
   w(256 + S--, v);
+  
   return S &= 255;
 },
 
@@ -276,7 +281,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `C&&(PC=a,c++) `
++ `C&&(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `-`: BEQ (branch if equal)
 // PC = address if Z is 0
@@ -285,7 +290,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `Z&&(PC=a,c++) `
++ `Z&&(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `.`: BMI (branch on minus)
 // PC = address if N is 1
@@ -294,7 +299,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `N&&(PC=a,c++) `
++ `N&&(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `/`: BVS (branch on overflow set)
 // PC = address if V is 1
@@ -303,7 +308,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `V&&(PC=a,c++) `
++ `V&&(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `0`: BCC (branch on carry clear)
 // PC = address if C is 0
@@ -312,7 +317,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `C||(PC=a,c++) `
++ `C||(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `1`: BNE (branch if not equal)
 // PC = address if Z is 1
@@ -321,7 +326,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `Z||(PC=a,c++) `
++ `Z||(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `2`: BPL (branch on plus)
 // PC = address if N is 0
@@ -330,7 +335,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `N||(PC=a,c++) `
++ `N||(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `3`: BVC (branch on overflow clear)
 // PC = address if V is 0
@@ -339,7 +344,7 @@ F = (
 // Cycles:      2**
 // Cycles addr: 0
 // Cycles opc:  0**
-+ `V||(PC=a,c++) `
++ `V||(c+=1+(a>>8!=PC-2>>8),PC=a) `
 
 // `4`: CLC (clear carry flag)
 // C is set to 0
@@ -709,6 +714,20 @@ F = (
 // Convert F to an array
 ).split(` `),
 
+// Make a function for each opcode
+O = [];
+for(o = 255; o--;){
+  O[o] = Function(
+    E[
+      `Z8Z111Z0Z33329Z444Z7Z66638Z111Z0Z33329Z444Z7Z666Z8Z111Z0Z33329Z444Z7Z666Z8Z111Z0Z33329Z444Z7Z666080111Z0Z33329Z445Z7Z667080111Z0Z33329Z445Z7Z667080111Z0Z33329Z444Z7Z666080111Z0Z33329Z444Z7Z666`[o - (o >> 2)]
+    ]
+    + `;`
+    + F [
+      `ZF[[F!IF [F!2F[[F!4F[[F!G([)(#K(")(#.([[(#M([[(#L@[[@%H@$B@%3@[[@%6@[[@%Y*[[*'J*&B*'/*[[*'O*[[*'[P[RPQ=[VRPQ0P[RPQWPX[P[ECDECDUCSECD,C[ECD7CTECD:8[:8;?8<:8;18[[8;58[[8;9+[9+A>+[9+A-+[[+AN+[[+A`[o - (o >> 2)].charCodeAt() - 32
+    ]
+  );
+}
+
 // Emulation
 // ---------
 
@@ -751,7 +770,7 @@ myop = v => (
       (
         (v == 2) 
         ? (S = (S-3) & 255) 
-        : ( PC++, push(PC >> 8), push(255 & PC), push(239 & P) )
+        : (push(PC >> 8), push(255 & PC), push(239 & P) )
       ),
       
       I = 1,
@@ -761,22 +780,11 @@ myop = v => (
   
   // Execute the instruction at the address pointed by PC
   : (
-    // Addressing modes:
-    // This string represents which mode to use for each valid opcode
-    // After execution, `a` contains the target address and `p` contains the value stored at this address
-    eval(
-      E [
-        `Z8Z111Z0Z33329Z444Z7Z66638Z111Z0Z33329Z444Z7Z666Z8Z111Z0Z33329Z444Z7Z666Z8Z111Z0Z33329Z444Z7Z666080111Z0Z33329Z445Z7Z667080111Z0Z33329Z445Z7Z667080111Z0Z33329Z444Z7Z666080111Z0Z33329Z444Z7Z666`[o - (o >> 2)]
-      ]
-    
-      + `;`
-    
-      + F [
-        `ZF[[F!IF [F!2F[[F!4F[[F!G([)(#K(")(#.([[(#M([[(#L@[[@%H@$B@%3@[[@%6@[[@%Y*[[*'J*&B*'/*[[*'O*[[*'[P[RPQ=[VRPQ0P[RPQWPX[P[ECDECDUCSECD,C[ECD7CTECD:8[:8;?8<:8;18[[8;58[[8;9+[9+A>+[9+A-+[[+AN+[[+A`[o - (o >> 2)].charCodeAt() - 32
-      ]
-    ),
-    
+    //ko||console.log(P.toString(2),C,Z,I,D,B,V,N),
+    O[o]&&O[o](),
     PC++
+    //ko||console.log(P.toString(2),C,Z,I,D,B,V,N)
+
   ),
   
   // Update status register using flags values
