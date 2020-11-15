@@ -9,6 +9,9 @@
 // - https://www.masswerk.at/6502/6502_instruction_set.html
 // - https://problemkaputt.de/everynes.htm#cpu65xxmicroprocessor
 // - https://www.npmjs.com/package/dict-tempering
+// - http://www.6502.org/tutorials/vflag.html
+// - https://retrocomputing.stackexchange.com/questions/145
+// - http://forum.6502.org/viewtopic.php?f=8&t=6370
 
 // Globals
 // -------
@@ -39,19 +42,18 @@ t = o = a = p = c = 0,
 r = v => (c++, CPU.load(v)),
 
 // Write a byte in memory. Costs 1 cycle.
-w = (v, w) => (++c, CPU.write(v, w)),
+w = (v, w) => (c++, CPU.write(v, w)),
 
 // Update N and Z flags:
 // - The value v is clamped on 8 bits
 // - Zero flag (bit 1 of P) is set if v is zero, otherwise it's cleared
 // - Negative flag (bit 7 of P) is set if byte 7 of v is 1, otherwise it's cleared
 // Other flags (C, I, D, B, V) are set individually by each concerned opcode
-NZ = v => {
-  //console.log(v)
-  Z = +((v & 255) < 1);
-  N = +((v & 255) >> 7);
-  return v & 255;
-},
+F = v => (
+  Z = (v &= 255) < 1,
+  N = (v &= 255) >> 7,
+  v
+),
 
 // Update the flags values from the status register
 f = v => (
@@ -110,13 +112,12 @@ for(o = 255; o--;){
       // The target address (between PC-128 and PC+127) = PC + signed offset stored in p
       // Opcode size: 2 bytes
       // Total cycles: 2 (no branch) / 3 (branch on same page) / 4 (branch on another page)
-      + "a=PC+p-256*(p>127)+1,PC++;" // todo: replace PC+1 with a ?
+      + "a=a+p-256*(p>>7),PC++;"
 
       // `2`: Indexed indirect X
       // The target address is absolute and stored at a zero page address which is stored at PC + 1 + X
       // Opcode size: 2 bytes
       // Total cycles: 6 (read or write)
-      // `a=r(p+X&255)+256*r(p+X+1&255),PC++,c++ `
       + "a=r(p+X&255)+256*r(p+X+1&255),PC++,c++;"
 
       // `3`: Indirect indexed Y
@@ -148,7 +149,7 @@ for(o = 255; o--;){
       // The target address is stored at PC+1 (low byte) and PC+2 (high byte)
       // Opcode size: 3 bytes
       // Total cycles: 3 (JMP) / 4 (read or write) / 6 (read + write or JSR)
-      + "a=p+256*r(PC+2),PC+=2;" // TODO: PC+1 = a+1?
+      + "a=p+256*r(PC+2),PC+=2;"
 
       // `8`: Absolute Y
       // The target address is equal to absolute address (stored at PC+1 and PC+2) + Y
@@ -175,8 +176,7 @@ for(o = 255; o--;){
     
     // Fetch the right addressing mode for the current opcode (ignore every illegal opcode where o % 4 == 3):
     [
-      `
-020666Z0Z77713Z444Z8Z999720666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999020666Z0Z77713Z445Z8Z998020666Z0Z77713Z445Z8Z998020466Z0Z77713Z444Z8Z999020666Z0Z77713Z444Z8Z999`[o-(o>>2)]
+      `020666Z0Z77713Z444Z8Z999720666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999020666Z0Z77713Z445Z8Z998020666Z0Z77713Z445Z8Z998020666Z0Z77713Z444Z8Z999020666Z0Z77713Z444Z8Z999`[o-(o>>2)]
     ]
     
     // Separator
@@ -188,7 +188,7 @@ for(o = 255; o--;){
     // There are 56 valid instructions, performing operations in memory and/or in the registers
     // Some instructions use extra cycles:
     // *  : cross-page when fetching the address costs 1 extra cycle
-    // ** : Same-page branch costs 1 extra cycle cycles. (Cross-page branch should cost another extra cycles but according to nestest, no)
+    // ** : Same-page branch (PC+2>>8 == a>>8) costs 1 extra cycle cycles. Cross-page branch costs another extra cycle.
     // ***: Instructions that read, modify and write a value in memory (and JSR/RTI/RTS) cost 1 to 2 extra cycles
     + (
     
@@ -209,7 +209,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4
       // Cycles addr: -1,  0,   1
       // Cycles opc:  1,   1,   1
-      + "p=r(a),C=X-p>=0,NZ(X-p);"
+      + "p=r(a),C=X-p>=0,F(X-p);"
       
       // `"`: CPY (compare memory and Y)
       // N, Z and C are set with the result of Y - a byte in memory
@@ -219,7 +219,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4
       // Cycles addr: -1,  0,   1
       // Cycles opc:  1,   1,   1
-      + "p=r(a),C=Y-p>=0,NZ(Y-p);"
+      + "p=r(a),C=Y-p>=0,F(Y-p);"
       
       // `#`: ASL (shift left)
       // A byte in memory is left shifted. Flags: N, Z, C
@@ -229,7 +229,7 @@ for(o = 255; o--;){
       // Cycles:      5,   6,    6,   7
       // Cycles addr: 0,   1,    1,   2
       // Cycles opc:  3,   3,    3,   3 (***)
-      + "p=r(a),C=p>>7,w(a,NZ(2*p)),c++;"
+      + "p=r(a),C=p>>7,w(a,F(2*p)),c++;"
       
       // `$`: ROL A (rotate left accumulator)
       // Rotate left A. Same as left shift but C flag is put into bit 0. Flags: N, Z, C
@@ -239,7 +239,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "C=A>>7,A=NZ(2*A+(1&P));"
+      + "C=A>>7,A=F(2*A+(1&P));"
       
       // `%`: ROL (rotate left)
       // Rotate left a byte in memory. Same as left shift but C flag is put into bit 0. Flags: N, Z, C
@@ -249,7 +249,7 @@ for(o = 255; o--;){
       // Cycles:      5,   6,    6,   7
       // Cycles addr: 0,   1,    1,   2
       // Cycles opc:  3,   3,    3,   3 (***)
-      + "p=r(a),C=p>>7,w(a,NZ(2*p+(1&P))),c++;"
+      + "p=r(a),C=p>>7,w(a,F(2*p+(1&P))),c++;"
       
       // `&`: LSR A (shift right accumulator)
       // A is shifted right. Flags: N, Z, C
@@ -259,7 +259,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "C=1&A,A=NZ(A>>1);"
+      + "C=1&A,A=F(A>>1);"
       
       // `'`: LSR (shift right)
       // A or a byte in memory is shifted right. Flags: N, Z, C
@@ -269,7 +269,7 @@ for(o = 255; o--;){
       // Cycles:      5,   6,    6,   7
       // Cycles addr: 0,   1,    1,   2
       // Cycles opc:  3,   3,    3,   3 (***)
-      + "p=r(a),C=1&p,w(a,NZ(p>>1)),c++;"
+      + "p=r(a),C=1&p,w(a,F(p>>1)),c++;"
       
       // `(`: DEX (decrement X)
       // X is decremented. Flags: N, Z
@@ -278,7 +278,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "X=NZ(X-1);"
+      + "X=F(X-1);"
       
       // `)`: BIT (test bits in memory)
       // N and V = bits 7 and 6 of operand. Z is set if operand AND A is not zero. Flags: N, Z, V
@@ -287,7 +287,7 @@ for(o = 255; o--;){
       // Cycles:      3,    4
       // Cycles addr: 0,    1
       // Cycles opc:  1,    1
-      + "p=r(a),NZ(p&A),N=p>>7&1,V=p>>6&1;"
+      + "p=r(a),F(p&A),N=p>>7&1,V=p>>6&1;"
       
       // `*`: ROR A (rotate right accumulator)
       // Rotate right A or a byte in memory. Same as left shift but C flag is put into bit 7. Flags: N, Z, C
@@ -297,7 +297,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "C=1&A,A=NZ((A>>1)+128*(1&P));"
+      + "C=1&A,A=F((A>>1)+128*(1&P));"
       
       // `+`: INC (increment memory)
       // A byte in memory is incremented. Flags: N, Z
@@ -306,7 +306,7 @@ for(o = 255; o--;){
       // Cycles:      5,   6,    6,   7
       // Cycles addr: 0,   1,    1,   2
       // Cycles opc:  3,   3,    3,   3 (***)
-      + "w(a,NZ(r(a)+1)),c++;"
+      + "w(a,F(r(a)+1)),c++;"
       
       // `,`: INX (increment X)
       // X is incremented. Flags: N, Z
@@ -315,7 +315,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "X=NZ(X+1);"
+      + "X=F(X+1);"
       
       // `-`: DEY (decrement Y)
       // Y is decremented. Flags: N, Z
@@ -324,7 +324,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "Y=NZ(Y-1);"
+      + "Y=F(Y-1);"
       
       // `.`: INY (increment Y)
       // Y is incremented. Flags: N, Z
@@ -333,7 +333,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "Y=NZ(Y+1);"
+      + "Y=F(Y+1);"
       
       // `/`: LDY (load Y with memory)
       // Y = a byte from memory. Flags: N, Z
@@ -342,7 +342,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*
       // Cycles addr: -1,  0,   1,    1,   1*
       // Cycles opc:  1,   1,   1,    1,   1
-      + "Y=NZ(r(a));"
+      + "Y=F(r(a));"
       
       // `0`: ROR (rotate right)
       // Rotate right a byte in memory. Same as left shift but C flag is put into bit 7. Flags: N, Z, C
@@ -352,7 +352,7 @@ for(o = 255; o--;){
       // Cycles:      5,   6,    6,   7
       // Cycles addr: 0,   1,    1,   2
       // Cycles opc:  3,   3,    3,   3 (***)
-      + "p=r(a),C=1&p,w(a,NZ((p>>1)+128*(1&P))),c++;"
+      + "p=r(a),C=1&p,w(a,F((p>>1)+128*(1&P))),c++;"
       
       // `1`: CLC (clear carry flag)
       // C is set to 0
@@ -397,7 +397,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "A=NZ(r(a));"
+      + "A=F(r(a));"
       
       // `6`: AND: (AND memory and accumulator)
       // A = A AND a byte in memory. Flags: N, Z
@@ -406,7 +406,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "A=NZ(r(a)&A);"
+      + "A=F(r(a)&A);"
       
       // `7`: CMP (compare memory and accumulator)
       // N, Z and C are set with the result of A - a byte in memory
@@ -416,7 +416,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "p=r(a),C=A-p>=0,NZ(A-p);"
+      + "p=r(a),C=A-p>=0,F(A-p);"
       
       // `8`: SBC (subtract from accumulator with carry)
       // A = A - a byte from memory - (1 - Carry). Flags: N, Z, C, V
@@ -427,7 +427,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "p=r(a),t=A+C-1-p,V=(128&(A^p))>0&&(128&(A^t))>0,C=t>=0,A=NZ(t);"
+      + "p=r(a),t=A+C-1-p,V=(128&(A^p))>0&&(128&(A^t))>0,C=t>=0,A=F(t);"
       
       // `9`: ADC (add to accumulator with carry)
       // A = A + a byte in memory + Carry. Flags: N, Z, C, V
@@ -438,7 +438,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "p=r(a),t=A+C+p,V=!(128&(A^p))&&(128&(A^t))>0,C=t>255,A=NZ(t);"
+      + "p=r(a),t=A+C+p,V=!(128&(A^p))&&(128&(A^t))>0,C=t>255,A=F(t);"
       
       // `:`: JMP (jump to new location)
       // Set a new value to PC
@@ -458,7 +458,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "C&&(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "C&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `<`: BMI (branch on minus)
       // PC = address if N is 1
@@ -467,7 +467,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "N&&(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "N&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `=`: BPL (branch on plus)
       // PC = address if N is 0
@@ -476,7 +476,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "N||(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "N||(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `>`: BVC (branch on overflow clear)
       // PC = address if V is 0
@@ -485,7 +485,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "V||(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "V||(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `?`: LDX (load X with memory)
       // X = a byte from memory. Flags: N, Z
@@ -494,7 +494,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*
       // Cycles addr: -1,  0,   1,    1,   1*
       // Cycles opc:  1,   1,   1,    1,   1
-      + "X=NZ(r(a));"
+      + "X=F(r(a));"
       
       // `@`: EOR (exclusive-or memory and accumulator)
       // A = A XOR a byte in memory. Flags: N, Z
@@ -503,7 +503,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "A=NZ(r(a)^A);"
+      + "A=F(r(a)^A);"
       
       // `A`: DEC (decrement memory)
       // A byte in memory is decremented. Flags: N, Z
@@ -512,7 +512,7 @@ for(o = 255; o--;){
       // Cycles:      5,   6,    6,   7
       // Cycles addr: 0,   1,    1,   2
       // Cycles opc:  3,   3,    3,   3 (***)
-      + "w(a,NZ((r(a)-1)&255)),c++;"
+      + "w(a,F((r(a)-1)&255)),c++;"
 
       // `B`: ASL A (shift left accumulator)
       // A is left shifted. Flags: N, Z, C
@@ -522,7 +522,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "C=A>>7,A=NZ(2*A);"
+      + "C=A>>7,A=F(2*A);"
       
       // `C`: JSR (jump to subroutine)
       // Push PC + 2, PC = absolute address
@@ -549,7 +549,7 @@ for(o = 255; o--;){
       // Cycles:      2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc:  1,   1,   1,    1,   1,    1,    1,    1
-      + "A=NZ(r(a)|A);"
+      + "A=F(r(a)|A);"
       
       // `F`: PHA (push accumulator)
       // Push A
@@ -576,7 +576,7 @@ for(o = 255; o--;){
       // Cycles:      4 (*** 1 extra cycle according to nestest)
       // Cycles addr: 0
       // Cycles opc:  1
-      + "A=NZ(pull()),c++;"
+      + "A=F(pull()),c++;"
       
       // `I`: PLP (pull processor status)
       // Pull P and set all flags
@@ -613,7 +613,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "Y=NZ(A);"
+      + "Y=F(A);"
       
       // `M`: STA (store accumulator)
       // A is copied in memory
@@ -640,7 +640,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "X=NZ(S);"
+      + "X=F(S);"
       
       // `P`: TAX (transfer accumulator to X)
       // X = A. Flags: N, Z
@@ -649,7 +649,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "X=NZ(A);"
+      + "X=F(A);"
       
       // `Q`: STY (store Y)
       // Y is copied in memory
@@ -667,7 +667,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "A=NZ(Y);"
+      + "A=F(Y);"
       
       // `S`: TXA (transfer X to accumulator)
       // A = X. Flags: N, Z
@@ -676,7 +676,7 @@ for(o = 255; o--;){
       // Cycles:      2
       // Cycles addr: 0
       // Cycles opc:  0
-      + "A=NZ(X);"
+      + "A=F(X);"
       
       // `T`: RTS (return from subroutine)
       // Pull and increment PC
@@ -703,7 +703,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "C||(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "C||(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `W`: BVS (branch on overflow set)
       // PC = address if V is 1
@@ -712,7 +712,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "V&&(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "V&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `X`: BEQ (branch if equal)
       // PC = address if Z is 0
@@ -721,7 +721,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "Z&&(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "Z&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
       // `Y`: BNE (branch if not equal)
       // PC = address if Z is 1
       // Addressing:  rel 
@@ -729,7 +729,7 @@ for(o = 255; o--;){
       // Cycles:      2**
       // Cycles addr: 0
       // Cycles opc:  0**
-      + "Z||(c+=1+(a>>8!=PC-2>>8),PC=a);"
+      + "Z||(c+=1+(a>>8!=PC+1>>8),PC=a);"
       
       // `Z`: CLV (clear overflow flag)
       // V is set to 0
@@ -740,7 +740,7 @@ for(o = 255; o--;){
       // Cycles opc:  0
       + "V=0;"
       
-      // `[`: NOP (no operation) / illegal opcodes
+      // `[`: NOP (no operation)
       // Addressing: imp
       // Opcode:     EA
       // Cycles:     2
@@ -753,10 +753,7 @@ for(o = 255; o--;){
     
     // Fetch the right instruction for the current opcode (ignore every illegal opcode where o % 4 == 3):
     [
-    
-    
-`UE__E#GEB_E#=E__E#1E__E#C6_)6%I6$)6%<6__6%D6__6%J@__@'F@&:@'>@__@'4@__@'T9__90H9*:90W9__9029__90_M_QMN-_SQMNVM_QMNRMK_M_/5?/5?L5P/5?;5_/5?Z5O/5?"7_"7A.7("7AY7__7A37__7A!8_!8+,8[!8+X8__8+ 8__8+`[o - (o >> 2)].charCodeAt() - 32
-    
+      `UE#UE#GEBUE#=E#UE#1E#UE#C6%)6%I6$)6%<6%D6%D6%C6%J@'J@'F@&:@'>@'J@'4@'J@'T90T90H9*:90W90T90290T90QMNQMN-NSQMNVMNQMNRMKQMN/5?/5?L5P/5?;5?/5?Z5O/5?"7A"7A.7("7AY7A"7A37A"7A!8+!8+,8[!8+X8+!8+ 8+!8+`[o - (o >> 2)].charCodeAt() - 32
     ]
   )
 }
@@ -797,7 +794,6 @@ myop = v => (
     // This costs 7 cycles
     
     (v > 1 || r(0x2000) >> 7)
-    
     &&
     (
       (
@@ -813,11 +809,8 @@ myop = v => (
   
   // Execute the instruction at the address pointed by PC
   : (
-    //ko||console.log(P.toString(2),C,Z,I,D,B,V,N),
-    O[o]&&O[o](),
+    O[o](),
     PC++
-    //ko||console.log(P.toString(2),C,Z,I,D,B,V,N)
-
   ),
   
   // Update status register using flags values

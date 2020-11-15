@@ -2,6 +2,9 @@
 // ===
 log = 0;
 ko = 0;
+cyc = 7;
+
+
 var CPU = {
 
   // Interrupt types
@@ -42,11 +45,11 @@ var CPU = {
     CPU.V = 0;  // Bit 6: Overflow
     CPU.N = 0;  // Bit 7: Negative
     
-    /*
+    
     // TMP
-    OpData.init();
-    CPU.opdata = OpData.opdata;
-    */
+    //OpData.init();
+    //CPU.opdata = OpData.opdata;
+    
     // Cycles to wait until next opcode
     CPU.halt_cycles = 0;
     
@@ -98,7 +101,7 @@ var CPU = {
         }
         case 1: {
           // NMI:
-          //console.log(log,"nmi");
+          //onsole.log(log,"nmi");
           //CPU.doNonMaskableInterrupt(temp);
           myop(1);
           break;
@@ -121,8 +124,8 @@ var CPU = {
 
     var op = CPU.load(CPU.PC + 1);
     
-    // Separate opcode in 3 parts (aaa-bbb-cc)
-    /*var a = op >> 5;
+    /*// Separate opcode in 3 parts (aaa-bbb-cc)
+    var a = op >> 5;
     var b = op >> 2 & 0b111;
     var c = op & 0b11;
     if([0x80,0x02,0x22,0x42,0x62,0x82,0xC2,0xE2,0x04,0x44,0x64,0x89,0x0C,0x14,0x34,0x54,0x74,0xD4,0xF4,0x1A,0x3A,0x5A,0x7A,0xDA,0xFA,0x1C,0x3C,0x5C,0x7C,0x9C,0xDC,0xFC,0x9E,0x12,0x32,0x52,0x72,0x92,0xB2,0xD2,0xF2].includes(op) || c==3){
@@ -312,14 +315,14 @@ var CPU = {
       }
     }
     // Wrap around for addresses above 0xFFFF:
-    addr &= 0xffff;
+    addr &= 0xffff;*/
 
     // ----------------------------------------------------------------------------------------------------
     // Decode & execute instruction:
     // ----------------------------------------------------------------------------------------------------
 
     // This should be compiled to a jump table.
-    switch (opinf & 0xff){
+    /*switch (opinf & 0xff){
       case 0: {
         // *******
         // * ADC *
@@ -1290,13 +1293,24 @@ var CPU = {
       }
     } // end of switch
     */
+    
+    //console.log(1)
+    
     myop();
+    //mine = PC.toString(16).padStart(4,0);
+    cyc += top.c;
+    //mine += ` A:${A.toString(16).padStart(2,0)} X:${X.toString(16).padStart(2,0)} Y:${Y.toString(16).padStart(2,0)} P:${P.toString(16).padStart(2,0)} SP:${S.toString(16).padStart(2,0)} CYC:${cyc}`;
+    //mine = mine.toUpperCase();
+    
+    
+    
+    
 
     //if((op !== o || CPU.A !== A || CPU.X !== X || CPU.Y !== Y || (CPU.S-0x100) !== S  || (CPU.PC+1) !== PC || cycleCount !== top.c || CPU.getP() !== P) && !ko) {
     
     //ko || console.log("Z", Z, CPU.Z)
-    //theirs = `Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} new PC: ${(CPU.PC+1).toString(16).padStart(4,0)} nvxbdizc: ${CPU.getP().toString(2).padStart(8,0)} cycles: ${cycleCount} M[0]: ${CPU.load(0)} M[1]: ${CPU.load(0x1)} M[fb]: ${CPU.load(0x1FB).toString(2)}`
-    //mine = `Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} new PC: ${PC.toString(16).padStart(4,0)} nvxbdizc: ${P.toString(2).padStart(8,0)} cycles: ${top.c} M[0]: ${top.m[0]||0} M[1]: ${top.m[0x1]||0} M[fb]: ${(top.m[0x1FB]||0).toString(2)}`
+    //theirs = `Op: ${op.toString(16).padStart(2,0)} A: ${CPU.A.toString(16).padStart(2,0)} X: ${CPU.X.toString(16).padStart(2,0)} Y: ${CPU.Y.toString(16).padStart(2,0)} S: ${(CPU.S - 0x100).toString(16).padStart(2,0)} new PC: ${(CPU.PC+1).toString(16).padStart(4,0)} nvxbdizc: ${CPU.getP().toString(2).padStart(8,0)} cycles: ${cycleCount}`
+    //mine = `Op: ${o.toString(16).padStart(2,0)} A: ${A.toString(16).padStart(2,0)} X: ${X.toString(16).padStart(2,0)} Y: ${Y.toString(16).padStart(2,0)} S: ${S.toString(16).padStart(2,0)} new PC: ${PC.toString(16).padStart(4,0)} nvxbdizc: ${P.toString(2).padStart(8,0)} cycles: ${top.c}`
       
     /*if(theirs != mine && !ko){
       console.log(log, 
@@ -1338,7 +1352,19 @@ var CPU = {
       if(theirs != mine) ko = 1;
     }*/
 
+    //theirs=dump[log];
+    
+    /*if((mine != theirs && !ko)){
+      console.log("they",dump[log-1]);
+      console.log(log);
+      console.log("mine",mine);
+      console.log("they",theirs);
+      ko=1;
+    }*/
+    
     log++;
+    //console.log(log)
+    
     //return cycleCount;
     return top.c;
   },

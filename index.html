@@ -102,11 +102,12 @@ start = file => {
   // Run
   
   // Uncomment for DK title screen
+  /*NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
-  NES.frame();
+  NES.frame();*/
 
   // Uncomment for SMB/IC title screen
   /*NES.frame();
@@ -139,7 +140,7 @@ start = file => {
   NES.frame();*/
   
   // Uncomment to try Nestest
-  //setInterval(NES.frame,16);
+  setInterval(NES.frame,16);
   //console.log((m[3]*256 + m[2]).toString(16))
   
   // Controller #1 keys listeners
