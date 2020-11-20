@@ -1,5 +1,13 @@
-// Tile
-// ====
+// Tiles & sprites
+// ===============
+// (part of the PPU)
+
+// Resources:
+// - https://wiki.nesdev.com/w/index.php/PPU_pattern_tables
+// - https://wiki.nesdev.com/w/index.php/PPU_OAM
+// - https://problemkaputt.de/everynes.htm#pputilememory
+// - https://problemkaputt.de/everynes.htm#ppusprites
+
 var Tile = {
 
   // Tile decoding

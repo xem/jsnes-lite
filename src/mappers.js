@@ -1,11 +1,23 @@
 // Mapper
 // ======
 
-// Only Mapper 0 is handled for now:
-// - 8, 16 or 32kb PRG-ROM
-// - up to 8kb PRG-RAM (enabled by default on most emulators)
-// - 0, 4 or 8kb CHR-ROM
+// Resources:
+// - https://problemkaputt.de/everynes.htm#cartridgesandmappers
+// - https://wiki.nesdev.com/w/index.php/Mapper
+// - https://wiki.nesdev.com/w/index.php/Cartridge_and_mappers%27_history
+
+// Mapper 0
+// --------
+
+// Only Mapper 0 (NROM) is handled for now:
+// https://wiki.nesdev.com/w/index.php/NROM
+
+// - 8, 16 or 32Kib PRG-ROM (mirrored if less than 32Kib)
+// - 0 or 8Kib PRG-RAM (only one game uses it: Family Basic)
+// - 0, 4 or 8Kib CHR-ROM (mirrored if it's just 4)
+// - 0 or 8Kib CHR-RAM (enable it if no CHR-ROM is present. Mapper 0 doesn't really support it, but some homebrew ROMs rely on it)
 // - Horizontal or vertical nametable mirroring
+
 var Mapper = {
   
   // Load ROM's content in memory
@@ -17,15 +29,14 @@ var Mapper = {
   // Load PRG-ROM banks in CPU memory
   load_prg_rom: () => {
     
-    // If there are two banks or more, the first ones placed at addresses $8000 and $C000
+    // If there are two banks or more, the first two banks are placed at addresses $8000 and $C000
     if(ROM.prg_rom_count > 1){
       Mapper.load_prg_rom_bank(0, 0x8000);
       Mapper.load_prg_rom_bank(1, 0xC000);
     }
 
-    // If there's only one bank, it's mirrored at both locations
-    // If the game only uses 8kb, the other 8kb are filled with zeroes 
     else {
+      // If there's only one bank, it's mirrored at both locations (ex: Donkey Kong, Galaxian)
       Mapper.load_prg_rom_bank(0, 0x8000);
       Mapper.load_prg_rom_bank(0, 0xC000);
     }

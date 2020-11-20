@@ -1,5 +1,5 @@
-// NES CPU simulator
-// =================
+// CPU simulator
+// =============
 
 // Resources:
 // - https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
@@ -18,7 +18,7 @@
 
 // 16kb memory
 // Each chunk of 256 bytes in memory is called a page
-// Fhe first chunk ($00-$FF) is called Zero page
+// The first chunk ($00-$FF) is called Zero page
 m = [],
 
 // Registers
@@ -39,10 +39,10 @@ t = o = a = p = c = 0,
 // Some areas in memory are mirrored, dynamic (PPU/APU/controller registers),
 // or specific to the game's Mapper (bank switches, save slot, ...),
 // So this function will be delegated to the Mapper 
-r = v => (c++, CPU.load(v)),
+r = v => (c++, Memory.load(v)),
 
 // Write a byte in memory. Costs 1 cycle.
-w = (v, w) => (c++, CPU.write(v, w)),
+w = (v, w) => (c++, Memory.write(v, w)),
 
 // Update N and Z flags:
 // - The value v is clamped on 8 bits
@@ -176,7 +176,7 @@ for(o = 255; o--;){
     
     // Fetch the right addressing mode for the current opcode (ignore every illegal opcode where o % 4 == 3):
     [
-      `020666Z0Z77713Z444Z8Z999720666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999020666Z0Z77713Z445Z8Z998020666Z0Z77713Z445Z8Z998020666Z0Z77713Z444Z8Z999020666Z0Z77713Z444Z8Z999`[o-(o>>2)]
+      "020666Z0Z77713Z444Z8Z999720666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999Z20666Z0Z77713Z444Z8Z999020666Z0Z77713Z445Z8Z998020666Z0Z77713Z445Z8Z998020666Z0Z77713Z444Z8Z999020666Z0Z77713Z444Z8Z999"[o-(o>>2)]
     ]
     
     // Separator
@@ -753,7 +753,7 @@ for(o = 255; o--;){
     
     // Fetch the right instruction for the current opcode (ignore every illegal opcode where o % 4 == 3):
     [
-      `UE#UE#GEBUE#=E#UE#1E#UE#C6%)6%I6$)6%<6%D6%D6%C6%J@'J@'F@&:@'>@'J@'4@'J@'T90T90H9*:90W90T90290T90QMNQMN-NSQMNVMNQMNRMKQMN/5?/5?L5P/5?;5?/5?Z5O/5?"7A"7A.7("7AY7A"7A37A"7A!8+!8+,8[!8+X8+!8+ 8+!8+`[o - (o >> 2)].charCodeAt() - 32
+      117 - "@Pr@PrNPS@PrXPr@PrdPr@PrR_pl_pL_ql_pY_pQ_pQ_pR_pKUnKUnOUo[UnWUnKUnaUnKUnA\\eA\\eM\\k[\\e>\\eA\\ec\\eA\\eDHGDHGhGBDHG?HGDHGCHJDHGf`Vf`VI`Ef`VZ`Vf`V;`Ff`Vs^Ts^Tg^ms^T<^Ts^Tb^Ts^Tt]jt]ji]:t]j=]jt]ju]jt]j"[o - (o >> 2)].charCodeAt()
     ]
   )
 }

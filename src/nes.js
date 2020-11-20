@@ -1,4 +1,13 @@
-// NES
+// Jsnes-lite API
+// ==============
+
+// This file exposes six functions that help handle the inputs and outputs of the emulator:
+// - NES.init({onFrame, onAudioSample,onBatteryRamWrite})
+// - NES.load_rom(data)
+// - NES.reset()
+// - NES.frame()
+// - NES.buttonDown(controller, button)
+// - NES.buttonUp(controller, button)
 var NES = {
   
   // Initialize the emulator
@@ -33,10 +42,10 @@ var NES = {
   // data: binary string
   load_rom: data => {
     
-    // Parse the ROM (trainer + ROM banks)
+    // Parse the ROM
     ROM.load_rom(data);
     
-    // Add the tight ROM banks to the CPU's memory
+    // Add the right ROM banks to the CPU's memory
     Mapper.load_rom();
   },
 
@@ -123,5 +132,13 @@ var NES = {
         }
       }
     }
+  },
+  
+  buttonDown: (controller, button) => {
+    NES.controllers[controller].buttonDown(button);
+  },
+
+  buttonUp: (controller, button) => {
+    NES.controllers[controller].buttonUp(button);
   }
 }

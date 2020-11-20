@@ -138,10 +138,3 @@ NES.zapperFireUp: function(){
   Mapper.zapperFired = false;
 },*/
 
-NES.buttonDown = (controller, button) => {
-  NES.controllers[controller].buttonDown(button);
-};
-
-NES.buttonUp = (controller, button) => {
-  NES.controllers[controller].buttonUp(button);
-};

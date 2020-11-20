@@ -6,7 +6,12 @@
 <button id=smb onclick='play("roms/smb.nes")'>SMB</button>
 <button id=ic onclick='play("roms/ic.nes")'>IC</button>
 <button onclick='play("roms/nestest.nes")'>nestest</button>
-<input type=file id=fileInput>
+<button onclick='play("roms/instr_test.nes")'>instr_test</button>
+<button><label for=fileInput>Browse...</label></button>
+<input type=file id=fileInput hidden>
+&nbsp;
+<label><input type=radio name=tv value=ntsc checked>NTSC</label>
+<label><input type=radio name=tv value=pal>PAL</label>
 <style>
 body { font: 14px Arial;background:#888; }
 canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * 1.067); image-rendering: crisp-edges; image-rendering: pixelated; }
@@ -15,9 +20,10 @@ canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 
 </style>
 <script src="src/nes.js"></script>
 <script src="src/rom.js"></script>
+<script src="src/cpu.js"></script>
+<script src="src/memory.js"></script>
 <script src="src/mappers.js"></script>
 <script src="src/controller.js"></script>
-<script src="src/cpu.js"></script>
 <script src="src/mycpu.js"></script>
 <script src="src/papu.js"></script>
 <script src="src/ppu.js"></script>
@@ -66,6 +72,7 @@ var currentSample = 0;
 
 // Load ROM + Start emulator
 // =========================
+
 var interval;
 start = file => {
 
@@ -90,7 +97,9 @@ start = file => {
       leftSamples.push(left);
       rightSamples.push(right);
       //console.log(left, right);
-    }
+    },
+    
+    onBatteryRamWrite: ()=>{}
   });
 
   // Reset emulator
@@ -102,12 +111,12 @@ start = file => {
   // Run
   
   // Uncomment for DK title screen
-  /*NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
-  NES.frame();*/
+  NES.frame();
+  NES.frame();
 
   // Uncomment for SMB/IC title screen
   /*NES.frame();
@@ -139,9 +148,8 @@ start = file => {
   NES.frame();
   NES.frame();*/
   
-  // Uncomment to try Nestest
-  setInterval(NES.frame,16);
-  //console.log((m[3]*256 + m[2]).toString(16))
+  clearInterval(interval);
+  interval = setInterval(NES.frame, 16);
   
   // Controller #1 keys listeners
   onkeydown = e => {
