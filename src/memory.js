@@ -130,7 +130,7 @@ Memory = {
     return CPU.mem[address] || 0;
   },
 
-  // Handle 8-bit writes in CPU memory
+  // Write a 8-bit value in memory
   write: (address, value) => {
     
     // Wrap around ($0000-$FFFF)
