@@ -52,6 +52,7 @@ var CPU = {
         }
         case 1: {
           // NMI:
+          console.log("nmi");
           myop(1);
           break;
         }

@@ -71,7 +71,7 @@ var NES = {
     var cpu_cycles = 0;
     var ppu_cycles = 0;
     
-    // Loop until a VBlank is detected or limit of cycles per frame exceeded
+    // Loop until a VBlank is detected
     loop: for(;;){
       
       // If CPU is not halted
@@ -109,9 +109,10 @@ var NES = {
       for(ppu_cycles = cpu_cycles * 3; ppu_cycles > 0; ppu_cycles--){
 
         // Handle Sprite 0 hit
-        if(PPU.curX === PPU.spr0HitX && PPU.f_spVisibility === 1 && PPU.scanline - 21 === PPU.spr0HitY){
-          PPU.setStatusFlag(PPU.STATUS_SPRITE0HIT, true);
-        }
+        /*if(PPU.curX === PPU.spr0HitX && PPU.f_spVisibility === 1 && PPU.scanline - 21 === PPU.spr0HitY){
+          PPU.PPUSTATUS_S = 1;
+          PPU.update_PPUSTATUS();
+        }*/
 
         // Handle VBlank request (end of current frame)
         if(PPU.requestEndFrame){

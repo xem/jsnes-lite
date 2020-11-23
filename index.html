@@ -14,7 +14,7 @@
 <label><input type=radio name=tv value=pal>PAL</label>
 <style>
 body { font: 14px Arial;background:#888; }
-canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * 1.067); image-rendering: crisp-edges; image-rendering: pixelated; }
+canvas { background: #000; height: calc(100vmin - 80px); width: calc((100vmin - 80px) * (256/240)); /*image-rendering: crisp-edges; image-rendering: pixelated;*/ }
 #dk, #smb, #ic { display: none; }
 .local #dk, .local #smb, .local #ic { display: inline; }
 </style>
@@ -148,8 +148,8 @@ start = file => {
   NES.frame();
   NES.frame();*/
   
-  clearInterval(interval);
-  interval = setInterval(NES.frame, 16);
+  //clearInterval(interval);
+  //interval = setInterval(NES.frame, 16);
   
   // Controller #1 keys listeners
   onkeydown = e => {

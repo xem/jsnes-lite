@@ -29,45 +29,45 @@
 //  | $1800-$1FFF | 2KiB  | Mirror of $0000-$07FF                                 |
 //  +-------------+-------+-------------------------------------------------------+
 //  | $2000-$2007 | 8B    | PPU I/O registers:                                    |
-//  | 2000h       | 1B    | PPU Control Register 1                   (Write-only) |
-//  | 2001h       | 1B    | PPU Control Register 2                   (Write-only) |
-//  | 2002h       | 1B    | PPU Status Register                      (Read-only)  |
-//  | 2003h       | 1B    | SPR-RAM Address Register                 (Write-only) |
-//  | 2004h       | 1B    | SPR-RAM Data Register                    (Read/write) |
-//  | 2005h       | 1B    | PPU Background Scrolling Offset   (Write-only, twice) |
-//  | 2006h       | 1B    | VRAM Address Register             (Write-only, twice) |
-//  | 2007h       | 1B    | VRAM Read/Write Data Register            (Read/write) |
+//  | 2000        | 1B    | PPU Control Register 1                   (Write-only) |
+//  | 2001        | 1B    | PPU Control Register 2                   (Write-only) |
+//  | 2002        | 1B    | PPU Status Register                      (Read-only)  |
+//  | 2003        | 1B    | SPR-RAM Address Register                 (Write-only) |
+//  | 2004        | 1B    | SPR-RAM Data Register                    (Read/write) |
+//  | 2005        | 1B    | PPU Background Scrolling Offset   (Write-only, twice) |
+//  | 2006        | 1B    | VRAM Address Register             (Write-only, twice) |
+//  | 2007        | 1B    | VRAM Read/Write Data Register            (Read/write) |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 //  | $2008-$3FFF | 8184B | Mirrors of $2000-$2007 (every 8 bytes)                |
 //  +-------------+-------+-------------------------------------------------------+
 //  | $4000-$4017 | 24B   | APU I/O registers:                                    |
-//  | 4000h       | 1B    | APU Channel 1 (Rectangle) Volume/Decay        (Write) |
-//  | 4001h       | 1B    | APU Channel 1 (Rectangle) Sweep               (Write) |
-//  | 4002h       | 1B    | APU Channel 1 (Rectangle) Frequency           (Write) |
-//  | 4003h       | 1B    | APU Channel 1 (Rectangle) Length              (Write) |
-//  | 4004h       | 1B    | APU Channel 2 (Rectangle) Volume/Decay        (Write) |
-//  | 4005h       | 1B    | APU Channel 2 (Rectangle) Sweep               (Write) |
-//  | 4006h       | 1B    | APU Channel 2 (Rectangle) Frequency           (Write) |
-//  | 4007h       | 1B    | APU Channel 2 (Rectangle) Length              (Write) |
-//  | 4008h       | 1B    | APU Channel 3 (Triangle) Linear Counter       (Write) |
-//  | 4009h       | 1B    | N/A                                                   |
-//  | 400Ah       | 1B    | APU Channel 3 (Triangle) Frequency            (Write) |
-//  | 400Bh       | 1B    | APU Channel 3 (Triangle) Length               (Write) |
-//  | 400Ch       | 1B    | APU Channel 4 (Noise) Volume/Decay            (Write) |
-//  | 400Dh       | 1B    | N/A                                                   |
-//  | 400Eh       | 1B    | APU Channel 4 (Noise) Frequency               (Write) |
-//  | 400Fh       | 1B    | APU Channel 4 (Noise) Length                  (Write) |
-//  | 4010h       | 1B    | APU Channel 5 (DMC) Play mode & DMA frequency (Write) |
-//  | 4011h       | 1B    | APU Channel 5 (DMC) Delta counter load        (Write) |
-//  | 4012h       | 1B    | APU Channel 5 (DMC) Address load              (Write) |
-//  | 4013h       | 1B    | APU Channel 5 (DMC) Length                    (Write) |
+//  | 4000        | 1B    | APU Channel 1 (Rectangle) Volume/Decay        (Write) |
+//  | 4001        | 1B    | APU Channel 1 (Rectangle) Sweep               (Write) |
+//  | 4002        | 1B    | APU Channel 1 (Rectangle) Frequency           (Write) |
+//  | 4003        | 1B    | APU Channel 1 (Rectangle) Length              (Write) |
+//  | 4004        | 1B    | APU Channel 2 (Rectangle) Volume/Decay        (Write) |
+//  | 4005        | 1B    | APU Channel 2 (Rectangle) Sweep               (Write) |
+//  | 4006        | 1B    | APU Channel 2 (Rectangle) Frequency           (Write) |
+//  | 4007        | 1B    | APU Channel 2 (Rectangle) Length              (Write) |
+//  | 4008        | 1B    | APU Channel 3 (Triangle) Linear Counter       (Write) |
+//  | 4009        | 1B    | N/A                                                   |
+//  | 400A        | 1B    | APU Channel 3 (Triangle) Frequency            (Write) |
+//  | 400B        | 1B    | APU Channel 3 (Triangle) Length               (Write) |
+//  | 400C        | 1B    | APU Channel 4 (Noise) Volume/Decay            (Write) |
+//  | 400D        | 1B    | N/A                                                   |
+//  | 400E        | 1B    | APU Channel 4 (Noise) Frequency               (Write) |
+//  | 400F        | 1B    | APU Channel 4 (Noise) Length                  (Write) |
+//  | 4010        | 1B    | APU Channel 5 (DMC) Play mode & DMA frequency (Write) |
+//  | 4011        | 1B    | APU Channel 5 (DMC) Delta counter load        (Write) |
+//  | 4012        | 1B    | APU Channel 5 (DMC) Address load              (Write) |
+//  | 4013        | 1B    | APU Channel 5 (DMC) Length                    (Write) |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
-//  | 4014h       | 1B    | SPR-RAM DMA Register                          (Write) |
+//  | 4014        | 1B    | SPR-RAM DMA Register                          (Write) |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
-//  | 4015h       | 1B    | DMC/IRQ/length status/channel enable     (Read/write) |
+//  | 4015        | 1B    | DMC/IRQ/length status/channel enable     (Read/write) |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
-//  | 4016h       | 1B    | Joypad #1                                (Read/write) |
-//  | 4017h       | 1B    | Joypad #2 / APU SOFTCLK                  (Read/write) |
+//  | 4016        | 1B    | Joypad #1                                (Read/write) |
+//  | 4017        | 1B    | Joypad #2 / APU SOFTCLK                  (Read/write) |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 //  | $4018-$401F | 8B    | APU I/O test registers (disabled)                     |
 //  +-------------+-------+-------------------------------------------------------+
@@ -104,13 +104,13 @@ Memory = {
       address &= 0x2007;
 
       // $2002: PPU Status Register
-      if(address == 0x2002) return PPU.readStatusRegister();
+      if(address == 0x2002) return PPU.get_PPUSTATUS();
 
       // $2004: Sprite Memory read
-      else if(address == 0x2004) return PPU.sramLoad();
+      else if(address == 0x2004) return PPU.get_OAMDATA();
       
       // $2007: VRAM read
-      else if(address == 0x2007) return PPU.vramLoad();
+      else if(address == 0x2007) return PPU.get_PPUDATA();
     }
     
     // Sound and I/O registers ($4000-$401F)
@@ -147,25 +147,25 @@ Memory = {
       address &= 0x2007;
       
       // $2000: PPU Control register 1 (write-only)
-      if(address == 0x2000) PPU.updateControlReg1(value);
+      if(address == 0x2000) PPU.set_PPUCTRL(value);
 
       // $2001: PPU Control register 2 (write-only)
-      else if(address == 0x2001) PPU.updateControlReg2(value);
+      else if(address == 0x2001) PPU.set_PPUMASK(value);
 
       // $2003: Set Sprite RAM address (write-only)
-      else if(address == 0x2003) PPU.writeSRAMAddress(value);
+      else if(address == 0x2003) PPU.set_OAMADDR(value);
 
       // $2004: Write to Sprite RAM
-      else if(address == 0x2004) PPU.sramWrite(value);
+      else if(address == 0x2004) PPU.set_OAMDATA(value);
 
       // $2005: Screen Scroll offsets (write-only)
-      else if(address == 0x2005) PPU.scrollWrite(value);
+      else if(address == 0x2005) PPU.set_PPUSCROLL(value);
 
       // $2006: Set VRAM address (write-only)
-      else if(address == 0x2006) PPU.writeVRAMAddress(value);
+      else if(address == 0x2006) PPU.set_PPUADDR(value);
 
       // $2007: Write to VRAM
-      else if(address == 0x2007) PPU.vramWrite(value);
+      else if(address == 0x2007) PPU.set_PPUDATA(value);
       
     }
     
@@ -178,7 +178,7 @@ Memory = {
     else if(address < 0x4020){
       
       // $4014: Sprite Memory DMA Access
-      if(address == 0x4014) PPU.sramDMA(value);
+      if(address == 0x4014) PPU.set_OAMDMA(value);
 
       // $4015: Sound Channel Switch, DMC Status
       else if(address == 0x4015) APU.writeReg(address, value);

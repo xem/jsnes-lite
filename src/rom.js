@@ -102,8 +102,8 @@ var ROM = {
       
       // Check if the game adds 2 extra Kib to the PPU's VRAM (byte 6, bit 4)
       // Otherwise, read mirroring layout (byte 6, bit 0)
-      // 0 => horizontal mirroring (bit 0 on: the game can scroll vertically)
-      // 1 => vertical mirroring (bit 0 off: the game can scroll horizontally)
+      // 0 => vertical mirroring (bit 0 on: the game can scroll horizontally)
+      // 1 => horizontal mirroring (bit 0 off: the game can scroll vertically)
       // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically)
       ROM.mirroring = (ROM.header[6] & 0b00001000) ? 2 : (ROM.header[6] & 0b0000001) ? 0 : 1;
 
