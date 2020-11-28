@@ -27,15 +27,17 @@ var NES = {
     
     // Save slot
     NES.onBatteryRamWrite = options.onBatteryRamWrite;
-
-    // Memory map (handled by the mapper)
-    NES.mmap = null;
     
     // Controllers
     NES.controllers = {
       1: new Controller(),
       2: new Controller()
     };
+
+    NES.cpu_cycles = 0;
+    
+    // Memory map (handled by the mapper)
+    //NES.mmap = null;
   },
   
   // Load a ROM file
@@ -64,75 +66,26 @@ var NES = {
   // Render a new frame
   frame: () => {
     
-    // Begin a new frame
-    PPU.startFrame();
+    var cycles;
+    NES.cpu_cycles = 0;
     
-    // Count CPU/PPU cycles
-    var cpu_cycles = 0;
-    var ppu_cycles = 0;
-    
-    // Loop until a VBlank is detected
-    loop: for(;;){
+    // Repeatedly execute CPU instructions until the frame is rendered
+    // On NTSC systems, the CPU executes a maximum of 29,781 cycles per frame,
+    // equivalent to 89,342 dots rendered by the PPU (3x more)
+    // On PAL, it's 33,248 for the CPU and 106,392 for the PPU (3.2x more) because VBlank is bigger
+    while(NES.cpu_cycles < 29781){
       
-      // If CPU is not halted
-      if(!CPU.halt_cycles){
-        
-        // Execute a CPU instruction, count remaining CPU cycles
-        cpu_cycles = CPU.emulate();
-        
-        // Clock the APU
-        APU.clockFrameCounter(cpu_cycles);
-      } 
+      // Execute a CPU instruction, count elapsed CPU cycles
+      cycles = CPU.emulate();
+      NES.cpu_cycles += cycles;
+      //console.log("emulate");
       
-      // If CPU is halted for more than 8 cycles
-      else if(CPU.halt_cycles > 8){
-        
-        // Clock the APU for 8 cycles
-        APU.clockFrameCounter(8);
-        
-        // Advance 8 CPU cycles
-        CPU.halt_cycles -= 8;
-      }
-      
-      // If CPU is halted for 1-8 cycles
-      else {
-        
-        // Clock the APU for the remaining number of cycles
-        APU.clockFrameCounter(CPU.halt_cycles);
-        
-        // Un-halt the CPU
-        CPU.halt_cycles = 0;
-      }
-
-      // Clock the PPU according to the number of CPU cycles executed
-      // The PPU executes 3 cycles for each CPU cycle  
-      for(ppu_cycles = cpu_cycles * 3; ppu_cycles > 0; ppu_cycles--){
-
-        // Handle Sprite 0 hit
-        /*if(PPU.curX === PPU.spr0HitX && PPU.f_spVisibility === 1 && PPU.scanline - 21 === PPU.spr0HitY){
-          PPU.PPUSTATUS_S = 1;
-          PPU.update_PPUSTATUS();
-        }*/
-
-        // Handle VBlank request (end of current frame)
-        if(PPU.requestEndFrame){
-          PPU.nmiCounter--;
-          if(PPU.nmiCounter === 0){
-            PPU.requestEndFrame = false;
-            PPU.startVBlank();
-            break loop;
-          }
-        }
-
-        // The NES renders a pixel per PPU cycle
-        // At the end of each scanline (340px), a new line starts
-        PPU.curX++;
-        if(PPU.curX > 340){
-          PPU.curX = 0;
-          PPU.endScanline();
-        }
+      // execute 3 PPU cycles and 1 APU cycle for each CPU tick
+      for(var i = 0; i < cycles; i++){
+        CPU.tick();
       }
     }
+    PPU.drawVram();
   },
   
   buttonDown: (controller, button) => {

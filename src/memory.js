@@ -31,7 +31,7 @@
 //  | $2000-$2007 | 8B    | PPU I/O registers:                                    |
 //  | 2000        | 1B    | PPU Control Register 1                   (Write-only) |
 //  | 2001        | 1B    | PPU Control Register 2                   (Write-only) |
-//  | 2002        | 1B    | PPU Status Register                      (Read-only)  |
+//  | 2002        | 1B    | PPU Status Register                       (Read-only) |
 //  | 2003        | 1B    | SPR-RAM Address Register                 (Write-only) |
 //  | 2004        | 1B    | SPR-RAM Data Register                    (Read/write) |
 //  | 2005        | 1B    | PPU Background Scrolling Offset   (Write-only, twice) |
@@ -104,13 +104,19 @@ Memory = {
       address &= 0x2007;
 
       // $2002: PPU Status Register
-      if(address == 0x2002) return PPU.get_PPUSTATUS();
+      if(address == 0x2002) {//console.log("get_PPUSTATUS"); 
+        return PPU.get_PPUSTATUS(); 
+      }
 
       // $2004: Sprite Memory read
-      else if(address == 0x2004) return PPU.get_OAMDATA();
+      else if(address == 0x2004) {//console.log("get_OAMDATA"); 
+        return PPU.get_OAMDATA(); 
+      }
       
       // $2007: VRAM read
-      else if(address == 0x2007) return PPU.get_PPUDATA();
+      else if(address == 0x2007) {//console.log("get_PPUDATA"); 
+        return PPU.get_PPUDATA(); 
+      }
     }
     
     // Sound and I/O registers ($4000-$401F)
@@ -147,25 +153,39 @@ Memory = {
       address &= 0x2007;
       
       // $2000: PPU Control register 1 (write-only)
-      if(address == 0x2000) PPU.set_PPUCTRL(value);
+      if(address == 0x2000)
+        //console.log("set_PPUCTRL"), 
+        PPU.set_PPUCTRL(value);
 
       // $2001: PPU Control register 2 (write-only)
-      else if(address == 0x2001) PPU.set_PPUMASK(value);
+      else if(address == 0x2001) 
+        //console.log("set_PPUMASK"), 
+        PPU.set_PPUMASK(value);
 
       // $2003: Set Sprite RAM address (write-only)
-      else if(address == 0x2003) PPU.set_OAMADDR(value);
+      else if(address == 0x2003)
+        //console.log("set_OAMADDR"), 
+        PPU.set_OAMADDR(value);
 
       // $2004: Write to Sprite RAM
-      else if(address == 0x2004) PPU.set_OAMDATA(value);
+      else if(address == 0x2004)
+        //console.log("set_OAMDATA"), 
+        PPU.set_OAMDATA(value);
 
       // $2005: Screen Scroll offsets (write-only)
-      else if(address == 0x2005) PPU.set_PPUSCROLL(value);
+      else if(address == 0x2005)
+        //console.log("set_PPUSCROLL"), 
+        PPU.set_PPUSCROLL(value);
 
       // $2006: Set VRAM address (write-only)
-      else if(address == 0x2006) PPU.set_PPUADDR(value);
+      else if(address == 0x2006)
+        //console.log("set_PPUADDR"), 
+        PPU.set_PPUADDR(value);
 
       // $2007: Write to VRAM
-      else if(address == 0x2007) PPU.set_PPUDATA(value);
+      else if(address == 0x2007)
+        //console.log("set_PPUDATA"), 
+        PPU.set_PPUDATA(value);
       
     }
     

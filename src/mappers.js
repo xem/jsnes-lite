@@ -69,9 +69,9 @@ var Mapper = {
   load_chr_rom_bank: (bank, address) => {
     // bank %= ROM.chr_rom_count // why JSNES does it?
     if(ROM.chr_rom_count > 0){
-      PPU.triggerRendering();
+      //PPU.triggerRendering();
       Mapper.copy_array(ROM.chr_rom[bank], PPU.mem, address);
-      Mapper.copy_array(ROM.chr_rom_tiles[bank], PPU.ptTile, address / 16);
+      //Mapper.copy_array(ROM.chr_rom_tiles[bank], PPU.ptTile, address / 16);
     }
   },
   

@@ -19,14 +19,14 @@ var Tile = {
 
     var i, j, byte1, byte2;
 
-    // For each line k
+    // For each line i
     for(i = 0; i < 8; i++){
       
       // Read two bytes
       byte1 = chr_rom[position * 16 + i];
       byte2 = chr_rom[position * 16 + i + 8];
       
-      // For each pixel l
+      // For each pixel j
       for(j = 0; j < 8; j++){
         
         // Set its color

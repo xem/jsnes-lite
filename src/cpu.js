@@ -29,12 +29,14 @@ var CPU = {
   
   // Clock 1 CPU cycle
   // During this time, 3 PPU cycles and 1 APU cycles take place
+  
   tick: () => {
     PPU.tick();
     PPU.tick();
     PPU.tick();
     APU.tick();
   },
+  
 
   // Emulates a single CPU instruction, returns the number of cycles
   emulate: () => {
@@ -52,12 +54,13 @@ var CPU = {
         }
         case 1: {
           // NMI:
-          console.log("nmi");
+          //console.log("nmi");
           myop(1);
           break;
         }
         case 2: {
           // Reset:
+          console.log("reset");
           myop(2);
           break;
         }

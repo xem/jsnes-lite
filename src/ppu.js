@@ -7,6 +7,8 @@
 // - https://austinmorlan.com/posts/nes_rendering_overview/
 // - https://www.gridbugs.org/zelda-screen-transitions-are-undefined-behaviour/
 // - https://www.youtube.com/watch?v=wfrNnwJrujw
+// - https://gist.githubusercontent.com/adamveld12/d0398717145a2c8dedab/raw/750246a2b4ee4bb722c2b5bb5e6ba997cdf74661/spec.md
+// - https://emulation.gametechwiki.com/index.php/Famicom_Color_Palette
 
 // PPU memory map (64KiB):
 
@@ -17,7 +19,7 @@
 // | $0000-$0FFF | 4KiB  | Pattern Table 0 (256 tiles) "left page"                   |
 // | $1000-$1FFF | 4KiB  | Pattern Table 1 (256 tiles) "right page"                  |
 // +-------------+-------+-----------------------------------------------------------+
-// | $2000-$2FFF | 4KiB  | RAM (2KiB in the NES, 2KiB in the cartridge or mirrored): |
+// | $2000-$2FFF | 4KiB  | VRAM (2KiB in the NES, 2KiB in the cartridge or mirrored):|
 // | $2000-$23BF | 960B  | Name Table 0                                              |
 // | $23C0-$23FF | 24B   | Attribute Table 0                                         |
 // | $2400-$27BF | 960B  | Name Table 1                                              |
@@ -32,11 +34,11 @@
 // | $3F00-$3F1F | 32B   | Palettes:                                                 |
 // | $3F00       | 1B    | Universal background color                                |
 // | $3F01-$3F03 | 3B    | Background palette 0                                      |
-// | $3F04       | 1B    | N/A (used by background palette 1 during forced blanking) |
+// | $3F04       | 1B    | Used by Background palette 1 only during forced blanking  |
 // | $3F05-$3F07 | 3B    | Background palette 1                                      |
-// | $3F08       | 1B    | N/A (used by background palette 2 during forced blanking) |
+// | $3F08       | 1B    | Used by background palette 2 only during forced blanking  |
 // | $3F09-$3F0B | 3B    | Background palette 2                                      |
-// | $3F0C       | 1B    | N/A (used by background palette 3 during forced blanking) |
+// | $3F0C       | 1B    | Used by background palette 3 only during forced blanking  |
 // | $3F0D-$3F0F | 3B    | Background palette 3                                      |
 // | $3F10       | 1B    | Mirror of $3F00                                           |
 // | $3F11-$3F13 | 3B    | Sprite palette 0                                          |
@@ -60,26 +62,34 @@
 // | $00-$FF     | 256B  | Sprites properties (4 bytes for each)                     |
 // +-------------+-------+-----------------------------------------------------------+
 
-// Each PPU cycle advances the rendering by one pixel on a 341*262px grid
+// Each PPU cycle advances the rendering by one pixel on a 341 * 262px grid
   
-//        x=0                 x=256      x=340
-//      --+--------------------+----------+
-//  y=-1  | pre-render scanline| prepare *|
-//      --+--------------------| sprites  |
-//  y=0   | visible area       | for the  |
-//        | (this is rendered  | next     |
-//  y=239 |   on the screen)   | scanline |
-//      --+--------------------+----------|
-//  y=240 | idle                          |
-//      --+-------------------------------|
-//  y=241 | vertical blanking (idle)      |
-//        | 20 scanlines long             |
-//  y=260 |                               |
-//      --+-------------------------------+
+//         x=0                 x=256               x=340
+//      ---+-------------------+-------------------+
+//  y=0    | visible area      | Horizontal blank  |
+//         | (this is rendered | (prepare sprites  |
+//  y=239  | on the screen)    | for the next      |
+//  y=239  |                   | scanline)         |
+//      ---+-------------------+-------------------|
+//  y=240  | idle scanline                         |
+//      ---+---------------------------------------|
+//  y=241  | vertical blanking (idle)              |
+//         | 20 scanlines long on NTSC consoles    |
+//  y=260  | 70 scanlines on PAL consoles          |
+//      ---+-----------------------------------+---+
+//  y=261  | pre-render scanline               | * |
+//  or -1 -+-----------------------------------+---+
 
 // (*) When background rendering is enabled, the pre-render scanline alternates between 340 and 341 pixels at each frame
 
+// NB:
+// - Writes on registers PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR are ignored during the 29,658 first CPU clocks after reset on NTSC
+// - PPU writes are ignored 33,132 cycles after power up and reset on PAL
+
 var PPU = {
+  
+  // System palette (64 RGB colors)
+  systemPalette: "666134124214414413412421441341241142144000000000aaa38a34a53a93aa38a34a53a938a34a33a53a9000000000fff6be67e96ed6ee6be67e96ed6be67e66e96ed555000000fffcefccfdcffcffcefccfdcffcefccfccfdcffbbb000000".match(/.../g).map(c=>parseInt(c[2]+c[2]+c[1]+c[1]+c[0]+c[0],16)),
   
   // PPU settings
   // ------------
@@ -87,125 +97,33 @@ var PPU = {
   // Reset PPU
   reset: () => {
     var i;
+    
+    // Screen coordinates
+    PPU.scanline = 0;
+    PPU.dot = 0;
 
     // Reset PPU memory and OAM
     PPU.mem = [];
-    PPU.spriteMem = [];
+    PPU.OAM = [];
     
     for(i = 0; i < 0x3FFF; i++){
       PPU.mem[i] = 0;
     }
-    for(i = 0; i < 0x100; i++){
-      PPU.spriteMem[i] = 0;
-    }
-
-    // VRAM I/O:
-    PPU.vramAddress = null;
-    PPU.vramTmpAddress = null;
-    PPU.vramBufferedReadValue = 0;
-    PPU.firstWrite = true;
-
-    // SPR-RAM I/O:
-    PPU.sramAddress = 0;
-
-    PPU.nametable_mirroring = -1;
-    PPU.requestEndFrame = false;
-    PPU.nmiOk = false;
-    PPU.dummyCycleToggle = false;
-    PPU.validTileData = false;
-    PPU.nmiCounter = 0;
-    PPU.scanlineAlreadyRendered = null;
     
-    // Control Flags Register 1
-    PPU.PPUCTRL_V = 0;
-    PPU.PPUCTRL_H = 0;
-    PPU.PPUCTRL_B = 0;
-    PPU.PPUCTRL_S = 0;
-    PPU.PPUCTRL_I = 0;
-    PPU.PPUCTRL_N = 0;
-
-    // Control Flags Register 2
-    PPU.PPUMASK_RGB = 0;
-    PPU.PPUMASK_s = 0;
-    PPU.PPUMASK_b = 0;
-    PPU.PPUMASK_M = 0;
-    PPU.PPUMASK_m = 0;
-    PPU.PPUMASK_G = 0;
+    for(i = 0; i < 0x100; i++){
+      PPU.OAM[i] = 0;
+    }
     
     // Status register
     PPU.PPUSTATUS_low = 0;
     PPU.PPUSTATUS_O = 0;
     PPU.PPUSTATUS_S = 0;
     PPU.PPUSTATUS_V = 0;
+
+    PPU.buffer = []; // 256 * 240
+    PPU.vramBuffer = []; // 512 * 480
     
-
-    // Counters:
-    PPU.cntFV = 0;
-    PPU.cntV = 0;
-    PPU.cntH = 0;
-    PPU.cntVT = 0;
-    PPU.cntHT = 0;
-
-    // Registers:
-    PPU.regFV = 0;
-    PPU.PPUCTRL_Y = 0;
-    PPU.PPUCTRL_X = 0;
-    PPU.PPUCTRL_YT = 0;
-    PPU.PPUCTRL_XT = 0;
-    PPU.regFH = 0;
-
-    // These are temporary variables used in rendering and sound procedures.
-    // Their states outside of those procedures can be ignored.
-    // TODO: the use of this is a bit weird, investigate
-    PPU.curNt = null;
-
-    // Variables used when rendering:
-    PPU.attrib = new Array(32);
-    PPU.buffer = new Array(256 * 240);
-    PPU.bgbuffer = new Array(256 * 240);
-    PPU.pixrendered = new Array(256 * 240);
-
-    PPU.validTileData = null;
-
-    PPU.scantile = new Array(32);
-
-    // Initialize misc vars:
-    PPU.scanline = 0;
-    PPU.lastRenderedScanline = -1;
-    PPU.curX = 0;
-
-    // Sprite data:
-    PPU.sprX = new Array(64); // X coordinate
-    PPU.sprY = new Array(64); // Y coordinate
-    PPU.sprTile = new Array(64); // Tile Index (into pattern table)
-    PPU.sprCol = new Array(64); // Upper two bits of color
-    PPU.vertFlip = new Array(64); // Vertical Flip
-    PPU.horiFlip = new Array(64); // Horizontal Flip
-    PPU.bgPriority = new Array(64); // Background priority
-    PPU.spr0HitX = 0; // Sprite #0 hit X coordinate
-    PPU.spr0HitY = 0; // Sprite #0 hit Y coordinate
-    PPU.hitSpr0 = false;
-
-    // Palette data:
-    PPU.sprPalette = new Array(16);
-    PPU.bgPalette = new Array(16);
-
-    // Create pattern table tile buffers:
-    PPU.ptTile = new Array(512);
-    for(i = 0; i < 512; i++){
-      PPU.ptTile[i] = { pixels: [] };
-    }
-
-    // Create nametable buffers:
-    // Name table data:
-    PPU.ntable1 = new Array(4);
-    PPU.nameTable = new Array(4);
-    for(i = 0; i < 4; i++){
-      PPU.nameTable[i] = new NameTable(32, 32, "Nt" + i);
-    }
-
-    PPU.palTable = new PaletteTable();
-    PPU.palTable.loadNTSCPalette();
+    PPU.PPUDATA_read_buffer = 0;
 
     PPU.set_PPUCTRL(0);
     PPU.set_PPUMASK(0);
@@ -214,32 +132,11 @@ var PPU = {
   // Set nametable mirroring
   setMirroring: mirroring => {
     if(mirroring != PPU.nametable_mirroring){
+      
+      // Render previous scanlines
+      PPU.render();
+
       PPU.nametable_mirroring = mirroring;
-      PPU.triggerRendering();
-
-      // Horizontal mirroring
-      if(mirroring === 1){
-        PPU.ntable1[0] = 0;
-        PPU.ntable1[1] = 0;
-        PPU.ntable1[2] = 1;
-        PPU.ntable1[3] = 1;
-      }
-
-      // Vertical mirroring
-      else if(mirroring === 0){
-        PPU.ntable1[0] = 0;
-        PPU.ntable1[1] = 1;
-        PPU.ntable1[2] = 0;
-        PPU.ntable1[3] = 1;
-      }
-
-      // Four-screen mirroring
-      else {
-        PPU.ntable1[0] = 0;
-        PPU.ntable1[1] = 1;
-        PPU.ntable1[2] = 2;
-        PPU.ntable1[3] = 3;
-      }
     }
   },
   
@@ -292,50 +189,74 @@ var PPU = {
   // Read a byte in from memory
   load: address => {
     //console.log("load",PPU.mirrorAddress(address).toString(16).padStart(2,0),PPU.mem[PPU.mirrorAddress(address)].toString(16).padStart(2,0))
+    //console.log("load", address.toString(16), PPU.mem[PPU.mirrorAddress(address)].toString(16));
     return PPU.mem[PPU.mirrorAddress(address)];
   },
 
   // Write a byte in memory
   write: (address, value) => {
+    //console.log("write", address.toString(16), value.toString(16));
     address = PPU.mirrorAddress(address);
-    console.log("write",address.toString(16).padStart(2,0),value.toString(16).padStart(2,0))
     PPU.mem[address] = value;
+  },
+  
+  drawVram: () => {
+    
+    // Background
+    bg = PPU.load(0x3F00);
+    
+    for(i = 0; i < 512; i++){
+      for(j = 0; j < 480; j++){
+        PPU.vramBuffer[(j*512+i)] = PPU.systemPalette[bg];
+      }
+    }
+    
+    var X, Y;
 
-    // $0000-$1FFF: write in CHR-RAM
-    if(address < 0x2000){
-      PPU.patternWrite(address, value);
-    }
+    for(X = 0; X < 64; X++){
+      for(Y = 0; Y < 60; Y++){
+        
+        // Name table address
+        var nametable = 0x2000 + (0x800 * (Y >= 30)) + (0x400 * (X >= 32));
     
-    // $2000-$2FFF: write in name table
-    else if(address >= 0x2000 && address < 0x23c0){
-      PPU.nameTableWrite(PPU.ntable1[0], address - 0x2000, value);
+        // Attribute table coordinates
+        var X2 = ~~((X%32) / 4);
+        var Y2 = ~~((Y%30) / 4);
+        var attribute = PPU.load(nametable + 0x3C0 + Y2 * 8 + X2);
+        
+        // Coordinates of the 2x2 tiles subgroup inside the 4x4 tiles group represented by this attribute byte
+        var X3 = ~~(((X%32) % 4) / 2);
+        var Y3 = ~~(((Y%30) % 4) / 2);
+        
+        // Bits representing this subgroup in the attribute byte
+        var bits = ((attribute >> (4*Y3 + 2*X3)) & 0b11);
+        
+        // Subpalette represented by these bits
+        var colors = [
+          PPU.systemPalette[PPU.load(0x3F00)],
+          PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 1)],
+          PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 2)],
+          PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 3)],
+        ];
+        
+        var byte1, byte2, pixel;
+        for(var i = 0; i < 8; i++){
+          byte1 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y%30)*32+(X%32)) * 16 + i);
+          byte2 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y%30)*32+(X%32)) * 16 + i + 8); 
+          for(var j = 0; j < 8; j++){
+            
+            // Pixel value
+            pixel = ((byte2 >> (7 - j)) & 1) * 2 + ((byte1 >> (7 - j)) & 1);
+            PPU.vramBuffer[(Y*8+i)*512+(X*8+j)] = colors[pixel];
+          }
+        }
+      }
     }
-    else if(address >= 0x23c0 && address < 0x2400){
-      PPU.attribTableWrite(PPU.ntable1[0], address - 0x23c0, value);
-    }
-    else if(address >= 0x2400 && address < 0x27c0){
-      PPU.nameTableWrite(PPU.ntable1[1], address - 0x2400, value);
-    }
-    else if(address >= 0x27c0 && address < 0x2800){
-      PPU.attribTableWrite(PPU.ntable1[1], address - 0x27c0, value);
-    }
-    else if(address >= 0x2800 && address < 0x2bc0){
-      PPU.nameTableWrite(PPU.ntable1[2], address - 0x2800, value);
-    }
-    else if(address >= 0x2bc0 && address < 0x2c00){
-      PPU.attribTableWrite(PPU.ntable1[2], address - 0x2bc0, value);
-    }
-    else if(address >= 0x2c00 && address < 0x2fc0){
-      PPU.nameTableWrite(PPU.ntable1[3], address - 0x2c00, value);
-    }
-    else if(address >= 0x2fc0 && address < 0x3000){
-      PPU.attribTableWrite(PPU.ntable1[3], address - 0x2fc0, value);
-    }
+    vramctx.strokeStyle = "#555";
+    vramctx.lineWidth = 4;
     
-    // $3F00-$3F20: write in palettes memory
-    else if(address >= 0x3f00 && address < 0x3f20){
-      PPU.updatePalettes();
-    }
+    vramctx.rect(2,2,256,240);
+    vramctx.stroke();
   },
   
   // CPU registers
@@ -344,9 +265,10 @@ var PPU = {
   // $2000 (write): set PPU Control Register 1 (PPUCTRL)
   set_PPUCTRL: value => {
     
-    console.log("PPUCTRL",value.toString(2).padStart(8,0));
+    //console.log("PPUCTRL",value.toString(2).padStart(8,0));
     
-    PPU.triggerRendering();
+    // Render previous scanlines
+    PPU.render();
 
     PPU.PPUCTRL_V = (value >> 7) & 1; // bit 7: trigger a NMI on VBlank
                                       // bit 6: ignored (external pin)
@@ -362,9 +284,10 @@ var PPU = {
   // $2001 (write): set PPU Control Register 2 (PPUMASK)
   set_PPUMASK: value => {
     
-    console.log("PPUMASK",value.toString(2).padStart(8,0));
+    //console.log("PPUMASK",value.toString(2).padStart(8,0));
     
-    PPU.triggerRendering();
+    // Render previous scanlines
+    PPU.render();
     
     PPU.PPUMASK_RGB = (value >> 5) & 7; // Bits 5-7: red/green/blue emphasis
     PPU.PPUMASK_s = (value >> 4) & 1;   // Bit 4: show sprites
@@ -372,7 +295,7 @@ var PPU = {
     PPU.PPUMASK_M = (value >> 2) & 1;   // Bit 2: show sprites on leftmost 8px-wide column 
     PPU.PPUMASK_m = (value >> 1) & 1;   // Bit 1: show background on leftmost 8px-wide column
     PPU.PPUMASK_G = value & 1;          // Bit 0: greyscale (all colors are ANDed with $30)
-    PPU.updatePalettes();
+    //PPU.updatePalettes();
   },
   
   // $2002 (read): get PPU Status Register (PPUSTATUS)
@@ -384,8 +307,8 @@ var PPU = {
   // - set when a non-zero pixel from sprite 0 overlaps a non-zero pixel of the background if both displays are enabled
   // - cleared at dot 1 of pre-render line
   // Bit 7 (V): VBlank
-  // - set at dot 1 of line 241
-  // - cleared after reading $2002 and at dot 1 of pre-render line
+  // - set at line 241
+  // - cleared after reading $2002 and at pre-render line
   update_PPUSTATUS: () => {
     CPU.mem[0x2002] = PPU.PPUSTATUS_low + (PPU.PPUSTATUS_O << 5) + (PPU.PPUSTATUS_S << 6) + (PPU.PPUSTATUS_V << 7);
   },
@@ -394,10 +317,10 @@ var PPU = {
     
     // Get status
     var tmp = CPU.mem[0x2002];
-    console.log("PPUSTATUS",CPU.mem[0x2002].toString(2).padStart(8,0));
+    //console.log("PPUSTATUS",CPU.mem[0x2002].toString(2).padStart(8,0));
     
-    // Reset address latch
-    PPU.firstWrite = true;
+    // Reset PPUSCROLL/PPUADDR latch
+    PPU.latch = 0;
     
     // Reset VBlank
     PPU.PPUSTATUS_V = 0;
@@ -411,46 +334,63 @@ var PPU = {
   
   // $2003 (write): set SPR-RAM Address Register (OAMADDR)
   set_OAMADDR: address => {
-    PPU.sramAddress = address;
+    PPU.OAMADDR = address;
   },
   
   // $2004h (read/write): SPR-RAM Data Register (OAMDATA, address must be set first)
   get_OAMDATA: () => {
-    return PPU.spriteMem[PPU.sramAddress];
+    return PPU.OAM[PPU.OAMADDR];
   },
 
   set_OAMDATA: value => {
-    PPU.spriteMem[PPU.sramAddress] = value;
-    PPU.spriteRamWriteUpdate(PPU.sramAddress, value);
-    PPU.sramAddress++; // Increment address
-    PPU.sramAddress %= 0x100;
+    
+    // Render previous scanlines
+    PPU.render();
+
+    PPU.OAM[PPU.OAMADDR] = value;
+    //PPU.spriteRamWriteUpdate(PPU.OAMADDR, value);
+    PPU.OAMADDR++;
+    PPU.OAMADDR %= 0x100;
   },
   
   // $2005 (write twice: vertical, then horizontal): PPU Background Scrolling Offset (PPUSCROLL)
   set_PPUSCROLL: value => {
-    PPU.triggerRendering();
+    
+    // Render previous scanlines
+    PPU.render();
 
-    if(PPU.firstWrite){
-      // First write, horizontal scroll:
-      PPU.PPUCTRL_XT = (value >> 3) & 31;
-      PPU.regFH = value & 7;
-    } else {
-      // Second write, vertical scroll:
-      PPU.regFV = value & 7;
-      PPU.PPUCTRL_YT = (value >> 3) & 31;
+    // Latch 0: first write, horizontal scroll
+    if(PPU.latch == 0){
+      //PPU.PPUCTRL_XT = (value >> 3) & 31;
+      //PPU.regFH = value & 7;
+
+    } 
+    
+    // Latch 1: second write, vertical scroll
+    else {
+      //PPU.regFV = value & 7;
+      //PPU.PPUCTRL_YT = (value >> 3) & 31;
     }
-    PPU.firstWrite = !PPU.firstWrite;
+    
+    // Toggle latch
+    PPU.latch ^= 1;
   },
   
-  // $2006 (write twice: high byte, then low byte): VRAM Address Register (PPUADDR)
+  // $2006 (write twice): VRAM Address Register (PPUADDR)
   set_PPUADDR: address => {
-    if(PPU.firstWrite){
-      PPU.regFV = (address >> 4) & 3;
-      PPU.PPUCTRL_Y = (address >> 3) & 1;
-      PPU.PPUCTRL_X = (address >> 2) & 1;
-      PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 7) | ((address & 3) << 3);
-    } else {
-      PPU.triggerRendering();
+    
+    // Latch 0: first write, high byte of address 
+    if(PPU.latch == 0){
+      //PPU.regFV = (address >> 4) & 3;
+      //PPU.PPUCTRL_Y = (address >> 3) & 1;
+      //PPU.PPUCTRL_X = (address >> 2) & 1;
+      //PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 7) | ((address & 3) << 3);
+      PPU.PPUADDR = address << 8;
+    } 
+    
+    // Latch 1: second write, low byte of address 
+    else {
+      /*PPU.render();
       PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 24) | ((address >> 5) & 7);
       PPU.PPUCTRL_XT = address & 31;
       PPU.cntFV = PPU.regFV;
@@ -458,32 +398,58 @@ var PPU = {
       PPU.cntH = PPU.PPUCTRL_X;
       PPU.cntVT = PPU.PPUCTRL_YT;
       PPU.cntHT = PPU.PPUCTRL_XT;
-      PPU.checkSprite0(PPU.scanline - 20);
+      PPU.checkSprite0(PPU.scanline - 20);*/
+      PPU.PPUADDR += address;
+      
     }
-    PPU.firstWrite = !PPU.firstWrite;
+    
+    // Toggle latch
+    PPU.latch ^= 1;
+    
     // Invoke mapper latch:
-    PPU.cntsToAddress();
+    //PPU.cntsToAddress();*/
   },
   
   // $2007h (read/write): VRAM Data Register (PPUDATA, address must be set first)
   set_PPUDATA: value => {
-    PPU.triggerRendering();
-    PPU.cntsToAddress();
+    
+    // Render previous scanlines
+    PPU.render();
+    
+    /*PPU.cntsToAddress();
     PPU.regsToAddress();
     PPU.write(PPU.vramAddress, value);
     // Increment by either 1 or 32, depending on d2 of Control Register 1:
     PPU.vramAddress += PPU.PPUCTRL_I === 1 ? 32 : 1;
     PPU.regsFromAddress();
-    PPU.cntsFromAddress();
+    PPU.cntsFromAddress();*/
+    
+    PPU.write(PPU.PPUADDR, value);
+    //console.log("set PPUDATA", PPU.mem[PPU.PPUADDR].toString(16), value.toString(16))
+    PPU.PPUADDR += PPU.PPUCTRL_I === 1 ? 32 : 1; 
   },
   
   get_PPUDATA: () => {
+    
     var tmp;
+    
+    // PPUADDR between $0000 and $3EFF: buffered read
+    // Each read fills a 1-byte buffer and returns the value previously stored in that buffer
+    if(PPU.PPUADDR <= 0x3F00){
+      tmp = PPU.PPUDATA_read_buffer;
+      PPU.PPUDATA_read_buffer = PPU.load(PPU.PPUADDR);
+    }
+    
+    // PPUADDR higher than $3EFF: direct read
+    else {
+      tmp = PPU.load(PPU.PPUADDR);
+    }
+    
+    /*var tmp;
     PPU.cntsToAddress();
     PPU.regsToAddress();
 
     // If address is in range 0x0000-0x3EFF, return buffered values:
-    if(PPU.vramAddress <= 0x3eff){
       tmp = PPU.vramBufferedReadValue;
       PPU.vramBufferedReadValue = PPU.load(PPU.vramAddress);
       // Increment by either 1 or 32, depending on d2 of Control Register 1:
@@ -502,19 +468,30 @@ var PPU = {
     PPU.cntsFromAddress();
     PPU.regsFromAddress();
 
+    return tmp;*/
+    //console.log("get PPUDATA", PPU.mem[PPU.PPUADDR].toString(16), tmp.toString(16))
+    PPU.PPUADDR += PPU.PPUCTRL_I === 1 ? 32 : 1; 
     return tmp;
   },
 
-  // $4014: (write): set the 256 bytes of Sprite RAM at once from CPU memory (OAMDMA)
+  // $4014: (write): copy a 256-byte page of CPU memory into the OAM memory (OAMDMA)
   set_OAMDMA: value => {
-    var baseAddress = value * 0x100;
-    var data;
-    for(var i = PPU.sramAddress; i < 256; i++){
-      data = CPU.mem[baseAddress + i];
-      PPU.spriteMem[i] = data;
-      PPU.spriteRamWriteUpdate(i, data);
+    
+    // Render previous scanlines
+    PPU.render();
+    
+    var tmp = value * 0x100;
+    //var data;
+    for(var i = PPU.OAMADDR; i < 256; i++){
+      PPU.OAM[i] = CPU.mem[tmp + i];;
+      //PPU.spriteRamWriteUpdate(i, data);
     }
-    CPU.haltCycles(513);
+    
+    // Consume 513 CPU cycles
+    // TODO: 514 cycles when the current CPU cycle is odd
+    for(i = 0; i < 513; i++){
+      CPU.tick();
+    }
   },
   
   // Clock
@@ -522,55 +499,85 @@ var PPU = {
   
   // Clock one PPU cycle
   tick: () => {
-    // TODO
+    
+    //console.log("tick", PPU.scanline, PPU.dot);
+    
+    PPU.dot++;
+    
+    // The PPU renders one dot (pixel) per cycle
+    // At the end of each scanline (341 dots), a new scanline starts
+    // TODO: the PPU reads the name table 33 times per scanline, some mappers need this to work properly
+    // TODO: On every odd frame, when background rendering is enabled, the pre-render line has 340 dots instead of 341
+    if(PPU.dot > 341){
+      PPU.dot = 0;
+      PPU.scanline++;
+
+      // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
+      if(PPU.scanline == 241){
+        //console.log("tick", PPU.scanline, PPU.dot);
+        PPU.PPUSTATUS_V = 1;
+        PPU.update_PPUSTATUS()
+        CPU.requestIrq(CPU.NMI);
+        
+        // Render previous scanlines
+        PPU.render();
+        
+        NES.onFrame(PPU.buffer, PPU.vramBuffer);
+      }
+      
+      // VBlank ends at the pre-render scanline
+      else if(PPU.scanline == 261){
+        PPU.PPUSTATUS_V = 0;
+        PPU.update_PPUSTATUS()
+      }
+      
+      // When the pre-render scanline is completed, a new frame starts
+      else if(PPU.scanline == 262){
+        PPU.scanline = 0;
+      }
+    }
+    
+    
+    
+    // Handle Sprite 0 hit
+    /*if(PPU.dot === PPU.spr0HitX && PPU.f_spVisibility === 1 && PPU.scanline - 21 === PPU.spr0HitY){
+      PPU.PPUSTATUS_S = 1;
+      PPU.update_PPUSTATUS();
+    }*/
+
+    // Handle VBlank request (end of current frame)
+    /*if(PPU.requestEndFrame){
+      PPU.nmiCounter--;
+      if(PPU.nmiCounter === 0){
+        PPU.requestEndFrame = false;
+        PPU.startVBlank();
+        break loop;
+      }
+    }*/
+
+    
   },
   
   // Frame rendering
   // ---------------
   
+  // When the CHR-ROM, VRAM, palettes, OAM or registers are updated, render all the previous scanlines
+  // If render() has been called in the same frame, draw the scanlines between the two calls
+  // Otherwise, start at the first scanline
+  
+  render: () => {
+    
+  }
+  
   // Start a new frame
-  startFrame: () => {
+  /*startFrame: () => {
     
     // Background color
-    var //bgColor = 0;
+    // TODO: handle greyscale / emphasis
+    //var bgColor = PPU.bgPalette[0];
 
-    //if(PPU.PPUMASK_G === 0){
-      // Color display.
-      // PPUMASK_RGB determines color emphasis.
-      // Use first entry of image palette as BG color.
-      bgColor = PPU.bgPalette[0];
-    //}
-    /* else {
-      // Monochrome display.
-      // PPUMASK_RGB determines the bg color.
-      switch (PPU.PPUMASK_RGB){
-        case 0:
-          // Black
-          bgColor = 0x00000;
-          break;
-        case 1:
-          // Green
-          bgColor = 0x00ff00;
-          break;
-        case 2:
-          // Blue
-          bgColor = 0xff0000;
-          break;
-        case 3:
-          // Invalid. Use black.
-          bgColor = 0x000000;
-          break;
-        case 4:
-          // Red
-          bgColor = 0x0000ff;
-          break;
-        default:
-          // Invalid. Use black.
-          bgColor = 0x0;
-      }*/
-    //}
-
-    var buffer = PPU.buffer;
+    // Fill frame buffer with background image
+    /*var buffer = PPU.buffer;
     var i;
     for(i = 0; i < 256 * 240; i++){
       buffer[i] = bgColor;
@@ -578,12 +585,12 @@ var PPU = {
     var pixrendered = PPU.pixrendered;
     for(i = 0; i < pixrendered.length; i++){
       pixrendered[i] = 65;
-    }
+    }* /
   },
   
   startVBlank: () => {
     // Do NMI:
-    CPU.requestIrq(CPU.NMI);
+    /*CPU.requestIrq(CPU.NMI);
 
     // Make sure everything is rendered:
     if(PPU.lastRenderedScanline < 239){
@@ -598,17 +605,18 @@ var PPU = {
 
     // Reset scanline counter:
     PPU.lastRenderedScanline = -1;
+   * /
   },
 
   endScanline: () => {
-    switch (PPU.scanline){
+    /*switch (PPU.scanline){
       case 19:
         // Dummy scanline.
         // May be variable length:
         if(PPU.dummyCycleToggle){
           // Remove dead cycle at end of scanline,
           // for next scanline:
-          PPU.curX = 1;
+          PPU.dot = 1;
           PPU.dummyCycleToggle = !PPU.dummyCycleToggle;
         }
         break;
@@ -700,12 +708,12 @@ var PPU = {
 
     PPU.scanline++;
     PPU.regsToAddress();
-    PPU.cntsToAddress();
+    PPU.cntsToAddress();* /
   },
 
   endFrame: () => {
-    var i, x, y;
-    var buffer = PPU.buffer;
+    //var i, x, y;
+    //var buffer = PPU.buffer;
 
     // Draw spr#0 hit coordinates:
     /*if(PPU.showSpr0Hit){
@@ -737,12 +745,12 @@ var PPU = {
           buffer[(i << 8) + PPU.spr0HitX] = 0x55ff55;
         }
       }
-    }*/
+    }* /
 
     // This is a bit lazy..
     // if either the sprites or the background should be clipped,
     // both are clipped after rendering is finished.
-    if(
+    /*if(
       //PPU.clipToTvSize ||
       PPU.PPUMASK_m === 0 ||
       PPU.PPUMASK_M === 0
@@ -774,13 +782,13 @@ var PPU = {
       }
     //}
 
-    NES.onFrame(buffer);
+    NES.onFrame(buffer, PPU.vramBuffer);* /
   },
 
 
   // Updates the scroll registers from a new VRAM address.
   regsFromAddress: () => {
-    var address = (PPU.vramTmpAddress >> 8) & 0xff;
+    /*var address = (PPU.vramTmpAddress >> 8) & 0xff;
     PPU.regFV = (address >> 4) & 7;
     PPU.PPUCTRL_Y = (address >> 3) & 1;
     PPU.PPUCTRL_X = (address >> 2) & 1;
@@ -788,12 +796,12 @@ var PPU = {
 
     address = PPU.vramTmpAddress & 0xff;
     PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 24) | ((address >> 5) & 7);
-    PPU.PPUCTRL_XT = address & 31;
+    PPU.PPUCTRL_XT = address & 31;* /
   },
 
   // Updates the scroll registers from a new VRAM address.
   cntsFromAddress: () => {
-    var address = (PPU.vramAddress >> 8) & 0xff;
+    /*var address = (PPU.vramAddress >> 8) & 0xff;
     PPU.cntFV = (address >> 4) & 3;
     PPU.cntV = (address >> 3) & 1;
     PPU.cntH = (address >> 2) & 1;
@@ -801,11 +809,11 @@ var PPU = {
 
     address = PPU.vramAddress & 0xff;
     PPU.cntVT = (PPU.cntVT & 24) | ((address >> 5) & 7);
-    PPU.cntHT = address & 31;
+    PPU.cntHT = address & 31;* /
   },
 
   regsToAddress: () => {
-    var b1 = (PPU.regFV & 7) << 4;
+    /*var b1 = (PPU.regFV & 7) << 4;
     b1 |= (PPU.PPUCTRL_Y & 1) << 3;
     b1 |= (PPU.PPUCTRL_X & 1) << 2;
     b1 |= (PPU.PPUCTRL_YT >> 3) & 3;
@@ -813,11 +821,11 @@ var PPU = {
     var b2 = (PPU.PPUCTRL_YT & 7) << 5;
     b2 |= PPU.PPUCTRL_XT & 31;
 
-    PPU.vramTmpAddress = ((b1 << 8) | b2) & 0x7fff;
+    PPU.vramTmpAddress = ((b1 << 8) | b2) & 0x7fff;* /
   },
 
   cntsToAddress: () => {
-    var b1 = (PPU.cntFV & 7) << 4;
+    /*var b1 = (PPU.cntFV & 7) << 4;
     b1 |= (PPU.cntV & 1) << 3;
     b1 |= (PPU.cntH & 1) << 2;
     b1 |= (PPU.cntVT >> 3) & 3;
@@ -825,11 +833,11 @@ var PPU = {
     var b2 = (PPU.cntVT & 7) << 5;
     b2 |= PPU.cntHT & 31;
 
-    PPU.vramAddress = ((b1 << 8) | b2) & 0x7fff;
+    PPU.vramAddress = ((b1 << 8) | b2) & 0x7fff;* /
   },
 
   incTileCounter: count => {
-    for(var i = count; i !== 0; i--){
+    /*for(var i = count; i !== 0; i--){
       PPU.cntHT++;
       if(PPU.cntHT === 32){
         PPU.cntHT = 0;
@@ -847,12 +855,12 @@ var PPU = {
           }
         }
       }
-    }
+    }* /
   },
 
   // Finish rendering the current frame, I think?
-  triggerRendering: () => {
-    if(PPU.scanline >= 21 && PPU.scanline <= 260){
+  render: () => {
+    /*if(PPU.scanline >= 21 && PPU.scanline <= 260){
       // Render sprites, and combine:
       PPU.renderFramePartially(
         PPU.lastRenderedScanline + 1,
@@ -861,11 +869,11 @@ var PPU = {
 
       // Set last rendered scanline:
       PPU.lastRenderedScanline = PPU.scanline - 21;
-    }
+    }* /
   },
 
   renderFramePartially: (startScan, scanCount) => {
-    if(PPU.PPUMASK_s === 1){
+    /*if(PPU.PPUMASK_s === 1){
       PPU.renderSpritesPartially(startScan, scanCount, true);
     }
 
@@ -889,18 +897,18 @@ var PPU = {
       PPU.renderSpritesPartially(startScan, scanCount, false);
     }
 
-    PPU.validTileData = false;
+    PPU.validTileData = false;* /
   },
 
   renderBgScanline: (bgbuffer, scan) => {
-    var baseTile = PPU.PPUCTRL_B === 0 ? 0 : 256;
+    /*var baseTile = PPU.PPUCTRL_B === 0 ? 0 : 256;
     var destIndex = (scan << 8) - PPU.regFH;
 
-    PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
+    //PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
 
     PPU.cntHT = PPU.PPUCTRL_XT;
     PPU.cntH = PPU.PPUCTRL_X;
-    PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
+    //PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
 
     if(scan < 240 && scan - PPU.cntFV >= 0){
       var tscanoffset = PPU.cntFV << 3;
@@ -967,7 +975,7 @@ var PPU = {
           PPU.cntHT = 0;
           PPU.cntH++;
           PPU.cntH %= 2;
-          PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
+          //PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
         }
       }
 
@@ -985,14 +993,14 @@ var PPU = {
         PPU.cntVT = 0;
         PPU.cntV++;
         PPU.cntV %= 2;
-        PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
+        //PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
       } else if(PPU.cntVT === 32){
         PPU.cntVT = 0;
       }
 
       // Invalidate fetched data:
       PPU.validTileData = false;
-    }
+    }* /
   },
 
   renderSpritesPartially: (startscan, scancount, bgPri) => {
@@ -1095,11 +1103,11 @@ var PPU = {
           }
         }
       }
-    }*/
+    }* /
   },
 
   checkSprite0: scan => {
-    PPU.spr0HitX = -1;
+    /*PPU.spr0HitX = -1;
     PPU.spr0HitY = -1;
 
     var toffset;
@@ -1242,51 +1250,53 @@ var PPU = {
       }
     }
 
-    return false;
+    return false;* /
   },
 
   // Reads data from $3f00 to $3f20
   // into the two buffered palettes.
   updatePalettes: () => {
-    for(var i = 0; i < 16; i++){
+    /*for(var i = 0; i < 16; i++){
       PPU.bgPalette[i] = PPU.palTable.getEntry(PPU.load(0x3f00 + i));
       PPU.sprPalette[i] = PPU.palTable.getEntry(PPU.load(0x3f10 + i));
     }
+    //console.log(PPU.bgPalette);
+    * /
   },
 
   // Updates the internal pattern
   // table buffers with this new byte.
   // In vNES, there is a version of this with 4 arguments which isn't used.
   patternWrite: (address, value) => {
-    var bank = address > 0x1000 ? 1 : 0;
+    /*var bank = address > 0x1000 ? 1 : 0;
     var tileIndex = Math.floor(address / 16);
     ROM.chr_rom[bank][address % 0x1000] = value;
     ROM.chr_rom_tiles[bank][tileIndex] = { pixels: [] };
-    Tile.decode(ROM.chr_rom_tiles[bank][tileIndex], ROM.chr_rom[bank], tileIndex);
+    Tile.decode(ROM.chr_rom_tiles[bank][tileIndex], ROM.chr_rom[bank], tileIndex);* /
   },
 
   // Updates the internal name table buffers
   // with this new byte.
   nameTableWrite: (index, address, value) => {
     //console.log(PPU.nameTable, index, PPU.nameTable[index]);
-    PPU.nameTable[index].tile[address] = value;
+    //PPU.nameTable[index].tile[address] = value;
 
     // Update Sprite #0 hit:
     //updateSpr0Hit();
-    PPU.checkSprite0(PPU.scanline - 20);
+    //PPU.checkSprite0(PPU.scanline - 20);
   },
 
   // Updates the internal pattern
   // table buffers with this new attribute
   // table byte.
   attribTableWrite: (index, address, value) => {
-    PPU.nameTable[index].writeAttrib(address, value);
+    //PPU.nameTable[index].writeAttrib(address, value);
   },
 
   // Updates the internally buffered sprite
   // data with this new byte of info.
   spriteRamWriteUpdate: (address, value) => {
-    var tIndex = Math.floor(address / 4);
+    /*var tIndex = Math.floor(address / 4);
 
     if(tIndex === 0){
       //updateSpr0Hit();
@@ -1318,14 +1328,14 @@ var PPU = {
     CPU.requestIrq(CPU.NMI);
   },
 
-  isPixelWhite: (x, y) => {
-    PPU.triggerRendering();
+  isPixelWhite: (x, y) => {* /
+    PPU.render();
     return PPU.buffer[(y << 8) + x] === 0xffffff;
   },
 };
 
 var NameTable = function(width, height, name){
-  this.width = width;
+  /*this.width = width;
   this.height = height;
   this.name = name;
 
@@ -1334,11 +1344,11 @@ var NameTable = function(width, height, name){
   for(var i = 0; i < width * height; i++){
     this.tile[i] = 0;
     this.attrib[i] = 0;
-  }
+  }* /
 };
 
 NameTable.prototype = {
-  getTileIndex: function(x, y){
+  /*getTileIndex: function(x, y){
     return this.tile[y * this.width + x];
   },
 
@@ -1366,17 +1376,17 @@ NameTable.prototype = {
         }
       }
     }
-  },
+  },* /
 };
 
 var PaletteTable = function(){
-  this.curTable = new Array(64);
+  /*this.curTable = new Array(64);
   this.emphTable = new Array(8);
-  this.currentEmph = -1;
+  this.currentEmph = -1;* /
 };
 
 PaletteTable.prototype = {
-  reset: function(){
+  /*reset: function(){
     this.setEmphasis(0);
   },
 
@@ -1415,9 +1425,9 @@ PaletteTable.prototype = {
       // Calculate table:
       for(i = 0; i < 64; i++){
         col = this.curTable[i];
-        r = Math.floor(this.getRed(col) * rFactor);
-        g = Math.floor(this.getGreen(col) * gFactor);
-        b = Math.floor(this.getBlue(col) * bFactor);
+        r = Math.floor(this.getRed(col))// * rFactor);
+        g = Math.floor(this.getGreen(col))// * gFactor);
+        b = Math.floor(this.getBlue(col))// * bFactor);
         this.emphTable[emph][i] = this.getRgb(r, g, b);
       }
     }
@@ -1450,5 +1460,5 @@ PaletteTable.prototype = {
 
   getRgb: function(r, g, b){
     return (r << 16) | (g << 8) | b;
-  }
+  }*/
 };
