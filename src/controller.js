@@ -15,11 +15,11 @@ Controller.BUTTON_LEFT = 6;
 Controller.BUTTON_RIGHT = 7;
 
 Controller.prototype = {
-  buttonDown: function(key){
+  keydown: function(key){
     this.state[key] = 0x41;
   },
 
-  buttonUp: function(key){
+  keyup: function(key){
     this.state[key] = 0x40;
   }
 };

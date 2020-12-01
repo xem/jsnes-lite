@@ -13,12 +13,22 @@ var NES = {
   // Initialize the emulator
   init: options => {
     
-    // Frame handler
-    NES.onFrame = options.onFrame;
+    // Display
+    NES.frameCtx = options.frameCanvas.getContext("2d");
+    NES.vramCtx = options.vramCanvas.getContext("2d");
+    NES.frameData = NES.frameCtx.getImageData(0,0,256,240);
+    NES.vramData = NES.vramCtx.getImageData(0,0,512,480);
+    NES.frameBuffer = new ArrayBuffer(NES.frameData.data.length);
+    NES.vramBuffer = new ArrayBuffer(NES.vramData.data.length);
+    NES.frameBuffer8 = new Uint8ClampedArray(NES.frameBuffer);
+    NES.vramBuffer8 = new Uint8ClampedArray(NES.vramBuffer);
+    NES.frameBuffer32 = new Uint32Array(NES.frameBuffer);
+    NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
+    
     NES.preferredFrameRate = 60;  // frames per second
     NES.frameTime = 16.67;        // ms per frame
     
-    // Audio handler
+    // Audio
     NES.onAudioSample = options.onAudioSample;
     NES.sampleRate = 44100;
     
@@ -88,11 +98,11 @@ var NES = {
     PPU.drawVram();
   },
   
-  buttonDown: (controller, button) => {
-    NES.controllers[controller].buttonDown(button);
+  keydown: (controller, button) => {
+    NES.controllers[controller].keydown(button);
   },
 
-  buttonUp: (controller, button) => {
-    NES.controllers[controller].buttonUp(button);
+  keyup: (controller, button) => {
+    NES.controllers[controller].keyup(button);
   }
 }

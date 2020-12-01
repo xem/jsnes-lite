@@ -1,7 +1,7 @@
 ﻿<!doctype html>
 <title>JSNES lite</title>
-<canvas id=canvas width=256 height=240 style="background: #000"></canvas>
-<canvas id=vram width=512 height=480 style="background: #000"></canvas>
+<canvas id=frameCanvas width=256 height=240 style="background: #000"></canvas>
+<canvas id=vramCanvas width=512 height=480 style="background: #000"></canvas>
 <br><b>Controls</b>: arrow keys + X + C + Start + Esc
 <p><button id=dk onclick='play("roms/dk.nes")'>DK</button>
 <button id=smb onclick='play("roms/smb.nes")'>SMB</button>
@@ -36,20 +36,6 @@ body { font: 14px Arial; background:#888; }
 // If hostname is localhost, show ROM shortcuts
 document.body.className = location.host.includes("localhost") ? "local" : "prod";
 
-// Canvas + framebuffer
-// ====================
-
-var ctx = canvas.getContext("2d");
-var vramctx = vram.getContext("2d");
-var imageData = ctx.getImageData(0,0,256,240);
-var vramData = ctx.getImageData(0,0,512,480);
-var frameBuffer = new ArrayBuffer(imageData.data.length);
-var vramBuffer = new ArrayBuffer(vramData.data.length);
-var frameBuffer8 = new Uint8ClampedArray(frameBuffer);
-var vramBuffer8 = new Uint8ClampedArray(vramBuffer);
-var frameBuffer32 = new Uint32Array(frameBuffer);
-var vramBuffer32 = new Uint32Array(vramBuffer);
-
 // AudioContext + audio buffers + samples lists
 // =============================================
 
@@ -83,29 +69,10 @@ start = file => {
 
   // Initialize JSNES
   NES.init({
-    
-    // Display each new frame on the canvas
-    onFrame: function(frameBuffer, vramBuffer){
-      var i = 0;
-      for(var x = 0; x < 256; ++x){
-        for(var y = 0; y < 240; ++y){
-          i = y * 256 + x;
-          frameBuffer32[i] = 0xff000000 | frameBuffer[i];
-        }
-      }
-      //imageData.data.set(frameBuffer8);
-      //ctx.putImageData(imageData, 0, 0);
-      
-      for(var x = 0; x < 512; ++x){
-        for(var y = 0; y < 480; ++y){
-          i = y * 512 + x;
-          vramBuffer32[i] = 0xff000000 | vramBuffer[i];
-        }
-      }
-      //console.log(vramBuffer);
-      vramData.data.set(vramBuffer8);
-      vramctx.putImageData(vramData, 0, 0);
-    },
+  
+    // Display
+    frameCanvas,
+    vramCanvas,
     
     // Add new audio samples to the Audio buffers
     onAudioSample: function(left, right){
@@ -183,32 +150,25 @@ start = file => {
   //console.log(Date.now());
   //NES.frame();
   
-  //clearInterval(interval);
-  //interval = setInterval(NES.frame, 16);
-  
-  //PPU.drawVram()
+  clearInterval(interval);
+  interval = setInterval(NES.frame, 16);
   
   // Controller #1 keys listeners
-  onkeydown = e => {
-    if(e.keyCode == 37) NES.buttonDown(1, Controller.BUTTON_LEFT);
-    else if(e.keyCode == 38) NES.buttonDown(1, Controller.BUTTON_UP);
-    else if(e.keyCode == 39) NES.buttonDown(1, Controller.BUTTON_RIGHT);
-    else if(e.keyCode == 40) NES.buttonDown(1, Controller.BUTTON_DOWN);
-    else if(e.keyCode == 88) NES.buttonDown(1, Controller.BUTTON_A); // X
-    else if(e.keyCode == 67) NES.buttonDown(1, Controller.BUTTON_B); // C
-    else if(e.keyCode == 27) NES.buttonDown(1, Controller.BUTTON_SELECT);
-    else if(e.keyCode == 13) NES.buttonDown(1, Controller.BUTTON_START);
-  }
-
-  onkeyup = e => {
-    if(e.keyCode == 37) NES.buttonUp(1, Controller.BUTTON_LEFT);
-    else if(e.keyCode == 38) NES.buttonUp(1, Controller.BUTTON_UP);
-    else if(e.keyCode == 39) NES.buttonUp(1, Controller.BUTTON_RIGHT);
-    else if(e.keyCode == 40) NES.buttonUp(1, Controller.BUTTON_DOWN);
-    else if(e.keyCode == 88) NES.buttonUp(1, Controller.BUTTON_A); // X
-    else if(e.keyCode == 67) NES.buttonUp(1, Controller.BUTTON_B); // C
-    else if(e.keyCode == 27) NES.buttonUp(1, Controller.BUTTON_SELECT);
-    else if(e.keyCode == 13) NES.buttonUp(1, Controller.BUTTON_START);
+  onkeydown = onkeyup = e => {
+    console.log(e);
+    NES[e.type](
+      1,
+      {
+        37: Controller.BUTTON_LEFT,
+        38: Controller.BUTTON_UP,
+        39: Controller.BUTTON_RIGHT,
+        40: Controller.BUTTON_DOWN,
+        88: Controller.BUTTON_A, // X
+        67: Controller.BUTTON_B, // C
+        27: Controller.BUTTON_SELECT,
+        13: Controller.BUTTON_START
+      }[e.keyCode]
+    )
   }
 };
 
@@ -231,9 +191,4 @@ play = path => {
     start(file.responseText);
   }
 }
-
-// Debug
-// =====
-
-vramctx = vram.getContext("2d");
 </script>

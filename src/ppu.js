@@ -88,8 +88,8 @@
 
 var PPU = {
   
-  // System palette (64 RGB colors)
-  systemPalette: "666134124214414413412421441341241142144000000000aaa38a34a53a93aa38a34a53a938a34a33a53a9000000000fff6be67e96ed6ee6be67e96ed6be67e66e96ed555000000fffcefccfdcffcffcefccfdcffcefccfccfdcffbbb000000".match(/.../g).map(c=>parseInt(c[2]+c[2]+c[1]+c[1]+c[0]+c[0],16)),
+  // System palette (64 RGB colors, decoded in AABBGGRR format)
+  systemPalette: "666134124214414413412421441341241142144000000000aaa38a34a53a93aa38a34a53a938a34a33a53a9000000000fff6be67e96ed6ee6be67e96ed6be67e66e96ed555000000fffcefccfdcffcffcefccfdcffcefccfccfdcffbbb000000".match(/.../g).map(c=>parseInt("ff"+c[2]+c[2]+c[1]+c[1]+c[0]+c[0], 16)),
   
   // PPU settings
   // ------------
@@ -120,8 +120,8 @@ var PPU = {
     PPU.PPUSTATUS_S = 0;
     PPU.PPUSTATUS_V = 0;
 
-    PPU.buffer = []; // 256 * 240
-    PPU.vramBuffer = []; // 512 * 480
+    //PPU.buffer = []; // 256 * 240
+    //PPU.vramBuffer = []; // 512 * 480
     
     PPU.PPUDATA_read_buffer = 0;
 
@@ -202,12 +202,12 @@ var PPU = {
   
   drawVram: () => {
     
-    // Background
-    bg = PPU.load(0x3F00);
+    // Background color
+    var bg = PPU.load(0x3F00);
     
     for(i = 0; i < 512; i++){
       for(j = 0; j < 480; j++){
-        PPU.vramBuffer[(j*512+i)] = PPU.systemPalette[bg];
+        NES.vramBuffer32[(j*512+i)] = PPU.systemPalette[bg];
       }
     }
     
@@ -232,6 +232,7 @@ var PPU = {
         var bits = ((attribute >> (4*Y3 + 2*X3)) & 0b11);
         
         // Subpalette represented by these bits
+        // TODO: use first color of subpalette at index 0 during forced blanking
         var colors = [
           PPU.systemPalette[PPU.load(0x3F00)],
           PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 1)],
@@ -247,16 +248,63 @@ var PPU = {
             
             // Pixel value
             pixel = ((byte2 >> (7 - j)) & 1) * 2 + ((byte1 >> (7 - j)) & 1);
-            PPU.vramBuffer[(Y*8+i)*512+(X*8+j)] = colors[pixel];
+            NES.vramBuffer32[(Y*8+i)*512+(X*8+j)] = colors[pixel];
           }
         }
       }
     }
-    vramctx.strokeStyle = "#555";
-    vramctx.lineWidth = 4;
+  },
+  
+  drawScanline: Y => {
+    //console.log(0);
+    // Background color
+    var bg = PPU.load(0x3F00);
     
-    vramctx.rect(2,2,256,240);
-    vramctx.stroke();
+    for(var X = 0; X < 256; X++){
+      NES.frameBuffer32[Y*256+X] = PPU.systemPalette[bg];
+    }
+
+    // For each pixel
+    for(X = 0; X < 256; X++){
+        
+      // Name table address
+      // TODO: scroll
+      var nametable = 0x2000;// + (0x800 * (Y >= 30)) + (0x400 * (X >= 32));
+  
+      // Attribute table coordinates
+      // TODO: scroll
+      var X2 = ~~(X / 8); // [0-32]
+      var Y2 = ~~(Y / 8); // [0-30]
+      var attribute = PPU.load(nametable + 0x3C0 + ~~(Y2/4) * 8 + ~~(X2/4)); // [0-64]
+      
+      // Coordinates of the 2x2 tiles subgroup inside the 4x4 tiles group represented by this attribute byte
+      // TODO: scroll
+      var X3 = ~~((X2 % 4) / 2); // [0-1]
+      var Y3 = ~~((Y2 % 4) / 2); // [0-1]
+      
+      //console.log(X,Y,X2,Y2,X3,Y3);
+      // Bits representing this subgroup in the attribute byte
+      var bits = ((attribute >> (4*Y3 + 2*X3)) & 0b11);
+      
+      // Subpalette represented by these bits
+      // TODO: use first color of subpalette at index 0 during forced blanking
+      // TODO: don't recompute subpalettes while they don't change if perfs suffer
+      var colors = [
+        PPU.systemPalette[PPU.load(0x3F00)],
+        PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 1)],
+        PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 2)],
+        PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 3)],
+      ];
+      
+      // Background tile pixels
+      var byte1, byte2, pixel;
+      byte1 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+Y2*32+X2) * 16 + (Y%8));
+      byte2 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+Y2*32+X2) * 16 + (Y%8) + 8); 
+        
+      // Pixel value
+      pixel = ((byte2 >> (7 - (X%8))) & 1) * 2 + ((byte1 >> (7 - (X%8))) & 1);
+      NES.frameBuffer32[Y*256+X] = colors[pixel];
+    }
   },
   
   // CPU registers
@@ -512,17 +560,27 @@ var PPU = {
       PPU.dot = 0;
       PPU.scanline++;
 
+      // Visible scanlines
+      if(PPU.scanline < 241){
+        PPU.drawScanline(PPU.scanline-1);
+      }
+      
       // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
-      if(PPU.scanline == 241){
+      else if(PPU.scanline == 241){
         //console.log("tick", PPU.scanline, PPU.dot);
         PPU.PPUSTATUS_V = 1;
         PPU.update_PPUSTATUS()
         CPU.requestIrq(CPU.NMI);
         
-        // Render previous scanlines
+        // Render previous scanlines on frame buffer
         PPU.render();
         
-        NES.onFrame(PPU.buffer, PPU.vramBuffer);
+        // Output frameBuffer on canvas
+        NES.frameData.data.set(NES.frameBuffer8);
+        NES.frameCtx.putImageData(NES.frameData, 0, 0);
+      
+        NES.vramData.data.set(NES.vramBuffer8);
+        NES.vramCtx.putImageData(NES.vramData, 0, 0);
       }
       
       // VBlank ends at the pre-render scanline
