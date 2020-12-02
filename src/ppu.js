@@ -256,25 +256,27 @@ var PPU = {
   },
   
   drawScanline: Y => {
-    //console.log(0);
-    // Background color
-    var bg = PPU.load(0x3F00);
     
+    var bg = PPU.load(0x3F00);
+    var scroll_x = PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X;
+    var scroll_y = PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y;
+    //document.title = scroll_y;
+    
+    /*
+    // For each pixel of the scanline
     for(var X = 0; X < 256; X++){
+      
+      // Set the background color
       NES.frameBuffer32[Y*256+X] = PPU.systemPalette[bg];
-    }
 
-    // For each pixel
-    for(X = 0; X < 256; X++){
-        
       // Name table address
       // TODO: scroll
-      var nametable = 0x2000;// + (0x800 * (Y >= 30)) + (0x400 * (X >= 32));
+      var nametable = 0x2000 + (0x800 * ((Y + scroll_y) >= 30)) + (0x400 * ((X + scroll_x) >= 32));
   
       // Attribute table coordinates
       // TODO: scroll
-      var X2 = ~~(X / 8); // [0-32]
-      var Y2 = ~~(Y / 8); // [0-30]
+      var X2 = ~~((X + scroll_x) / 8); // [0-32]
+      var Y2 = ~~((Y + scroll_y) / 8); // [0-30]
       var attribute = PPU.load(nametable + 0x3C0 + ~~(Y2/4) * 8 + ~~(X2/4)); // [0-64]
       
       // Coordinates of the 2x2 tiles subgroup inside the 4x4 tiles group represented by this attribute byte
@@ -304,6 +306,10 @@ var PPU = {
       // Pixel value
       pixel = ((byte2 >> (7 - (X%8))) & 1) * 2 + ((byte1 >> (7 - (X%8))) & 1);
       NES.frameBuffer32[Y*256+X] = colors[pixel];
+    }*/
+    
+    for(var X = 0; X < 256; X++){
+      NES.frameBuffer32[Y*256+X] = NES.vramBuffer32[((Y + scroll_y) % 480) * 512 + ((X + scroll_x) % 512)];
     }
   },
   
@@ -409,13 +415,17 @@ var PPU = {
 
     // Latch 0: first write, horizontal scroll
     if(PPU.latch == 0){
+      PPU.PPUSCROLL_X = value;
       //PPU.PPUCTRL_XT = (value >> 3) & 31;
       //PPU.regFH = value & 7;
 
     } 
     
     // Latch 1: second write, vertical scroll
+    // TODO: if value is between 240 and 255, it becomes negative (-16 to -1)
     else {
+      
+      PPU.PPUSCROLL_Y = value;
       //PPU.regFV = value & 7;
       //PPU.PPUCTRL_YT = (value >> 3) & 31;
     }
@@ -574,6 +584,8 @@ var PPU = {
         
         // Render previous scanlines on frame buffer
         PPU.render();
+
+        vramCanvas.width ^= 0;
         
         // Output frameBuffer on canvas
         NES.frameData.data.set(NES.frameBuffer8);
@@ -581,6 +593,17 @@ var PPU = {
       
         NES.vramData.data.set(NES.vramBuffer8);
         NES.vramCtx.putImageData(NES.vramData, 0, 0);
+
+        var scroll_x = PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X;
+        var scroll_y = PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y;
+        NES.vramCtx.strokeStyle = "pink";
+        NES.vramCtx.lineWidth = 6;
+        NES.vramCtx.rect(scroll_x+3, scroll_y+3, 256, 240);
+        NES.vramCtx.rect(scroll_x+3 - 512, scroll_y+3, 256, 240);
+        NES.vramCtx.rect(scroll_x+3, scroll_y+3 - 480, 256, 240);
+        NES.vramCtx.rect(scroll_x+3 - 512, scroll_y+3 - 480, 256, 240);
+        NES.vramCtx.stroke();
+
       }
       
       // VBlank ends at the pre-render scanline
@@ -592,6 +615,7 @@ var PPU = {
       // When the pre-render scanline is completed, a new frame starts
       else if(PPU.scanline == 262){
         PPU.scanline = 0;
+
       }
     }
     
