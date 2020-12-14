@@ -6,6 +6,10 @@
 <p><button id=dk onclick='play("roms/dk.nes")'>DK</button>
 <button id=smb onclick='play("roms/smb.nes")'>SMB</button>
 <button id=ic onclick='play("roms/ic.nes")'>IC</button>
+<button id=eb onclick='play("roms/eb.nes")'>EB</button>
+<button id=dw onclick='play("roms/dw.nes")'>DW</button>
+<button id=dw onclick='play("roms/lr.nes")'>LR</button>
+<button id=g onclick='play("roms/g.nes")'>G</button>
 <button onclick='play("roms/nestest.nes")'>nestest</button>
 <button onclick='play("roms/instr_test.nes")'>instr_test</button>
 <button><label for=fileInput>Browse...</label></button>
@@ -15,8 +19,8 @@
 <label><input type=radio name=tv value=pal>PAL</label>
 <style>
 body { font: 14px Arial; background:#888; }
-#dk, #smb, #ic { display: none; }
-.local #dk, .local #smb, .local #ic { display: inline; }
+#dk, #smb, #ic, #eb { display: none; }
+.local #dk, .local #smb, .local #ic, .local #eb, .local #g, .local #dw, .local #lr { display: inline; }
 </style>
 <script src="src/nes.js"></script>
 <script src="src/rom.js"></script>
@@ -27,7 +31,6 @@ body { font: 14px Arial; background:#888; }
 <script src="src/mycpu.js"></script>
 <script src="src/papu.js"></script>
 <script src="src/ppu.js"></script>
-<script src="src/tile.js"></script>
 <script>
 
 // Debug mode
@@ -35,6 +38,7 @@ body { font: 14px Arial; background:#888; }
 
 // If hostname is localhost, show ROM shortcuts
 document.body.className = location.host.includes("localhost") ? "local" : "prod";
+debug = 0;
 
 // AudioContext + audio buffers + samples lists
 // =============================================
@@ -99,10 +103,11 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
+  debug = 1;
   NES.frame();
-
+  
   // Uncomment for SMB/IC title screen
-  NES.frame();
+  /*NES.frame();
   NES.frame();
   NES.frame();
   NES.frame();
@@ -146,7 +151,7 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
-  NES.frame();
+  NES.frame();*/
   //console.log(Date.now());
   //NES.frame();
   
@@ -155,7 +160,7 @@ start = file => {
   
   // Controller #1 keys listeners
   onkeydown = onkeyup = e => {
-    console.log(e);
+    //console.log(e);
     NES[e.type](
       1,
       {

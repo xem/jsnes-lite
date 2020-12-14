@@ -76,14 +76,15 @@ var NES = {
   // Render a new frame
   frame: () => {
     
+    //NES.vramCtx.clearRect(0,0,512,512);
+    vramCanvas.width ^= 0;
+    
     var cycles;
     NES.cpu_cycles = 0;
+    PPU.endFrame = 0;
     
-    // Repeatedly execute CPU instructions until the frame is rendered
-    // On NTSC systems, the CPU executes a maximum of 29,781 cycles per frame,
-    // equivalent to 89,342 dots rendered by the PPU (3x more)
-    // On PAL, it's 33,248 for the CPU and 106,392 for the PPU (3.2x more) because VBlank is bigger
-    while(NES.cpu_cycles < 29781){
+    // Repeatedly execute CPU instructions until the frame is fully rendered
+    while(!PPU.endFrame){
       
       // Execute a CPU instruction, count elapsed CPU cycles
       cycles = CPU.emulate();
@@ -95,7 +96,6 @@ var NES = {
         CPU.tick();
       }
     }
-    PPU.drawVram();
   },
   
   keydown: (controller, button) => {

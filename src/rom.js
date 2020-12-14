@@ -152,7 +152,7 @@ var ROM = {
 
         for(j = 0; j < 256; j++){
           ROM.chr_rom_tiles[i][j] = { pixels: [] };
-          Tile.decode(ROM.chr_rom_tiles[i][j], ROM.chr_rom[i], j);
+          //Tile.decode(ROM.chr_rom_tiles[i][j], ROM.chr_rom[i], j);
         }
       }
     }

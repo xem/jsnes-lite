@@ -106,6 +106,9 @@ var PPU = {
     PPU.mem = [];
     PPU.OAM = [];
     
+    // VRAM pixel buffer for current scanline (to handle sprite priority)
+    PPU.vramPixelBuffer = [];
+
     for(i = 0; i < 0x3FFF; i++){
       PPU.mem[i] = 0;
     }
@@ -114,19 +117,18 @@ var PPU = {
       PPU.OAM[i] = 0;
     }
     
-    // Status register
+    // PPU Status register
     PPU.PPUSTATUS_low = 0;
     PPU.PPUSTATUS_O = 0;
     PPU.PPUSTATUS_S = 0;
     PPU.PPUSTATUS_V = 0;
 
-    //PPU.buffer = []; // 256 * 240
-    //PPU.vramBuffer = []; // 512 * 480
-    
-    PPU.PPUDATA_read_buffer = 0;
-
+    // PPU Ctrl and Mask registers
     PPU.set_PPUCTRL(0);
     PPU.set_PPUMASK(0);
+
+    // PPU Data register buffer
+    PPU.PPUDATA_read_buffer = 0;
   },
   
   // Set nametable mirroring
@@ -200,35 +202,23 @@ var PPU = {
     PPU.mem[address] = value;
   },
   
-  drawVram: () => {
-    
-    // Background color
-    var bg = PPU.load(0x3F00);
-    
-    for(i = 0; i < 512; i++){
-      for(j = 0; j < 480; j++){
-        NES.vramBuffer32[(j*512+i)] = PPU.systemPalette[bg];
-      }
-    }
-    
-    var X, Y;
-
-    for(X = 0; X < 64; X++){
-      for(Y = 0; Y < 60; Y++){
+  /*drawVram: () => {
+    for(var X = 0; X < 64; X++){
+      for(var Y = 0; Y < 60; Y++){
         
         // Name table address
-        var nametable = 0x2000 + (0x800 * (Y >= 30)) + (0x400 * (X >= 32));
+        var nametable = 0x2000 + (0x800 * (Y > 29)) + (0x400 * (X > 31));
     
         // Attribute table coordinates
-        var X2 = ~~((X%32) / 4);
-        var Y2 = ~~((Y%30) / 4);
+        var X2 = (X%32) >> 2; // [pixels 0-255 / 256-511 => tiles 0-32 => attributes 0-7]
+        var Y2 = (Y%30) >> 2; // [pixels 0-239 / 240-480 => tiles 0-30 => attributes 0-7]
         var attribute = PPU.load(nametable + 0x3C0 + Y2 * 8 + X2);
         
         // Coordinates of the 2x2 tiles subgroup inside the 4x4 tiles group represented by this attribute byte
-        var X3 = ~~(((X%32) % 4) / 2);
-        var Y3 = ~~(((Y%30) % 4) / 2);
+        var X3 = ((X%32) >> 1) & 1; // [pixels 0-31 / 32-63 / ... => tiles 0-3 / 4-7 / ... => coordinates 0-1]
+        var Y3 = ((Y%30) >> 1) & 1; // [pixels 0-31 / 32-63 / ... => tiles 0-3 / 4-7 / ... => coordinates 0-1]
         
-        // Bits representing this subgroup in the attribute byte
+        // Take the 2 bits representing this subgroup in the attribute byte
         var bits = ((attribute >> (4*Y3 + 2*X3)) & 0b11);
         
         // Subpalette represented by these bits
@@ -253,44 +243,39 @@ var PPU = {
         }
       }
     }
-  },
+  },*/
   
-  drawScanline: Y => {
+  // Render one line of the VRAM visualizer (background)
+  // And fill a buffer with the opaque pixels
+  drawVramScanline: y => {
     
-    var bg = PPU.load(0x3F00);
-    var scroll_x = PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X;
-    var scroll_y = PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y;
-    //document.title = scroll_y;
+    //console.log(y);
     
-    /*
-    // For each pixel of the scanline
-    for(var X = 0; X < 256; X++){
-      
-      // Set the background color
-      NES.frameBuffer32[Y*256+X] = PPU.systemPalette[bg];
+    var i, j, X, Y;
 
+    // Y tile coordinate
+    Y = ~~(y/8); 
+
+    // For each tile of the scanline
+    for(X = 0; X < 64; X++){
+      
       // Name table address
-      // TODO: scroll
-      var nametable = 0x2000 + (0x800 * ((Y + scroll_y) >= 30)) + (0x400 * ((X + scroll_x) >= 32));
-  
+      var nametable = 0x2000 + (0x800 * (Y > 29)) + (0x400 * (X > 31));
+      
       // Attribute table coordinates
-      // TODO: scroll
-      var X2 = ~~((X + scroll_x) / 8); // [0-32]
-      var Y2 = ~~((Y + scroll_y) / 8); // [0-30]
-      var attribute = PPU.load(nametable + 0x3C0 + ~~(Y2/4) * 8 + ~~(X2/4)); // [0-64]
+      var X2 = (X%32) >> 2; // pixels 0-255 / 256-511 => tiles 0-32 => attributes 0-7
+      var Y2 = (Y%30) >> 2; // pixels 0-239 / 240-480 => tiles 0-30 => attributes 0-7
+      var attribute = PPU.load(nametable + 0x3C0 + Y2 * 8 + X2);
       
       // Coordinates of the 2x2 tiles subgroup inside the 4x4 tiles group represented by this attribute byte
-      // TODO: scroll
-      var X3 = ~~((X2 % 4) / 2); // [0-1]
-      var Y3 = ~~((Y2 % 4) / 2); // [0-1]
+      var X3 = ((X%32) >> 1) & 1; // [pixels 0-31 / 32-63 / ... => tiles 0-3 / 4-7 / ... => coordinates 0-1]
+      var Y3 = ((Y%30) >> 1) & 1; // [pixels 0-31 / 32-63 / ... => tiles 0-3 / 4-7 / ... => coordinates 0-1]
       
-      //console.log(X,Y,X2,Y2,X3,Y3);
-      // Bits representing this subgroup in the attribute byte
+      // Take the 2 bits representing this subgroup in the attribute byte
       var bits = ((attribute >> (4*Y3 + 2*X3)) & 0b11);
       
       // Subpalette represented by these bits
       // TODO: use first color of subpalette at index 0 during forced blanking
-      // TODO: don't recompute subpalettes while they don't change if perfs suffer
       var colors = [
         PPU.systemPalette[PPU.load(0x3F00)],
         PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 1)],
@@ -298,19 +283,123 @@ var PPU = {
         PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 3)],
       ];
       
-      // Background tile pixels
       var byte1, byte2, pixel;
-      byte1 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+Y2*32+X2) * 16 + (Y%8));
-      byte2 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+Y2*32+X2) * 16 + (Y%8) + 8); 
-        
-      // Pixel value
-      pixel = ((byte2 >> (7 - (X%8))) & 1) * 2 + ((byte1 >> (7 - (X%8))) & 1);
-      NES.frameBuffer32[Y*256+X] = colors[pixel];
-    }*/
-    
-    for(var X = 0; X < 256; X++){
-      NES.frameBuffer32[Y*256+X] = NES.vramBuffer32[((Y + scroll_y) % 480) * 512 + ((X + scroll_x) % 512)];
+      
+      // Draw a line of each background tile
+      for(i = 0; i < 8; i++){
+        j = y % 8;
+        byte1 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y%30)*32+(X%32)) * 16 + j);
+        byte2 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y%30)*32+(X%32)) * 16 + j + 8); 
+          
+        // Pixel value
+        pixel = ((byte2 >> (7 - i)) & 1) * 2 + ((byte1 >> (7 - i)) & 1);
+        NES.vramBuffer32[(Y*8+j)*512+(X*8+i)] = colors[pixel];
+        if(pixel){
+          PPU.vramPixelBuffer[X*8+i] = colors[pixel];
+        }
+      }
     }
+  },
+  
+  // Render one final scanline on screen (background + sprites)
+  drawScanline: y => {
+
+    var i, x, spriteScanlineAddress, bits, colors;
+
+    // Sprites are drawn from front (0) to back (63) and can overlap.
+    // They are encoded on 4 bytes in the OAM memory:
+    // - Byte 0: Y coordinate
+    // - Byte 1: 8x8 mode: tile index in current tile bank, 8x16 mode: bit 0 = tile bank / bits 1-7 = top tile index
+    // - Byte 2: bits 0-1: palette (4-7) / bits 2-4: always 0 / bit 5: priority / bit 6: X flip / bit 7: Y flip
+    // - Byte 3: X coordinate
+    // A sprite can be either in the foreground or behind the background (if the priority bit is set)
+    // NB: if a sprite is behind the background and overlaps another sprite that is in the froreground, the other sprite will still be hidden by it
+    
+    
+    // TODO: sprite 0 hit
+    
+    // Find the sprites present in this scanline
+    var scanlineSprites = [];
+    for(i = 0; i < 64; i++){
+      if(y >= PPU.OAM[i*4] && y < PPU.OAM[i*4] + (PPU.PPUCTRL_H ? 16 : 8)){
+        scanlineSprites.push(i);
+      }
+    }
+    
+    // Set overflow flag if more than 8 sprites are present
+    if(scanlineSprites.length > 8) {
+      PPU.PPUSTATUS_O = 1;
+    }
+    
+    // Draw the scanline's pixels:
+    // - For each pixel, draw the sprite with the highest priority among the first 8
+    // - If the frontmost sprite is behind the background, draw a background tile pixel on top of it
+    for(x = 0; x < 256; x++){
+      
+      // Draw background tiles      
+      NES.frameBuffer32[y*256+x] = NES.vramBuffer32[((y+PPU.scroll_y)%480)*512+(x+PPU.scroll_x)%512];
+      
+      // For each sprite
+      for(i = Math.min(7, scanlineSprites.length-1); i >= 0; i--){
+        
+        // Retrieve the sprite's subpalette
+        bits = PPU.OAM[scanlineSprites[i]*4+2]&0b11;
+        colors = [
+          ,
+          PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 1)],
+          PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 2)],
+          PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 3)],
+        ];
+        
+        // If this sprite is present at this pixel
+        if(x >= PPU.OAM[scanlineSprites[i]*4+3] && x < PPU.OAM[scanlineSprites[i]*4+3] + 8){
+          
+          // Decode the current sprite scanline:
+          // Vertical flip
+          if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
+            spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - (8 - PPU.OAM[scanlineSprites[i]*4]));
+          }
+          
+          // No flip
+          else {
+            spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - PPU.OAM[scanlineSprites[i]*4]);
+          }
+          
+          byte1 = PPU.load(spriteScanlineAddress);
+          byte2 = PPU.load(spriteScanlineAddress + 8);
+          
+          // Decode current pixel:
+          // Horizontal flip
+          if(PPU.OAM[scanlineSprites[i]*4+2] & 0b1000000){
+            pixel = ((byte2 >> ((x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1) * 2 + ((byte1 >> ((x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1);
+          }
+          
+          // No flip
+          else{
+            pixel = ((byte2 >> (7 - (x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1) * 2 + ((byte1 >> (7 - (x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1);
+          }
+          
+          // 0: transparent pixel / 1-3: colored pixel
+          if(pixel){
+            
+            NES.frameBuffer32[y*256+x] = colors[pixel];
+            
+            // If priority bit is 1: draw current background tile pixel on top of sprite (if any)
+            if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && NES.frameBuffer32[y*256+x]){
+              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x] 
+            }
+          }
+        }
+      }
+    }
+    
+    //console.log(Y);
+    
+    // Background: copy pixels from VRAM visualizer
+    //for(var X = 0; X < 256; X++){
+    //  NES.frameBuffer32[Y*256+X] = NES.vramBuffer32[((Y+PPU.scroll_y)%480)*512+(X+PPU.scroll_x)%512];
+    //}
+
   },
   
   // CPU registers
@@ -356,13 +445,14 @@ var PPU = {
   // Bits 0-4: copy of last 5 bits written to a PPU register
   // Bit 5 (O): Sprite overflow
   // - set during sprite evaluation if more than 8 sprites in next scanline
-  // - cleared at dot 1 of pre-render line, but it's buggy on the NES)
+  // - cleared on pre-render line
+  // - it's buggy on the NES
   // Bit 6 (S): Sprite 0 hit
   // - set when a non-zero pixel from sprite 0 overlaps a non-zero pixel of the background if both displays are enabled
-  // - cleared at dot 1 of pre-render line
+  // - cleared on pre-render line
   // Bit 7 (V): VBlank
   // - set at line 241
-  // - cleared after reading $2002 and at pre-render line
+  // - cleared after reading PPUSTATUS and at pre-render line
   update_PPUSTATUS: () => {
     CPU.mem[0x2002] = PPU.PPUSTATUS_low + (PPU.PPUSTATUS_O << 5) + (PPU.PPUSTATUS_S << 6) + (PPU.PPUSTATUS_V << 7);
   },
@@ -564,14 +654,20 @@ var PPU = {
     
     // The PPU renders one dot (pixel) per cycle
     // At the end of each scanline (341 dots), a new scanline starts
-    // TODO: the PPU reads the name table 33 times per scanline, some mappers need this to work properly
+    // TODO: the PPU reads the name table 34 times per scanline (the 34th is garbage), some mappers need this to work properly
     // TODO: On every odd frame, when background rendering is enabled, the pre-render line has 340 dots instead of 341
     if(PPU.dot > 341){
       PPU.dot = 0;
       PPU.scanline++;
+      
+      // Scroll
+      PPU.scroll_x = (PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X) || 0;
+      PPU.scroll_y = (PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y) || 0;
 
       // Visible scanlines
       if(PPU.scanline < 241){
+        //console.log(PPU.scanline-1, PPU.scanline+PPU.scroll_y-1);
+        PPU.drawVramScanline(PPU.scanline+PPU.scroll_y-1);
         PPU.drawScanline(PPU.scanline-1);
       }
       
@@ -585,7 +681,7 @@ var PPU = {
         // Render previous scanlines on frame buffer
         PPU.render();
 
-        vramCanvas.width ^= 0;
+        //vramCanvas.width ^= 0;
         
         // Output frameBuffer on canvas
         NES.frameData.data.set(NES.frameBuffer8);
@@ -594,28 +690,28 @@ var PPU = {
         NES.vramData.data.set(NES.vramBuffer8);
         NES.vramCtx.putImageData(NES.vramData, 0, 0);
 
-        var scroll_x = PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X;
-        var scroll_y = PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y;
+        // Debug
         NES.vramCtx.strokeStyle = "pink";
         NES.vramCtx.lineWidth = 6;
-        NES.vramCtx.rect(scroll_x+3, scroll_y+3, 256, 240);
-        NES.vramCtx.rect(scroll_x+3 - 512, scroll_y+3, 256, 240);
-        NES.vramCtx.rect(scroll_x+3, scroll_y+3 - 480, 256, 240);
-        NES.vramCtx.rect(scroll_x+3 - 512, scroll_y+3 - 480, 256, 240);
+        NES.vramCtx.rect(PPU.scroll_x+3, PPU.scroll_y+3, 256, 240);
+        NES.vramCtx.rect(PPU.scroll_x+3 - 512, PPU.scroll_y+3, 256, 240);
+        NES.vramCtx.rect(PPU.scroll_x+3, PPU.scroll_y+3 - 480, 256, 240);
+        NES.vramCtx.rect(PPU.scroll_x+3 - 512, PPU.scroll_y+3 - 480, 256, 240);
         NES.vramCtx.stroke();
-
       }
       
-      // VBlank ends at the pre-render scanline
+      // VBlank ends at the pre-render scanline, and PPUSTATUS is reset
       else if(PPU.scanline == 261){
+        PPU.PPUSTATUS_O =
+        PPU.PPUSTATUS_S =
         PPU.PPUSTATUS_V = 0;
-        PPU.update_PPUSTATUS()
+        PPU.update_PPUSTATUS();
       }
       
       // When the pre-render scanline is completed, a new frame starts
       else if(PPU.scanline == 262){
         PPU.scanline = 0;
-
+        PPU.endFrame = 1;
       }
     }
     
