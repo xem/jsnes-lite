@@ -314,9 +314,7 @@ var PPU = {
     // - Byte 3: X coordinate
     // A sprite can be either in the foreground or behind the background (if the priority bit is set)
     // NB: if a sprite is behind the background and overlaps another sprite that is in the froreground, the other sprite will still be hidden by it
-    
-    
-    // TODO: sprite 0 hit
+    // When an opaque pixel of the sprite 0 overlaps an opaque pixel of the background and both displays are enabled, a "sprite 0 hit" is detected
     
     // Find the sprites present in this scanline
     var scanlineSprites = [];
@@ -325,6 +323,8 @@ var PPU = {
         scanlineSprites.push(i);
       }
     }
+    
+    //if(debug && scanlineSprites.length) console.log(y, scanlineSprites);
     
     // Set overflow flag if more than 8 sprites are present
     if(scanlineSprites.length > 8) {
@@ -343,7 +343,7 @@ var PPU = {
       for(i = Math.min(7, scanlineSprites.length-1); i >= 0; i--){
         
         // Retrieve the sprite's subpalette
-        bits = PPU.OAM[scanlineSprites[i]*4+2]&0b11;
+        bits = PPU.OAM[scanlineSprites[i]*4+2] & 0b11;
         colors = [
           ,
           PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 1)],
@@ -355,14 +355,50 @@ var PPU = {
         if(x >= PPU.OAM[scanlineSprites[i]*4+3] && x < PPU.OAM[scanlineSprites[i]*4+3] + 8){
           
           // Decode the current sprite scanline:
-          // Vertical flip
-          if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
-            spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - (8 - PPU.OAM[scanlineSprites[i]*4]));
+          // 16x8:
+          if(PPU.PPUCTRL_H){
+            
+            // Vertical flip: bottom tile is reversed on top, top tile is reversed on bottom
+            if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
+              
+              // Top tile
+              if(y < PPU.OAM[scanlineSprites[i]*4] + 8){
+                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + 8 + (16 - y + PPU.OAM[scanlineSprites[i]*4]);
+              }
+              
+              // Bottom tile
+              else {
+                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + (16 - y + PPU.OAM[scanlineSprites[i]*4]);
+              }
+            }
+            
+            // No flip
+            else {
+              
+              // Top tile
+              if(y < PPU.OAM[scanlineSprites[i]*4] + 8){
+                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + (y - PPU.OAM[scanlineSprites[i]*4]);
+              }
+              
+              // Bottom tile
+              else {
+                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + 8 + (y - PPU.OAM[scanlineSprites[i]*4]);
+              }
+            }
           }
           
-          // No flip
+          // 8x8:
           else {
-            spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - PPU.OAM[scanlineSprites[i]*4]);
+          
+            // Vertical flip
+            if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
+              spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - (8 - PPU.OAM[scanlineSprites[i]*4]));
+            }
+            
+            // No flip
+            else {
+              spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - PPU.OAM[scanlineSprites[i]*4]);
+            }
           }
           
           byte1 = PPU.load(spriteScanlineAddress);
@@ -381,12 +417,17 @@ var PPU = {
           
           // 0: transparent pixel / 1-3: colored pixel
           if(pixel){
-            
             NES.frameBuffer32[y*256+x] = colors[pixel];
             
+            // Sprite 0 hit
+            if(scanlineSprites[i] === 0 && !PPU.PPUSTATUS_S && pixel && PPU.vramPixelBuffer[x] && PPU.PPUMASK_s && PPU.PPUMASK_b){
+              PPU.PPUSTATUS_S = 1;
+              PPU.update_PPUSTATUS();
+            }
+            
             // If priority bit is 1: draw current background tile pixel on top of sprite (if any)
-            if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && NES.frameBuffer32[y*256+x]){
-              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x] 
+            if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && PPU.vramPixelBuffer[y*256+x]){
+              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x];
             }
           }
         }
@@ -448,7 +489,7 @@ var PPU = {
   // - cleared on pre-render line
   // - it's buggy on the NES
   // Bit 6 (S): Sprite 0 hit
-  // - set when a non-zero pixel from sprite 0 overlaps a non-zero pixel of the background if both displays are enabled
+  // - set when an opaque pixel from sprite 0 overlaps an opaque pixel of the background if both displays are enabled
   // - cleared on pre-render line
   // Bit 7 (V): VBlank
   // - set at line 241
