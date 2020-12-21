@@ -9,6 +9,7 @@
 // - https://www.youtube.com/watch?v=wfrNnwJrujw
 // - https://gist.githubusercontent.com/adamveld12/d0398717145a2c8dedab/raw/750246a2b4ee4bb722c2b5bb5e6ba997cdf74661/spec.md
 // - https://emulation.gametechwiki.com/index.php/Famicom_Color_Palette
+// - http://forums.nesdev.com/viewtopic.php?t=19259
 
 // PPU memory map (64KiB):
 
@@ -89,7 +90,25 @@
 var PPU = {
   
   // System palette (64 RGB colors, decoded in AABBGGRR format)
-  systemPalette: "666134124214414413412421441341241142144000000000aaa38a34a53a93aa38a34a53a938a34a33a53a9000000000fff6be67e96ed6ee6be67e96ed6be67e66e96ed555000000fffcefccfdcffcffcefccfdcffcefccfccfdcffbbb000000".match(/.../g).map(c=>parseInt("ff"+c[2]+c[2]+c[1]+c[1]+c[0]+c[0], 16)),
+  systemPalette: 
+  [
+    0xFF737373, 0xFF8c1821, 0xFFad0000, 0xFF9c0042,
+    0xFF73008c, 0xFF1000ad, 0xFF0000a5, 0xFF00087b,
+    0xFF002942, 0xFF004200, 0xFF005200, 0xFF103900,
+    0xFF5a3918, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFFbdbdbd, 0xFFef7300, 0xFFef3921, 0xFFf70084,
+    0xFFbd00bd, 0xFF5a00e7, 0xFF0029de, 0xFF084ace,
+    0xFF00738c, 0xFF009400, 0xFF00ad00, 0xFF399400,
+    0xFF8c8400, 0xFF101010, 0xFF000000, 0xFF000000,
+    0xFFffffff, 0xFFffbd39, 0xFFff945a, 0xFFff8ca5,
+    0xFFff7bf7, 0xFFb573ff, 0xFF6373ff, 0xFF399cff,
+    0xFF39bdf7, 0xFF10d684, 0xFF4ade4a, 0xFF9cff5a,
+    0xFFdeef00, 0xFF393939, 0xFF000000, 0xFF000000,
+    0xFFffffff, 0xFFffe7ad, 0xFFffd6c6, 0xFFffced6,
+    0xFFffc6ff, 0xFFdec6ff, 0xFFb5bdff, 0xFFaddeff,
+    0xFFa5e7ff, 0xFFa5ffe7, 0xFFbdf7ad, 0xFFceffb5,
+    0xFFf7ff9c, 0xFF8c8c8c, 0xFF000000, 0xFF000000
+  ],//"666134124214414413412421441341241142144000000000aaa38a34a53a93aa38a34a53a938a34a33a53a9000000000fff6be67e96ed6ee6be67e96ed6be67e66e96ed555000000fffcefccfdcffcffcefccfdcffcefccfccfdcffbbb000000".match(/.../g).map(c=>parseInt("ff"+c[2]+c[2]+c[1]+c[1]+c[0]+c[0], 16)),
   
   // PPU settings
   // ------------
@@ -126,6 +145,26 @@ var PPU = {
     // PPU Ctrl and Mask registers
     PPU.set_PPUCTRL(0);
     PPU.set_PPUMASK(0);
+    
+    // PPU Scroll internal registers:
+    // V: where to scroll on next line (0yyyNNYYYYYXXXXX)
+    PPU.V_yyy = 0;
+    PPU.V_NN = 0;
+    PPU.V_YYYYY = 0;
+    PPU.V_XXXXX = 0;
+    
+    // T: current scroll (0yyyNNYYYYYXXXXX)
+    PPU.T_yyy = 0;
+    PPU.T_NN = 0;
+    PPU.T_YYYYY = 0;
+    PPU.T_XXXXX = 0;
+
+    // Fine X scroll (xxx)
+    PPU.xxx = 0; 
+    
+    // Effective PPU scroll
+    PPU.scroll_x = 0; // (NN % 2) * 256 + XXXXX * 8 + xxx 
+    PPU.scroll_y = 0; // (NN >= 2) * 240 + YYYYY * 8 + yyy
 
     // PPU Data register buffer
     PPU.PPUDATA_read_buffer = 0;
@@ -136,7 +175,7 @@ var PPU = {
     if(mirroring != PPU.nametable_mirroring){
       
       // Render previous scanlines
-      PPU.render();
+      //PPU.render();
 
       PPU.nametable_mirroring = mirroring;
     }
@@ -392,7 +431,7 @@ var PPU = {
           
             // Vertical flip
             if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
-              spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - (8 - PPU.OAM[scanlineSprites[i]*4]));
+              spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + 8 - (y - PPU.OAM[scanlineSprites[i]*4]);
             }
             
             // No flip
@@ -427,7 +466,7 @@ var PPU = {
             
             // If priority bit is 1: draw current background tile pixel on top of sprite (if any)
             if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && PPU.vramPixelBuffer[y*256+x]){
-              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x];
+              //NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x];
             }
           }
         }
@@ -452,7 +491,7 @@ var PPU = {
     //console.log("PPUCTRL",value.toString(2).padStart(8,0));
     
     // Render previous scanlines
-    PPU.render();
+    //PPU.render();
 
     PPU.PPUCTRL_V = (value >> 7) & 1; // bit 7: trigger a NMI on VBlank
                                       // bit 6: ignored (external pin)
@@ -460,9 +499,12 @@ var PPU = {
     PPU.PPUCTRL_B = (value >> 4) & 1; // bit 4: background pattern table (0: $0000, 1: $1000)
     PPU.PPUCTRL_S = (value >> 3) & 1; // bit 3: sprite pattern table (0: $0000, 1: $1000, ignored in 8x16 mode)
     PPU.PPUCTRL_I = (value >> 2) & 1; // bit 2: VRAM address increment after reading from PPUDATA (0: 1, 1: 32)
-    PPU.PPUCTRL_N = value & 3;        // bits 0-1: nametable address ($2000 + $400 * N)
+    PPU.PPUCTRL_N = value & 0b11;     // bits 0-1: nametable address ($2000 + $400 * N)
     PPU.PPUCTRL_Y = (value >> 1) & 1; // Bit 1: adds 240 to Y scroll position if set
     PPU.PPUCTRL_X = value & 1;        // Bit 0: adds 256 to X scroll position if set
+    
+    // Update scroll register T (NN = bits 0-1 of value)
+    PPU.T_NN = value & 0b11;
   },
   
   // $2001 (write): set PPU Control Register 2 (PPUMASK)
@@ -471,7 +513,7 @@ var PPU = {
     //console.log("PPUMASK",value.toString(2).padStart(8,0));
     
     // Render previous scanlines
-    PPU.render();
+    //PPU.render();
     
     PPU.PPUMASK_RGB = (value >> 5) & 7; // Bits 5-7: red/green/blue emphasis
     PPU.PPUMASK_s = (value >> 4) & 1;   // Bit 4: show sprites
@@ -530,7 +572,7 @@ var PPU = {
   set_OAMDATA: value => {
     
     // Render previous scanlines
-    PPU.render();
+    //PPU.render();
 
     PPU.OAM[PPU.OAMADDR] = value;
     //PPU.spriteRamWriteUpdate(PPU.OAMADDR, value);
@@ -542,23 +584,27 @@ var PPU = {
   set_PPUSCROLL: value => {
     
     // Render previous scanlines
-    PPU.render();
+    //PPU.render();
 
     // Latch 0: first write, horizontal scroll
     if(PPU.latch == 0){
-      PPU.PPUSCROLL_X = value;
-      //PPU.PPUCTRL_XT = (value >> 3) & 31;
-      //PPU.regFH = value & 7;
-
+      //PPU.PPUSCROLL_X = value;
+      
+      // Update scroll register T (XXXXXxxx = value)
+      PPU.T_XXXXX = value >> 3;
+      //console.log(PPU.T_XXXXX);
+      PPU.xxx = value & 0b111;
     } 
     
     // Latch 1: second write, vertical scroll
     // TODO: if value is between 240 and 255, it becomes negative (-16 to -1)
     else {
+      //PPU.PPUSCROLL_Y = value;
       
-      PPU.PPUSCROLL_Y = value;
-      //PPU.regFV = value & 7;
-      //PPU.PPUCTRL_YT = (value >> 3) & 31;
+      // Update scroll register T (YYYYYyyy = value)
+      PPU.T_YYYYY = value >> 3;
+      PPU.T_yyy = value & 0b111;
+      
     }
     
     // Toggle latch
@@ -566,7 +612,7 @@ var PPU = {
   },
   
   // $2006 (write twice): VRAM Address Register (PPUADDR)
-  set_PPUADDR: address => {
+  set_PPUADDR: value => {
     
     // Latch 0: first write, high byte of address 
     if(PPU.latch == 0){
@@ -574,7 +620,12 @@ var PPU = {
       //PPU.PPUCTRL_Y = (address >> 3) & 1;
       //PPU.PPUCTRL_X = (address >> 2) & 1;
       //PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 7) | ((address & 3) << 3);
-      PPU.PPUADDR = address << 8;
+      PPU.PPUADDR = value << 8;
+      
+      // Update scroll register T (00yyNNYY)
+      PPU.T_yyy = (value >> 4) & 0b11; // only bits 1 and 2 of yyy are set. Bit 3 is corrupted to 0
+      PPU.T_NN = (value >> 2) & 0b11;
+      PPU.T_YYYYY = (value & 0b11) << 3; // read the two high bits of YYYYY
     } 
     
     // Latch 1: second write, low byte of address 
@@ -588,7 +639,19 @@ var PPU = {
       PPU.cntVT = PPU.PPUCTRL_YT;
       PPU.cntHT = PPU.PPUCTRL_XT;
       PPU.checkSprite0(PPU.scanline - 20);*/
-      PPU.PPUADDR += address;
+      PPU.PPUADDR += value;
+      
+      // Update scroll register T (YYYXXXXX)
+      PPU.T_YYYYY += (value >> 5); // read the three low bits of YYYYY
+      PPU.T_XXXXX = value & 0b11111;
+      //console.log(PPU.T_XXXXX);
+      
+      // Copy T in V
+      PPU.V_yyy = PPU.T_yyy;
+      PPU.V_YYYYY = PPU.T_YYYYY;
+      PPU.V_XXXXX = PPU.T_XXXXX;
+      PPU.V_NN = PPU.T_NN;
+
       
     }
     
@@ -603,7 +666,7 @@ var PPU = {
   set_PPUDATA: value => {
     
     // Render previous scanlines
-    PPU.render();
+    //PPU.render();
     
     /*PPU.cntsToAddress();
     PPU.regsToAddress();
@@ -667,7 +730,7 @@ var PPU = {
   set_OAMDMA: value => {
     
     // Render previous scanlines
-    PPU.render();
+    //PPU.render();
     
     var tmp = value * 0x100;
     //var data;
@@ -701,15 +764,26 @@ var PPU = {
       PPU.dot = 0;
       PPU.scanline++;
       
-      // Scroll
-      PPU.scroll_x = (PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X) || 0;
-      PPU.scroll_y = (PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y) || 0;
+      // Update scroll
+      //PPU.scroll_x = 0;
+      //PPU.scroll_y = 0;
+      PPU.V_XXXXX = PPU.T_XXXXX;
+      PPU.V_NN = (PPU.V_NN & 0b10) + (PPU.T_NN & 0b01);
 
+      //if(PPU.scanline == 200){
+      //  console.log(PPU.V_XXXXX, PPU.xxx, PPU.scroll_x);
+      //}
+      
       // Visible scanlines
       if(PPU.scanline < 241){
         //console.log(PPU.scanline-1, PPU.scanline+PPU.scroll_y-1);
         PPU.drawVramScanline(PPU.scanline+PPU.scroll_y-1);
         PPU.drawScanline(PPU.scanline-1);
+        
+        // Update scroll
+        PPU.scroll_x = (PPU.V_NN & 0b1) * 256 + PPU.V_XXXXX * 8 + PPU.xxx;
+        
+        
       }
       
       // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
@@ -720,7 +794,7 @@ var PPU = {
         CPU.requestIrq(CPU.NMI);
         
         // Render previous scanlines on frame buffer
-        PPU.render();
+        //PPU.render();
 
         //vramCanvas.width ^= 0;
         
@@ -753,16 +827,26 @@ var PPU = {
       else if(PPU.scanline == 262){
         PPU.scanline = 0;
         PPU.endFrame = 1;
+        
+        // Update scroll
+        //PPU.scroll_x = (PPU.PPUCTRL_X * 256 + PPU.PPUSCROLL_X);
+        //PPU.scroll_y = (PPU.PPUCTRL_Y * 240 + PPU.PPUSCROLL_Y);
+        //console.log(PPU.PPUCTRL_X, PPU.PPUSCROLL_X)
+        PPU.V_YYYYY = PPU.T_YYYYY;
+        PPU.V_yyy = PPU.T_yyy;
+        PPU.V_NN = (PPU.V_NN & 0b01) + (PPU.T_NN & 0b10);
+        PPU.scroll_y = (PPU.V_NN >> 1) * 240 + PPU.V_YYYYY * 8 + PPU.V_yyy;
+        
+        // Update VRAM view outside viewport
+        for(var i = 0; i < PPU.scroll_y; i++){
+          PPU.drawVramScanline(i);
+        }
+        
+        for(var i = PPU.scroll_y + 240; i < 480; i++){
+          PPU.drawVramScanline(i);
+        }
       }
     }
-    
-    
-    
-    // Handle Sprite 0 hit
-    /*if(PPU.dot === PPU.spr0HitX && PPU.f_spVisibility === 1 && PPU.scanline - 21 === PPU.spr0HitY){
-      PPU.PPUSTATUS_S = 1;
-      PPU.update_PPUSTATUS();
-    }*/
 
     // Handle VBlank request (end of current frame)
     /*if(PPU.requestEndFrame){
@@ -773,911 +857,5 @@ var PPU = {
         break loop;
       }
     }*/
-
-    
   },
-  
-  // Frame rendering
-  // ---------------
-  
-  // When the CHR-ROM, VRAM, palettes, OAM or registers are updated, render all the previous scanlines
-  // If render() has been called in the same frame, draw the scanlines between the two calls
-  // Otherwise, start at the first scanline
-  
-  render: () => {
-    
-  }
-  
-  // Start a new frame
-  /*startFrame: () => {
-    
-    // Background color
-    // TODO: handle greyscale / emphasis
-    //var bgColor = PPU.bgPalette[0];
-
-    // Fill frame buffer with background image
-    /*var buffer = PPU.buffer;
-    var i;
-    for(i = 0; i < 256 * 240; i++){
-      buffer[i] = bgColor;
-    }
-    var pixrendered = PPU.pixrendered;
-    for(i = 0; i < pixrendered.length; i++){
-      pixrendered[i] = 65;
-    }* /
-  },
-  
-  startVBlank: () => {
-    // Do NMI:
-    /*CPU.requestIrq(CPU.NMI);
-
-    // Make sure everything is rendered:
-    if(PPU.lastRenderedScanline < 239){
-      PPU.renderFramePartially(
-        PPU.lastRenderedScanline + 1,
-        240 - PPU.lastRenderedScanline
-      );
-    }
-
-    // End frame:
-    PPU.endFrame();
-
-    // Reset scanline counter:
-    PPU.lastRenderedScanline = -1;
-   * /
-  },
-
-  endScanline: () => {
-    /*switch (PPU.scanline){
-      case 19:
-        // Dummy scanline.
-        // May be variable length:
-        if(PPU.dummyCycleToggle){
-          // Remove dead cycle at end of scanline,
-          // for next scanline:
-          PPU.dot = 1;
-          PPU.dummyCycleToggle = !PPU.dummyCycleToggle;
-        }
-        break;
-
-      case 20:
-        // Clear VBlank flag:
-        PPU.PPUSTATUS_V = 0;
-        //PPU.update_PPUSTATUS();
-
-        // Clear Sprite #0 hit flag:
-        PPU.PPUSTATUS_S = 0;
-        PPU.update_PPUSTATUS();
-        PPU.hitSpr0 = false;
-        PPU.spr0HitX = -1;
-        PPU.spr0HitY = -1;
-
-        if(PPU.PPUMASK_b === 1 || PPU.PPUMASK_s === 1){
-          // Update counters:
-          PPU.cntFV = PPU.regFV;
-          PPU.cntV = PPU.PPUCTRL_Y;
-          PPU.cntH = PPU.PPUCTRL_X;
-          PPU.cntVT = PPU.PPUCTRL_YT;
-          PPU.cntHT = PPU.PPUCTRL_XT;
-
-          if(PPU.PPUMASK_b === 1){
-            // Render dummy scanline:
-            PPU.renderBgScanline(false, 0);
-          }
-        }
-
-        if(PPU.PPUMASK_b === 1 && PPU.PPUMASK_s === 1){
-          // Check sprite 0 hit for first scanline:
-          PPU.checkSprite0(0);
-        }
-
-        if(PPU.PPUMASK_b === 1 || PPU.PPUMASK_s === 1){
-          // Clock mapper IRQ Counter:
-          //Mapper.clockIrqCounter();
-        }
-        break;
-
-      case 261:
-        // Dead scanline, no rendering.
-        // Set VINT:
-        PPU.PPUSTATUS_V = 1;
-        PPU.update_PPUSTATUS();
-        PPU.requestEndFrame = true;
-        PPU.nmiCounter = 9;
-
-        // Wrap around:
-        PPU.scanline = -1; // will be incremented to 0
-
-        break;
-
-      default:
-        if(PPU.scanline >= 21 && PPU.scanline <= 260){
-          // Render normally:
-          if(PPU.PPUMASK_b === 1){
-            if(!PPU.scanlineAlreadyRendered){
-              // update scroll:
-              PPU.cntHT = PPU.PPUCTRL_XT;
-              PPU.cntH = PPU.PPUCTRL_X;
-              PPU.renderBgScanline(true, PPU.scanline + 1 - 21);
-            }
-            PPU.scanlineAlreadyRendered = false;
-
-            // Check for sprite 0 (next scanline):
-            if(!PPU.hitSpr0 && PPU.PPUMASK_s === 1){
-              if(
-                PPU.sprX[0] >= -7 &&
-                PPU.sprX[0] < 256 &&
-                PPU.sprY[0] + 1 <= PPU.scanline - 20 &&
-                PPU.sprY[0] + 1 + (PPU.PPUCTRL_H === 0 ? 8 : 16) >=
-                  PPU.scanline - 20
-              ){
-                if(PPU.checkSprite0(PPU.scanline - 20)){
-                  PPU.hitSpr0 = true;
-                }
-              }
-            }
-          }
-
-          if(PPU.PPUMASK_b === 1 || PPU.PPUMASK_s === 1){
-            // Clock mapper IRQ Counter:
-            //Mapper.clockIrqCounter();
-          }
-        }
-    }
-
-    PPU.scanline++;
-    PPU.regsToAddress();
-    PPU.cntsToAddress();* /
-  },
-
-  endFrame: () => {
-    //var i, x, y;
-    //var buffer = PPU.buffer;
-
-    // Draw spr#0 hit coordinates:
-    /*if(PPU.showSpr0Hit){
-      // Spr 0 position:
-      if(
-        PPU.sprX[0] >= 0 &&
-        PPU.sprX[0] < 256 &&
-        PPU.sprY[0] >= 0 &&
-        PPU.sprY[0] < 240
-      ){
-        for(i = 0; i < 256; i++){
-          buffer[(PPU.sprY[0] << 8) + i] = 0xff5555;
-        }
-        for(i = 0; i < 240; i++){
-          buffer[(i << 8) + PPU.sprX[0]] = 0xff5555;
-        }
-      }
-      // Hit position:
-      if(
-        PPU.spr0HitX >= 0 &&
-        PPU.spr0HitX < 256 &&
-        PPU.spr0HitY >= 0 &&
-        PPU.spr0HitY < 240
-      ){
-        for(i = 0; i < 256; i++){
-          buffer[(PPU.spr0HitY << 8) + i] = 0x55ff55;
-        }
-        for(i = 0; i < 240; i++){
-          buffer[(i << 8) + PPU.spr0HitX] = 0x55ff55;
-        }
-      }
-    }* /
-
-    // This is a bit lazy..
-    // if either the sprites or the background should be clipped,
-    // both are clipped after rendering is finished.
-    /*if(
-      //PPU.clipToTvSize ||
-      PPU.PPUMASK_m === 0 ||
-      PPU.PPUMASK_M === 0
-    ){
-      // Clip left 8-pixels column:
-      for(y = 0; y < 240; y++){
-        for(x = 0; x < 8; x++){
-          buffer[(y << 8) + x] = 0;
-        }
-      }
-    }
-
-    //if(PPU.clipToTvSize){
-      // Clip right 8-pixels column too:
-      for(y = 0; y < 240; y++){
-        for(x = 0; x < 8; x++){
-          buffer[(y << 8) + 255 - x] = 0;
-        }
-      }
-    //}
-
-    // Clip top and bottom 8 pixels:
-    //if(PPU.clipToTvSize){
-      for(y = 0; y < 8; y++){
-        for(x = 0; x < 256; x++){
-          buffer[(y << 8) + x] = 0;
-          buffer[((239 - y) << 8) + x] = 0;
-        }
-      }
-    //}
-
-    NES.onFrame(buffer, PPU.vramBuffer);* /
-  },
-
-
-  // Updates the scroll registers from a new VRAM address.
-  regsFromAddress: () => {
-    /*var address = (PPU.vramTmpAddress >> 8) & 0xff;
-    PPU.regFV = (address >> 4) & 7;
-    PPU.PPUCTRL_Y = (address >> 3) & 1;
-    PPU.PPUCTRL_X = (address >> 2) & 1;
-    PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 7) | ((address & 3) << 3);
-
-    address = PPU.vramTmpAddress & 0xff;
-    PPU.PPUCTRL_YT = (PPU.PPUCTRL_YT & 24) | ((address >> 5) & 7);
-    PPU.PPUCTRL_XT = address & 31;* /
-  },
-
-  // Updates the scroll registers from a new VRAM address.
-  cntsFromAddress: () => {
-    /*var address = (PPU.vramAddress >> 8) & 0xff;
-    PPU.cntFV = (address >> 4) & 3;
-    PPU.cntV = (address >> 3) & 1;
-    PPU.cntH = (address >> 2) & 1;
-    PPU.cntVT = (PPU.cntVT & 7) | ((address & 3) << 3);
-
-    address = PPU.vramAddress & 0xff;
-    PPU.cntVT = (PPU.cntVT & 24) | ((address >> 5) & 7);
-    PPU.cntHT = address & 31;* /
-  },
-
-  regsToAddress: () => {
-    /*var b1 = (PPU.regFV & 7) << 4;
-    b1 |= (PPU.PPUCTRL_Y & 1) << 3;
-    b1 |= (PPU.PPUCTRL_X & 1) << 2;
-    b1 |= (PPU.PPUCTRL_YT >> 3) & 3;
-
-    var b2 = (PPU.PPUCTRL_YT & 7) << 5;
-    b2 |= PPU.PPUCTRL_XT & 31;
-
-    PPU.vramTmpAddress = ((b1 << 8) | b2) & 0x7fff;* /
-  },
-
-  cntsToAddress: () => {
-    /*var b1 = (PPU.cntFV & 7) << 4;
-    b1 |= (PPU.cntV & 1) << 3;
-    b1 |= (PPU.cntH & 1) << 2;
-    b1 |= (PPU.cntVT >> 3) & 3;
-
-    var b2 = (PPU.cntVT & 7) << 5;
-    b2 |= PPU.cntHT & 31;
-
-    PPU.vramAddress = ((b1 << 8) | b2) & 0x7fff;* /
-  },
-
-  incTileCounter: count => {
-    /*for(var i = count; i !== 0; i--){
-      PPU.cntHT++;
-      if(PPU.cntHT === 32){
-        PPU.cntHT = 0;
-        PPU.cntVT++;
-        if(PPU.cntVT >= 30){
-          PPU.cntH++;
-          if(PPU.cntH === 2){
-            PPU.cntH = 0;
-            PPU.cntV++;
-            if(PPU.cntV === 2){
-              PPU.cntV = 0;
-              PPU.cntFV++;
-              PPU.cntFV &= 0x7;
-            }
-          }
-        }
-      }
-    }* /
-  },
-
-  // Finish rendering the current frame, I think?
-  render: () => {
-    /*if(PPU.scanline >= 21 && PPU.scanline <= 260){
-      // Render sprites, and combine:
-      PPU.renderFramePartially(
-        PPU.lastRenderedScanline + 1,
-        PPU.scanline - 21 - PPU.lastRenderedScanline
-      );
-
-      // Set last rendered scanline:
-      PPU.lastRenderedScanline = PPU.scanline - 21;
-    }* /
-  },
-
-  renderFramePartially: (startScan, scanCount) => {
-    /*if(PPU.PPUMASK_s === 1){
-      PPU.renderSpritesPartially(startScan, scanCount, true);
-    }
-
-    if(PPU.PPUMASK_b === 1){
-      var si = startScan << 8;
-      var ei = (startScan + scanCount) << 8;
-      if(ei > 0xf000){
-        ei = 0xf000;
-      }
-      var buffer = PPU.buffer;
-      var bgbuffer = PPU.bgbuffer;
-      var pixrendered = PPU.pixrendered;
-      for(var destIndex = si; destIndex < ei; destIndex++){
-        if(pixrendered[destIndex] > 0xff){
-          buffer[destIndex] = bgbuffer[destIndex];
-        }
-      }
-    }
-
-    if(PPU.PPUMASK_s === 1){
-      PPU.renderSpritesPartially(startScan, scanCount, false);
-    }
-
-    PPU.validTileData = false;* /
-  },
-
-  renderBgScanline: (bgbuffer, scan) => {
-    /*var baseTile = PPU.PPUCTRL_B === 0 ? 0 : 256;
-    var destIndex = (scan << 8) - PPU.regFH;
-
-    //PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
-
-    PPU.cntHT = PPU.PPUCTRL_XT;
-    PPU.cntH = PPU.PPUCTRL_X;
-    //PPU.curNt = PPU.ntable1[PPU.cntV + PPU.cntV + PPU.cntH];
-
-    if(scan < 240 && scan - PPU.cntFV >= 0){
-      var tscanoffset = PPU.cntFV << 3;
-      var scantile = PPU.scantile;
-      var attrib = PPU.attrib;
-      var ptTile = PPU.ptTile;
-      var nameTable = PPU.nameTable;
-      var bgPalette = PPU.bgPalette;
-      var pixrendered = PPU.pixrendered;
-      var targetBuffer = bgbuffer ? PPU.bgbuffer : PPU.buffer;
-
-      var t, tpix, att, col;
-
-      for(var tile = 0; tile < 32; tile++){
-        if(scan >= 0){
-          // Fetch tile & attrib data:
-          if(PPU.validTileData){
-            // Get data from array:
-            t = scantile[tile];
-            if(typeof t === "undefined"){
-              continue;
-            }
-            tpix = t.pixels;
-            att = attrib[tile];
-          } else {
-            // Fetch data:
-            t =
-              ptTile[
-                baseTile +
-                  nameTable[PPU.curNt].getTileIndex(PPU.cntHT, PPU.cntVT)
-              ];
-            if(typeof t === "undefined"){
-              continue;
-            }
-            tpix = t.pixels;
-            att = nameTable[PPU.curNt].getAttrib(PPU.cntHT, PPU.cntVT);
-            scantile[tile] = t;
-            attrib[tile] = att;
-          }
-
-          // Render tile scanline:
-          var sx = 0;
-          var x = (tile << 3) - PPU.regFH;
-
-          if(x > -8){
-            if(x < 0){
-              destIndex -= x;
-              sx = -x;
-            }
-
-              for(; sx < 8; sx++){
-                col = tpix[tscanoffset + sx];
-                if(col !== 0){
-                  targetBuffer[destIndex] = bgPalette[col + att];
-                  pixrendered[destIndex] |= 256;
-                }
-                destIndex++;
-              }
-          }
-        }
-
-        // Increase Horizontal Tile Counter:
-        if(++PPU.cntHT === 32){
-          PPU.cntHT = 0;
-          PPU.cntH++;
-          PPU.cntH %= 2;
-          //PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
-        }
-      }
-
-      // Tile data for one row should now have been fetched,
-      // so the data in the array is valid.
-      PPU.validTileData = true;
-    }
-
-    // update vertical scroll:
-    PPU.cntFV++;
-    if(PPU.cntFV === 8){
-      PPU.cntFV = 0;
-      PPU.cntVT++;
-      if(PPU.cntVT === 30){
-        PPU.cntVT = 0;
-        PPU.cntV++;
-        PPU.cntV %= 2;
-        //PPU.curNt = PPU.ntable1[(PPU.cntV << 1) + PPU.cntH];
-      } else if(PPU.cntVT === 32){
-        PPU.cntVT = 0;
-      }
-
-      // Invalidate fetched data:
-      PPU.validTileData = false;
-    }* /
-  },
-
-  renderSpritesPartially: (startscan, scancount, bgPri) => {
-    /*if(PPU.PPUMASK_s === 1){
-      for(var i = 0; i < 64; i++){
-        if(
-          PPU.bgPriority[i] === bgPri &&
-          PPU.sprX[i] >= 0 &&
-          PPU.sprX[i] < 256 &&
-          PPU.sprY[i] + 8 >= startscan &&
-          PPU.sprY[i] < startscan + scancount
-        ){
-          // Show sprite.
-          if(PPU.PPUCTRL_H === 0){
-            // 8x8 sprites
-
-            PPU.srcy1 = 0;
-            PPU.srcy2 = 8;
-
-            if(PPU.sprY[i] < startscan){
-              PPU.srcy1 = startscan - PPU.sprY[i] - 1;
-            }
-
-            if(PPU.sprY[i] + 8 > startscan + scancount){
-              PPU.srcy2 = startscan + scancount - PPU.sprY[i] + 1;
-            }
-
-            /*Tile.draw_sprite(
-              PPU.ptTile[PPU.PPUCTRL_S === 0 ? PPU.sprTile[i] : PPU.sprTile[i] + 256],
-              PPU.buffer,
-              PPU.srcy1,
-              PPU.srcy2,
-              PPU.sprX[i],
-              PPU.sprY[i] + 1,
-              PPU.sprPalette,
-              PPU.sprCol[i],
-              PPU.horiFlip[i],
-              PPU.vertFlip[i],
-              i,
-              PPU.pixrendered
-            );* /
-          } else {
-            // 8x16 sprites
-            var top = PPU.sprTile[i];
-            if((top & 1) !== 0){
-              top = PPU.sprTile[i] - 1 + 256;
-            }
-
-            var srcy1 = 0;
-            var srcy2 = 8;
-
-            if(PPU.sprY[i] < startscan){
-              srcy1 = startscan - PPU.sprY[i] - 1;
-            }
-
-            if(PPU.sprY[i] + 8 > startscan + scancount){
-              srcy2 = startscan + scancount - PPU.sprY[i];
-            }
-
-            /*Tile.draw_sprite(
-              PPU.ptTile[top + (PPU.vertFlip[i] ? 1 : 0)],
-              PPU.buffer,
-              srcy1,
-              srcy2,
-              PPU.sprX[i],
-              PPU.sprY[i] + 1,
-              PPU.sprPalette,
-              PPU.sprCol[i],
-              PPU.horiFlip[i],
-              PPU.vertFlip[i],
-              i,
-              PPU.pixrendered
-            );* /
-
-            srcy1 = 0;
-            srcy2 = 8;
-
-            if(PPU.sprY[i] + 8 < startscan){
-              srcy1 = startscan - (PPU.sprY[i] + 8 + 1);
-            }
-
-            if(PPU.sprY[i] + 16 > startscan + scancount){
-              srcy2 = startscan + scancount - (PPU.sprY[i] + 8);
-            }
-
-            /*Tile.draw_sprite(
-              PPU.ptTile[top + (PPU.vertFlip[i] ? 0 : 1)],
-              PPU.buffer,
-              srcy1,
-              srcy2,
-              PPU.sprX[i],
-              PPU.sprY[i] + 1 + 8,
-              PPU.sprPalette,
-              PPU.sprCol[i],
-              PPU.horiFlip[i],
-              PPU.vertFlip[i],
-              i,
-              PPU.pixrendered
-            );* /
-          }
-        }
-      }
-    }* /
-  },
-
-  checkSprite0: scan => {
-    /*PPU.spr0HitX = -1;
-    PPU.spr0HitY = -1;
-
-    var toffset;
-    var tIndexAdd = PPU.PPUCTRL_S === 0 ? 0 : 256;
-    var x, y, t, i;
-    var bufferIndex;
-
-    x = PPU.sprX[0];
-    y = PPU.sprY[0] + 1;
-
-    if(PPU.PPUCTRL_H === 0){
-      // 8x8 sprites.
-
-      // Check range:
-      if(y <= scan && y + 8 > scan && x >= -7 && x < 256){
-        // Sprite is in range.
-        // Draw scanline:
-        t = PPU.ptTile[PPU.sprTile[0] + tIndexAdd];
-
-        if(PPU.vertFlip[0]){
-          toffset = 7 - (scan - y);
-        } else {
-          toffset = scan - y;
-        }
-        toffset *= 8;
-
-        bufferIndex = scan * 256 + x;
-        if(PPU.horiFlip[0]){
-          for(i = 7; i >= 0; i--){
-            if(x >= 0 && x < 256){
-              if(
-                bufferIndex >= 0 &&
-                bufferIndex < 61440 &&
-                PPU.pixrendered[bufferIndex] !== 0
-              ){
-                if(t.pixels[toffset + i] !== 0){
-                  PPU.spr0HitX = bufferIndex % 256;
-                  PPU.spr0HitY = scan;
-                  return true;
-                }
-              }
-            }
-            x++;
-            bufferIndex++;
-          }
-        } else {
-          for(i = 0; i < 8; i++){
-            if(x >= 0 && x < 256){
-              if(
-                bufferIndex >= 0 &&
-                bufferIndex < 61440 &&
-                PPU.pixrendered[bufferIndex] !== 0
-              ){
-                if(t.pixels[toffset + i] !== 0){
-                  PPU.spr0HitX = bufferIndex % 256;
-                  PPU.spr0HitY = scan;
-                  return true;
-                }
-              }
-            }
-            x++;
-            bufferIndex++;
-          }
-        }
-      }
-    } else {
-      // 8x16 sprites:
-
-      // Check range:
-      if(y <= scan && y + 16 > scan && x >= -7 && x < 256){
-        // Sprite is in range.
-        // Draw scanline:
-
-        if(PPU.vertFlip[0]){
-          toffset = 15 - (scan - y);
-        } else {
-          toffset = scan - y;
-        }
-
-        if(toffset < 8){
-          // first half of sprite.
-          t = PPU.ptTile[
-            PPU.sprTile[0] +
-              (PPU.vertFlip[0] ? 1 : 0) +
-              ((PPU.sprTile[0] & 1) !== 0 ? 255 : 0)
-          ];
-        } else {
-          // second half of sprite.
-          t = PPU.ptTile[
-            PPU.sprTile[0] +
-              (PPU.vertFlip[0] ? 0 : 1) +
-              ((PPU.sprTile[0] & 1) !== 0 ? 255 : 0)
-          ];
-          if(PPU.vertFlip[0]){
-            toffset = 15 - toffset;
-          } else {
-            toffset -= 8;
-          }
-        }
-        toffset *= 8;
-
-        bufferIndex = scan * 256 + x;
-        if(PPU.horiFlip[0]){
-          for(i = 7; i >= 0; i--){
-            if(x >= 0 && x < 256){
-              if(
-                bufferIndex >= 0 &&
-                bufferIndex < 61440 &&
-                PPU.pixrendered[bufferIndex] !== 0
-              ){
-                if(t.pixels[toffset + i] !== 0){
-                  PPU.spr0HitX = bufferIndex % 256;
-                  PPU.spr0HitY = scan;
-                  return true;
-                }
-              }
-            }
-            x++;
-            bufferIndex++;
-          }
-        } else {
-          for(i = 0; i < 8; i++){
-            if(x >= 0 && x < 256){
-              if(
-                bufferIndex >= 0 &&
-                bufferIndex < 61440 &&
-                PPU.pixrendered[bufferIndex] !== 0
-              ){
-                if(t.pixels[toffset + i] !== 0){
-                  PPU.spr0HitX = bufferIndex % 256;
-                  PPU.spr0HitY = scan;
-                  return true;
-                }
-              }
-            }
-            x++;
-            bufferIndex++;
-          }
-        }
-      }
-    }
-
-    return false;* /
-  },
-
-  // Reads data from $3f00 to $3f20
-  // into the two buffered palettes.
-  updatePalettes: () => {
-    /*for(var i = 0; i < 16; i++){
-      PPU.bgPalette[i] = PPU.palTable.getEntry(PPU.load(0x3f00 + i));
-      PPU.sprPalette[i] = PPU.palTable.getEntry(PPU.load(0x3f10 + i));
-    }
-    //console.log(PPU.bgPalette);
-    * /
-  },
-
-  // Updates the internal pattern
-  // table buffers with this new byte.
-  // In vNES, there is a version of this with 4 arguments which isn't used.
-  patternWrite: (address, value) => {
-    /*var bank = address > 0x1000 ? 1 : 0;
-    var tileIndex = Math.floor(address / 16);
-    ROM.chr_rom[bank][address % 0x1000] = value;
-    ROM.chr_rom_tiles[bank][tileIndex] = { pixels: [] };
-    Tile.decode(ROM.chr_rom_tiles[bank][tileIndex], ROM.chr_rom[bank], tileIndex);* /
-  },
-
-  // Updates the internal name table buffers
-  // with this new byte.
-  nameTableWrite: (index, address, value) => {
-    //console.log(PPU.nameTable, index, PPU.nameTable[index]);
-    //PPU.nameTable[index].tile[address] = value;
-
-    // Update Sprite #0 hit:
-    //updateSpr0Hit();
-    //PPU.checkSprite0(PPU.scanline - 20);
-  },
-
-  // Updates the internal pattern
-  // table buffers with this new attribute
-  // table byte.
-  attribTableWrite: (index, address, value) => {
-    //PPU.nameTable[index].writeAttrib(address, value);
-  },
-
-  // Updates the internally buffered sprite
-  // data with this new byte of info.
-  spriteRamWriteUpdate: (address, value) => {
-    /*var tIndex = Math.floor(address / 4);
-
-    if(tIndex === 0){
-      //updateSpr0Hit();
-      PPU.checkSprite0(PPU.scanline - 20);
-    }
-
-    if(address % 4 === 0){
-      // Y coordinate
-      PPU.sprY[tIndex] = value;
-    } else if(address % 4 === 1){
-      // Tile index
-      PPU.sprTile[tIndex] = value;
-    } else if(address % 4 === 2){
-      // Attributes
-      PPU.vertFlip[tIndex] = (value & 0x80) !== 0;
-      PPU.horiFlip[tIndex] = (value & 0x40) !== 0;
-      PPU.bgPriority[tIndex] = (value & 0x20) !== 0;
-      PPU.sprCol[tIndex] = (value & 3) << 2;
-    } else if(address % 4 === 3){
-      // X coordinate
-      PPU.sprX[tIndex] = value;
-    }
-  },
-
-  doNMI: () => {
-    // Set VBlank flag:
-    PPU.PPUSTATUS_V = 1;
-    PPU.update_PPUSTATUS();
-    CPU.requestIrq(CPU.NMI);
-  },
-
-  isPixelWhite: (x, y) => {* /
-    PPU.render();
-    return PPU.buffer[(y << 8) + x] === 0xffffff;
-  },
-};
-
-var NameTable = function(width, height, name){
-  /*this.width = width;
-  this.height = height;
-  this.name = name;
-
-  this.tile = new Array(width * height);
-  this.attrib = new Array(width * height);
-  for(var i = 0; i < width * height; i++){
-    this.tile[i] = 0;
-    this.attrib[i] = 0;
-  }* /
-};
-
-NameTable.prototype = {
-  /*getTileIndex: function(x, y){
-    return this.tile[y * this.width + x];
-  },
-
-  getAttrib: function(x, y){
-    return this.attrib[y * this.width + x];
-  },
-
-  writeAttrib: function(index, value){
-    var basex = (index % 8) * 4;
-    var basey = Math.floor(index / 8) * 4;
-    var add;
-    var tx, ty;
-    var attindex;
-
-    for(var sqy = 0; sqy < 2; sqy++){
-      for(var sqx = 0; sqx < 2; sqx++){
-        add = (value >> (2 * (sqy * 2 + sqx))) & 3;
-        for(var y = 0; y < 2; y++){
-          for(var x = 0; x < 2; x++){
-            tx = basex + sqx * 2 + x;
-            ty = basey + sqy * 2 + y;
-            attindex = ty * this.width + tx;
-            this.attrib[attindex] = (add << 2) & 12;
-          }
-        }
-      }
-    }
-  },* /
-};
-
-var PaletteTable = function(){
-  /*this.curTable = new Array(64);
-  this.emphTable = new Array(8);
-  this.currentEmph = -1;* /
-};
-
-PaletteTable.prototype = {
-  /*reset: function(){
-    this.setEmphasis(0);
-  },
-
-  loadNTSCPalette: function(){
-    // prettier-ignore
-    this.curTable = [0x525252, 0xB40000, 0xA00000, 0xB1003D, 0x740069, 0x00005B, 0x00005F, 0x001840, 0x002F10, 0x084A08, 0x006700, 0x124200, 0x6D2800, 0x000000, 0x000000, 0x000000, 0xC4D5E7, 0xFF4000, 0xDC0E22, 0xFF476B, 0xD7009F, 0x680AD7, 0x0019BC, 0x0054B1, 0x006A5B, 0x008C03, 0x00AB00, 0x2C8800, 0xA47200, 0x000000, 0x000000, 0x000000, 0xF8F8F8, 0xFFAB3C, 0xFF7981, 0xFF5BC5, 0xFF48F2, 0xDF49FF, 0x476DFF, 0x00B4F7, 0x00E0FF, 0x00E375, 0x03F42B, 0x78B82E, 0xE5E218, 0x787878, 0x000000, 0x000000, 0xFFFFFF, 0xFFF2BE, 0xF8B8B8, 0xF8B8D8, 0xFFB6FF, 0xFFC3FF, 0xC7D1FF, 0x9ADAFF, 0x88EDF8, 0x83FFDD, 0xB8F8B8, 0xF5F8AC, 0xFFFFB0, 0xF8D8F8, 0x000000, 0x000000];
-    this.makeTables();
-    this.setEmphasis(0);
-  },
-
-  makeTables: function(){
-    var r, g, b, col, i, rFactor, gFactor, bFactor;
-
-    // Calculate a table for each possible emphasis setting:
-    for(var emph = 0; emph < 8; emph++){
-      // Determine color component factors:
-      rFactor = 1.0;
-      gFactor = 1.0;
-      bFactor = 1.0;
-
-      if((emph & 1) !== 0){
-        rFactor = 0.75;
-        bFactor = 0.75;
-      }
-      if((emph & 2) !== 0){
-        rFactor = 0.75;
-        gFactor = 0.75;
-      }
-      if((emph & 4) !== 0){
-        gFactor = 0.75;
-        bFactor = 0.75;
-      }
-
-      this.emphTable[emph] = new Array(64);
-
-      // Calculate table:
-      for(i = 0; i < 64; i++){
-        col = this.curTable[i];
-        r = Math.floor(this.getRed(col))// * rFactor);
-        g = Math.floor(this.getGreen(col))// * gFactor);
-        b = Math.floor(this.getBlue(col))// * bFactor);
-        this.emphTable[emph][i] = this.getRgb(r, g, b);
-      }
-    }
-  },
-
-  setEmphasis: function(emph){
-    if(emph !== this.currentEmph){
-      this.currentEmph = emph;
-      for(var i = 0; i < 64; i++){
-        this.curTable[i] = this.emphTable[emph][i];
-      }
-    }
-  },
-
-  getEntry: function(yiq){
-    return this.curTable[yiq];
-  },
-
-  getRed: function(rgb){
-    return (rgb >> 16) & 0xff;
-  },
-
-  getGreen: function(rgb){
-    return (rgb >> 8) & 0xff;
-  },
-
-  getBlue: function(rgb){
-    return rgb & 0xff;
-  },
-
-  getRgb: function(r, g, b){
-    return (r << 16) | (g << 8) | b;
-  }*/
 };
