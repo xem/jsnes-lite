@@ -107,7 +107,7 @@ var ROM = {
       // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically)
       ROM.mirroring = (ROM.header[6] & 0b00001000) ? 2 : (ROM.header[6] & 0b0000001) ? 0 : 1;
 
-      PPU.setMirroring(ROM.mirroring);
+      PPU.nametable_mirroring = ROM.mirroring;
       
       // Check if the game has at least one battery-backed PRG-RAM bank (byte 6, bit 2)
       // This is a persistent save slot that can be used to save the player's progress in a game

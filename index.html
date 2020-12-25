@@ -1,7 +1,7 @@
 ﻿<!doctype html>
 <title>JSNES lite</title>
 <canvas id=frameCanvas width=256 height=240 style="background: #000"></canvas>
-<canvas id=vramCanvas width=512 height=480 style="background: #000; width:256px;height:240px;"></canvas>
+<canvas id=vramCanvas width=512 height=480 style="background: #000; width:256px;height:240px;" hidden></canvas>
 <br><b>Controls</b>: arrow keys + X + C + Start + Esc
 <p><button id=dk onclick='play("roms/dk.nes")'>DK</button>
 <button id=smb onclick='play("roms/smb.nes")'>SMB</button>
@@ -15,8 +15,8 @@
 <button><label for=fileInput>Browse...</label></button>
 <input type=file id=fileInput hidden>
 &nbsp;
-<label><input type=radio name=tv value=ntsc checked>NTSC</label>
-<label><input type=radio name=tv value=pal>PAL</label>
+<label><input type=radio name=tv id=ntsc checked>NTSC</label>
+<label><input type=radio name=tv id=pal>PAL</label>
 <style>
 body { font: 14px Arial; background:#888; }
 #dk, #smb, #ic, #eb, #g, #dw, #lr { display: none; }
@@ -156,7 +156,7 @@ start = file => {
   //NES.frame();
   
   clearInterval(interval);
-  interval = setInterval(NES.frame, 16);
+  interval = setInterval(NES.frame, pal.checked ? 20 : 16);
   
   // Controller #1 keys listeners
   onkeydown = onkeyup = e => {
