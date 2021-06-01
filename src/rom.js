@@ -115,7 +115,7 @@ var ROM = {
       ROM.batteryRam = (ROM.header[6] & 0b0000010);
       
       // Check if the game contains a 512b trainer (byte 6, bit 3)
-      // This bank contains subroutines executed by some Mapper.s
+      // This bank contains subroutines executed by some Mappers
       // If present, it can be accessed by the CPU at the addresses $7000-$71FF
       ROM.trainer = (ROM.header[6] & 0b00000100);
       
@@ -138,7 +138,7 @@ var ROM = {
         }
       }
       
-      // Load the CHR-ROM pages and make 256 tiles from each of them
+      // Load the CHR-ROM pages and prepare 256 tiles for each of them
       var byte1;
       var byte2;
       var color;
@@ -152,7 +152,6 @@ var ROM = {
 
         for(j = 0; j < 256; j++){
           ROM.chr_rom_tiles[i][j] = { pixels: [] };
-          //Tile.decode(ROM.chr_rom_tiles[i][j], ROM.chr_rom[i], j);
         }
       }
     }

@@ -414,10 +414,10 @@ var PPU = {
       // Subpalette represented by these bits
       // NB: during forced blanking (background and sprites disabled), if PPUADDR points to a palette's index 0, this color will be used as universal background color (ignored here) 
       var colors = [
-        PPU.systemPalette[PPU.load(0x3F00)],
-        PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 1)],
-        PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 2)],
-        PPU.systemPalette[PPU.load(0x3F00 + bits * 4 + 3)],
+        PPU.systemPalette[PPU.mem[0x3F00]],
+        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 1]],
+        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 2]],
+        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 3]],
       ];
       
       var byte1, byte2, pixel;
@@ -457,15 +457,16 @@ var PPU = {
     var scanlineSprites = [];
     for(i = 0; i < 64; i++){
       if(y >= PPU.OAM[i*4] && y < PPU.OAM[i*4] + (PPU.PPUCTRL_H ? 16 : 8)){
+        
+        // Set overflow flag if more than 8 sprites are present
+        if(scanlineSprites.length == 8) {
+          PPU.PPUSTATUS_O = 1;
+          break;
+        }
         scanlineSprites.push(i);
       }
     }
-    
-    // Set overflow flag if more than 8 sprites are present
-    if(scanlineSprites.length > 8) {
-      PPU.PPUSTATUS_O = 1;
-    }
-    
+
     // Draw the scanline's pixels:
     // - For each pixel, draw the sprite with the highest priority among the first 8
     // - If the frontmost sprite is behind the background, draw a background tile pixel on top of it
@@ -477,15 +478,15 @@ var PPU = {
       }
       
       // For each sprite
-      for(i = Math.min(7, scanlineSprites.length-1); i >= 0; i--){
+      for(i = scanlineSprites.length-1; i >= 0; i--){
         
         // Retrieve the sprite's subpalette (index 0 is always considered transparent)
         bits = PPU.OAM[scanlineSprites[i]*4+2] & 0b11;
         colors = [
           ,
-          PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 1)],
-          PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 2)],
-          PPU.systemPalette[PPU.load(0x3F10 + bits * 4 + 3)],
+          PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 1]],
+          PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 2]],
+          PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 3]],
         ];
         
         // If this sprite is present at this pixel
@@ -495,51 +496,55 @@ var PPU = {
           // 8x16:
           if(PPU.PPUCTRL_H){
             
+            spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16;
+            
             // Vertical flip: bottom tile is reversed on top, top tile is reversed on bottom
             if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
-              
+
               // Top tile
               if(y < PPU.OAM[scanlineSprites[i]*4] + 8){
-                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + 7 + (16 - y + PPU.OAM[scanlineSprites[i]*4]);
+                spriteScanlineAddress += 7 + (16 - y + PPU.OAM[scanlineSprites[i]*4]);
               }
               
               // Bottom tile
               else {
-                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + (15 - y + PPU.OAM[scanlineSprites[i]*4]);
+                spriteScanlineAddress += (15 - y + PPU.OAM[scanlineSprites[i]*4]);
               }
             }
             
             // No flip
             else {
-              
+
               // Top tile
               if(y < PPU.OAM[scanlineSprites[i]*4] + 8){
-                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + (y - PPU.OAM[scanlineSprites[i]*4]);
+                spriteScanlineAddress += (y - PPU.OAM[scanlineSprites[i]*4]);
               }
               
               // Bottom tile
               else {
-                spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16 + 8 + (y - PPU.OAM[scanlineSprites[i]*4]);
+                spriteScanlineAddress += 8 + (y - PPU.OAM[scanlineSprites[i]*4]);
               }
             }
           }
           
           // 8x8:
           else {
+            
+            spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16;
           
             // Vertical flip
             if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
-              spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + 7 - (y - PPU.OAM[scanlineSprites[i]*4]);
+              spriteScanlineAddress += 7 - (y - PPU.OAM[scanlineSprites[i]*4]);
             }
             
             // No flip
             else {
-              spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16 + (y - PPU.OAM[scanlineSprites[i]*4]);
+              spriteScanlineAddress += (y - PPU.OAM[scanlineSprites[i]*4]);
             }
           }
           
-          byte1 = PPU.load(spriteScanlineAddress);
-          byte2 = PPU.load(spriteScanlineAddress + 8);
+          byte1 = PPU.mem[spriteScanlineAddress];
+          byte2 = PPU.mem[spriteScanlineAddress + 8];
           
           // Decode current pixel:
           // Horizontal flip
@@ -562,13 +567,13 @@ var PPU = {
             
             // Sprite 0 hit
             // Many edge cases prevent Sprite 0 hit from triggering, but it can be ignored
-            if(scanlineSprites[i] === 0 && !PPU.PPUSTATUS_S && pixel && PPU.vramPixelBuffer[x+PPU.scroll_x] && PPU.PPUMASK_s && PPU.PPUMASK_b){
+            if(scanlineSprites[i] === 0 && !PPU.PPUSTATUS_S && pixel && PPU.vramPixelBuffer[x+PPU.scroll_x]/* && PPU.PPUMASK_s && PPU.PPUMASK_b*/){
               PPU.PPUSTATUS_S = 1;
             }
             
             // If priority bit is 1 and background rendering enabled: draw current background tile pixel on top of sprite (if any)
             if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && PPU.vramPixelBuffer[x+PPU.scroll_x] && PPU.PPUMASK_b){
-              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x+PPU.scroll_x];
+              //NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x+PPU.scroll_x];
             }
           }
         }
@@ -605,9 +610,9 @@ var PPU = {
         PPU.scroll_x = (PPU.V_NN & 0b1) * 256 + PPU.V_XXXXX * 8 + PPU.xxx;
         
         // Debug
-        //NES.vramCtx.fillStyle = "pink";
-        //NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
-        //NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
+        NES.vramCtx.fillStyle = "pink";
+        NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
+        NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
       }
       
       // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
@@ -620,8 +625,8 @@ var PPU = {
         NES.frameCtx.putImageData(NES.frameData, 0, 0);
       
         // Debug (VRAM view)
-        //NES.vramData.data.set(NES.vramBuffer8);
-        //NES.vramCtx.putImageData(NES.vramData, 0, 0);
+        NES.vramData.data.set(NES.vramBuffer8);
+        NES.vramCtx.putImageData(NES.vramData, 0, 0);
         
         // Debug (pink lines)
         NES.vramCtx.fill();
