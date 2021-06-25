@@ -11,7 +11,6 @@
 <button id=dw onclick='play("roms/lr.nes")'>LR</button>
 <button id=g onclick='play("roms/g.nes")'>G</button>
 <button onclick='play("roms/nestest.nes")'>nestest</button>
-<button onclick='play("roms/instr_test.nes")'>instr_test</button>
 <button><label for=fileInput>Browse...</label></button>
 <input type=file id=fileInput hidden>
 &nbsp;
@@ -28,7 +27,7 @@ body { font: 14px Arial; background:#888; }
 <script src="src/memory.js"></script>
 <script src="src/mappers.js"></script>
 <script src="src/controller.js"></script>
-<script src="src/mycpu.js"></script>
+<script src="src/6502.js"></script>
 <script src="src/papu.js"></script>
 <script src="src/ppu.js"></script>
 <script>
@@ -80,9 +79,9 @@ start = file => {
     
     // Add new audio samples to the Audio buffers
     onAudioSample: function(left, right){
+      //console.log(left, right);
       leftSamples.push(left);
       rightSamples.push(right);
-      //console.log(left, right);
     },
     
     onBatteryRamWrite: ()=>{}
@@ -103,7 +102,7 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();
-  debug = 1;
+  //debug = 1;
   NES.frame();
   
   // Uncomment for SMB/IC title screen

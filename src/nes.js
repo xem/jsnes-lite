@@ -30,7 +30,7 @@ var NES = {
     
     // Audio
     NES.onAudioSample = options.onAudioSample;
-    NES.sampleRate = 44100;
+    NES.sampleRate = 48000;
     
     // Logs
     NES.onStatusUpdate = options.onStatusUpdate;
@@ -95,6 +95,7 @@ var NES = {
       for(var i = 0; i < cycles; i++){
         CPU.tick();
       }
+      //APU.clockFrameCounter(cycles/3);
     }
   },
   

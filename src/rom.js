@@ -139,10 +139,6 @@ var ROM = {
       }
       
       // Load the CHR-ROM pages and prepare 256 tiles for each of them
-      var byte1;
-      var byte2;
-      var color;
-      
       for(i = 0; i < ROM.chr_rom_count; i++){
         ROM.chr_rom[i] = [];
         ROM.chr_rom_tiles[i] = [];

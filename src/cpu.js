@@ -13,9 +13,9 @@ var CPU = {
     
     var i;
     
-    // CPU memory map (16kb)
+    // CPU internal RAM (2kb)
     CPU.mem = [];
-    for(i = 0; i < 16 * 1024; i++){
+    for(i = 0; i < 2 * 1024; i++){
       CPU.mem[i] = 0;
     }
 
@@ -29,14 +29,12 @@ var CPU = {
   
   // Clock 1 CPU cycle
   // During this time, 3 PPU cycles and 1 APU cycles take place
-  
   tick: () => {
     PPU.tick();
     PPU.tick();
     PPU.tick();
     APU.tick();
   },
-  
 
   // Emulates a single CPU instruction, returns the number of cycles
   emulate: () => {
@@ -49,26 +47,26 @@ var CPU = {
           if(CPU.I !== 0){
             break;
           }
-          myop(3);
+          op(3);
           break;
         }
         case 1: {
           // NMI:
           //console.log("nmi");
-          myop(1);
+          op(1);
           break;
         }
         case 2: {
           // Reset:
           console.log("reset");
-          myop(2);
+          op(2);
           break;
         }
       }
       CPU.interrupt_requested = false;
     }
 
-    myop();
+    op();
 
     return c;
   },
@@ -87,10 +85,4 @@ var CPU = {
   haltCycles: cycles => {
     CPU.halt_cycles += cycles;
   },
-
-  
-  
-  
-
-  
 };

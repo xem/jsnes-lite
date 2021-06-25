@@ -610,9 +610,9 @@ var PPU = {
         PPU.scroll_x = (PPU.V_NN & 0b1) * 256 + PPU.V_XXXXX * 8 + PPU.xxx;
         
         // Debug
-        NES.vramCtx.fillStyle = "pink";
-        NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
-        NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
+        //NES.vramCtx.fillStyle = "pink";
+        //NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
+        //NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
       }
       
       // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
@@ -625,11 +625,11 @@ var PPU = {
         NES.frameCtx.putImageData(NES.frameData, 0, 0);
       
         // Debug (VRAM view)
-        NES.vramData.data.set(NES.vramBuffer8);
-        NES.vramCtx.putImageData(NES.vramData, 0, 0);
+        //NES.vramData.data.set(NES.vramBuffer8);
+        //NES.vramCtx.putImageData(NES.vramData, 0, 0);
         
         // Debug (pink lines)
-        NES.vramCtx.fill();
+        //NES.vramCtx.fill();
       }
       
       // VBlank ends at the pre-render scanline, and PPUSTATUS is reset
