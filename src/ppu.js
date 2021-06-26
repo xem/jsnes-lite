@@ -165,8 +165,8 @@ var PPU = {
     PPU.set_PPUMASK(0);
   },
   
-  // PPU memory access
-  // -----------------
+  // Memory access
+  // -------------
   
   // Handle address mirrorings
   mirrorAddress: address => {
@@ -466,7 +466,12 @@ var PPU = {
         scanlineSprites.push(i);
       }
     }
-
+    
+    // Set overflow flag if more than 8 sprites are present (useful?)
+    if(scanlineSprites.length > 8) {
+      PPU.PPUSTATUS_O = 1;
+    }
+    
     // Draw the scanline's pixels:
     // - For each pixel, draw the sprite with the highest priority among the first 8
     // - If the frontmost sprite is behind the background, draw a background tile pixel on top of it
@@ -557,7 +562,7 @@ var PPU = {
             pixel = ((byte2 >> (7 - (x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1) * 2 + ((byte1 >> (7 - (x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1);
           }
           
-          // Non-transparent pixel
+          // Non-transparent pixel (value: 1, 2 or 3)
           if(pixel){
             
             // If sprite rendering is enabled, draw it on the current frame
@@ -566,14 +571,13 @@ var PPU = {
             }
             
             // Sprite 0 hit
-            // Many edge cases prevent Sprite 0 hit from triggering, but it can be ignored
-            if(scanlineSprites[i] === 0 && !PPU.PPUSTATUS_S && pixel && PPU.vramPixelBuffer[x+PPU.scroll_x]/* && PPU.PPUMASK_s && PPU.PPUMASK_b*/){
+            if(scanlineSprites[i] === 0 && !PPU.PPUSTATUS_S && pixel && PPU.vramPixelBuffer[x] && PPU.PPUMASK_s && PPU.PPUMASK_b){
               PPU.PPUSTATUS_S = 1;
             }
             
             // If priority bit is 1 and background rendering enabled: draw current background tile pixel on top of sprite (if any)
             if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && PPU.vramPixelBuffer[x+PPU.scroll_x] && PPU.PPUMASK_b){
-              //NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x+PPU.scroll_x];
+              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x+PPU.scroll_x];
             }
           }
         }
@@ -604,15 +608,17 @@ var PPU = {
       // Visible scanlines
       if(PPU.scanline < 241){
         PPU.drawVramScanline((PPU.scanline+PPU.scroll_y)%480-1);
+        PPU.drawVramScanline(((PPU.scanline+PPU.scroll_y)%480-1)+240);
         PPU.drawScanline(PPU.scanline-1);
         
         // Update scroll
         PPU.scroll_x = (PPU.V_NN & 0b1) * 256 + PPU.V_XXXXX * 8 + PPU.xxx;
         
         // Debug
-        //NES.vramCtx.fillStyle = "pink";
-        //NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
-        //NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
+        NES.vramCtx.fillStyle = "pink";
+        NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, (PPU.scanline == 1 || PPU.scanline == 240) ? 256 : 6, 6);
+        NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
+        //NES.vramCtx.fill();
       }
       
       // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
@@ -625,11 +631,13 @@ var PPU = {
         NES.frameCtx.putImageData(NES.frameData, 0, 0);
       
         // Debug (VRAM view)
-        //NES.vramData.data.set(NES.vramBuffer8);
-        //NES.vramCtx.putImageData(NES.vramData, 0, 0);
+        NES.vramData.data.set(NES.vramBuffer8);
+        NES.vramCtx.putImageData(NES.vramData, 0, 0);
         
         // Debug (pink lines)
-        //NES.vramCtx.fill();
+        if(PPU.PPUMASK_b){
+          NES.vramCtx.fill();
+        }
       }
       
       // VBlank ends at the pre-render scanline, and PPUSTATUS is reset
