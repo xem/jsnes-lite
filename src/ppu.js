@@ -13,16 +13,16 @@
 // - http://forums.nesdev.com/viewtopic.php?t=8214
 // - https://www.youtube.com/watch?v=wt73KPS_23w
 
-// PPU memory map (64KiB):
+// PPU memory map (64KB):
 
 // +-------------+-------+-----------------------------------------------------------+
 // | Address     | Size  | Use                                                       |
 // +-------------+-------+-----------------------------------------------------------+
-// | $0000-$1FFF | 8KiB  | Cartridge space (CHR-ROM or CHR-RAM):                     |
-// | $0000-$0FFF | 4KiB  | Pattern Table 0 (256 tiles) "left page"                   |
-// | $1000-$1FFF | 4KiB  | Pattern Table 1 (256 tiles) "right page"                  |
+// | $0000-$1FFF | 8KB   | Cartridge space (CHR-ROM or CHR-RAM):                     |
+// | $0000-$0FFF | 4KB   | Pattern Table 0 (256 tiles) "left page"                   |
+// | $1000-$1FFF | 4KB   | Pattern Table 1 (256 tiles) "right page"                  |
 // +-------------+-------+-----------------------------------------------------------+
-// | $2000-$2FFF | 4KiB  | VRAM (2KiB in the NES, 2KiB in the cartridge or mirrored):|
+// | $2000-$2FFF | 4KB   | VRAM (2KB in the NES, 2KB in the cartridge or mirrored):  |
 // | $2000-$23BF | 960B  | Name Table 0                                              |
 // | $23C0-$23FF | 24B   | Attribute Table 0                                         |
 // | $2400-$27BF | 960B  | Name Table 1                                              |
@@ -54,7 +54,7 @@
 // +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 // | $3F20-$3FFF | 224B  | Mirrors of $3F00-$3F1F                                    |
 // +-------------+-------+-----------------------------------------------------------+
-// | $4000-$FFFF | 48kiB | Mirrors of $0000-$3FFF                                    |
+// | $4000-$FFFF | 48KB  | Mirrors of $0000-$3FFF                                    |
 // +-------------+-------+-----------------------------------------------------------+
 
 // OAM Memory (256 bytes):
@@ -65,8 +65,8 @@
 // | $00-$FF     | 256B  | Sprites properties (4 bytes for each)                     |
 // +-------------+-------+-----------------------------------------------------------+
 
-// Each PPU cycle advances the rendering by one pixel on a 341 * 262px grid
-  
+// Rendering beam for each frame (one pixel for each PPU tick):
+
 //         x=0                 x=256               x=340
 //      ---+-------------------+-------------------+
 //  y=0    | visible area      | Horizontal blank  |
@@ -77,82 +77,82 @@
 //  y=240  | idle scanline                         |
 //      ---+---------------------------------------|
 //  y=241  | vertical blanking (idle)              |
-//         | 20 scanlines long on NTSC consoles    |
-//  y=260  | 70 scanlines on PAL consoles          |
-//      ---+-----------------------------------+---+
-//  y=261  | pre-render scanline               | * |
-//  or -1 -+-----------------------------------+---+
+//         | - 20 scanlines long on NTSC consoles  |
+//  y=260  | - 70 scanlines on PAL consoles        |
+//      ---+-------------------------------------+-+
+//  y=261  | pre-render scanline                 |*|
+//  or -1 -+-------------------------------------+-+
 
-// (*) When background rendering is enabled, the pre-render scanline alternates between 340 and 341 pixels at each frame
+// Globals
+// -------
 
-// NB:
-// - Writes on registers PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR are ignored during the 29,658 first CPU clocks after reset on NTSC
-// - PPU writes are ignored 33,132 cycles after power up and reset on PAL
+var t = 0;  // temp var
+var o = 0;  // temp var
 
 var PPU = {
   
-  // System palette (64 RGB colors, in AABBGGRR format, ripped from the 3DS VC)
-  systemPalette:
-  /*
-  [
-    0xFF737373, 0xFF8c1821, 0xFFad0000, 0xFF9c0042,
-    0xFF73008c, 0xFF1000ad, 0xFF0000a5, 0xFF00087b,
-    0xFF002942, 0xFF004200, 0xFF005200, 0xFF103900,
-    0xFF5a3918, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFFbdbdbd, 0xFFef7300, 0xFFef3921, 0xFFf70084,
-    0xFFbd00bd, 0xFF5a00e7, 0xFF0029de, 0xFF084ace,
-    0xFF00738c, 0xFF009400, 0xFF00ad00, 0xFF399400,
-    0xFF8c8400, 0xFF101010, 0xFF000000, 0xFF000000,
-    0xFFffffff, 0xFFffbd39, 0xFFff945a, 0xFFff8ca5,
-    0xFFff7bf7, 0xFFb573ff, 0xFF6373ff, 0xFF399cff,
-    0xFF39bdf7, 0xFF10d684, 0xFF4ade4a, 0xFF9cff5a,
-    0xFFdeef00, 0xFF393939, 0xFF000000, 0xFF000000,
-    0xFFffffff, 0xFFffe7ad, 0xFFffd6c6, 0xFFffced6,
-    0xFFffc6ff, 0xFFdec6ff, 0xFFb5bdff, 0xFFaddeff,
-    0xFFa5e7ff, 0xFFa5ffe7, 0xFFbdf7ad, 0xFFceffb5,
-    0xFFf7ff9c, 0xFF8c8c8c, 0xFF000000, 0xFF000000
-  ],
-  */
-  "777812a0090470810a00a007024040050130531000000000bbbe70e32f08b0b50e02d04c0780900a0390880111000000ffffb3f95f8af7fb7f67f39f3bf1d84d49f5de0333000000ffffeafdcfcdfcfdcfbbfadfaefafebfacfbff9888000000".match(/.../g).map(c=>eval("0xff"+c[0]+c[0]+c[1]+c[1]+c[2]+c[2])),
-  
-  // PPU settings
-  // ------------
+  // System palette
+  // An array of 64 RGB colors, inspired by the 3DS VC palette, stored in AABBGGRR format.
+  systemPalette: (
+      "777812a0090470810a00a007"+
+      "024040050130531000000000"+
+      "bbbe70e32f08b0b50e02d04c"+
+      "0780900a0390880111000000"+
+      "ffffb3f95f8af7fb7f67f39f"+
+      "3bf1d84d49f5de0333000000"+
+      "ffffeafdcfcdfcfdcfbbfadf"+
+      "aefafebfacfbff9888000000"
+    )
+    .replace(/./g,"$&$&").match(/....../g).map(c=>eval("0xff"+c)),        // shorter
+    // .match(/.../g).map(c=>eval("0xff"+c[0]+c[0]+c[1]+c[1]+c[2]+c[2])), // longer but may compress better
 
-  // Reset PPU
+  // Reset the PPU
   reset: () => {
     
-    // Screen coordinates
-    PPU.scanline = 0;
-    PPU.dot = 0;
+    // Coordinates of the current pixel
+    PPU.scanline = 0; // Y between 0 and 261 on NTSC (or 311 on PAL)
+    PPU.dot = 0;      // X between 0 and 340 (on scanline 261, alternate between 239 and 240 if background rendering is enabled)
 
-    // Reset PPU memory and OAM
+    // Reset PPU memory (64KB) and OAM memory (256b)
     PPU.mem = [];
     PPU.OAM = [];
     
-    // VRAM pixel buffer for current scanline (to handle sprite priority)
+    // Background pixel buffer for current scanline (to handle sprite priority)
     PPU.vramPixelBuffer = [];
     
-    // PPU Scroll internal registers:
-    // V: where to scroll on next line (0yyyNNYYYYYXXXXX)
+    // PPU scrolling is handled via two 15-bit registers called V and T
+    // In these registers:
+    // - bits 0-4 (XXXXX) represent the coarse X scrolling
+    // - bits 5-9 (YYYYY) represent the coarse Y scrolling
+    // - bits 10-11 (NN) represent the nametable where the scrolling starts
+    // - bits 12-14 (yyy) represent the fine Y scrolling
+    // The fine X scrolling (xxx) is stored separately
+    // The effective X scrolling is equal to: (NN & 0b1) * 256 + XXXXX * 8 + xxx
+    // The effective Y scrolling is equal to: (NN >> 1) * 240 + YYYYY * 8 + yyy
+    
+    // V: value of scroll on the next scanline (V = 0yyyNNYYYYYXXXXX)
     PPU.V_yyy = 0;
     PPU.V_NN = 0;
     PPU.V_YYYYY = 0;
     PPU.V_XXXXX = 0;
     
-    // T: current scroll (0yyyNNYYYYYXXXXX)
+    // T: value of scroll on current scanline (T = 0yyyNNYYYYYXXXXX)
     PPU.T_yyy = 0;
     PPU.T_NN = 0;
     PPU.T_YYYYY = 0;
     PPU.T_XXXXX = 0;
 
-    // Fine X scroll (xxx)
+    // Fine X scroll (xxx, also called w)
     PPU.xxx = 0; 
     
     // Effective PPU scroll
-    PPU.scroll_x = 0; // (NN % 2) * 256 + XXXXX * 8 + xxx 
-    PPU.scroll_y = 0; // (NN >= 2) * 240 + YYYYY * 8 + yyy
+    PPU.scroll_x = 0;
+    PPU.scroll_y = 0;
 
-    // PPU Data register buffer
+    // PPUDATA register buffer
+    // When the CPU requests one byte from the PPU memory by reading the PPUDATA register,
+    // the byte is placed in a 1-byte buffer, and the value previously stored in this buffer is returned
+    // so the CPU will receive the requested byte the next time it reads PPUDATA
     PPU.PPUDATA_read_buffer = 0;
     
     // PPU Status register
@@ -160,9 +160,13 @@ var PPU = {
     PPU.PPUSTATUS_S =
     PPU.PPUSTATUS_V = 0;
 
-    // PPU Ctrl and Mask registers
+    // PPUCTRL and PPUMASK registers
     PPU.set_PPUCTRL(0);
     PPU.set_PPUMASK(0);
+    
+    // PPU latch (also called w)
+    // It's toggled between 0 and 1 every time PPUSCROLL or PPUADDR get written, and reset to 0 when PPUSTATUS is read
+    PPU.latch = 0;
   },
   
   // Memory access
@@ -205,7 +209,8 @@ var PPU = {
         address &= 0x3bff;
       }
       
-      // 2: four-screen nametable (no mirroring)
+      // 2: four-screen nametable
+      // There's no mirroring in this case, the address is not modified
     }
     
     return address;
@@ -221,8 +226,10 @@ var PPU = {
     PPU.mem[PPU.mirrorAddress(address)] = value;
   },
   
-  // CPU registers
-  // -------------
+  // CPU I/O registers
+  // -----------------
+  
+  // The CPU can read/write at the following addresses in memory to interact with the PPU
   
   // $2000 (write): set PPU Control Register 1 (PPUCTRL)
   set_PPUCTRL: value => {
@@ -249,7 +256,7 @@ var PPU = {
   get_PPUSTATUS: () => {
     
     // Update status
-    CPU.mem[0x2002] = 
+    t = CPU.mem[0x2002] = 
       0                         // Bits 0-4: copy of last 5 bits written to a PPU register (can be ignored)
       + (PPU.PPUSTATUS_O << 5)  // Bit 5 (O): Sprite overflow (set during sprite evaluation if more than 8 sprites in next scanline, cleared at pre-render line, buggy on the NES)
       + (PPU.PPUSTATUS_S << 6)  // Bit 6 (S): Sprite 0 hit (set when an opaque pixel from sprite 0 overlaps an opaque pixel of the background if both displays are enabled, cleared at pre-render line)
@@ -262,7 +269,7 @@ var PPU = {
     PPU.PPUSTATUS_V = 0;
 
     // Return status (without the resets)
-    return CPU.mem[0x2002];
+    return t;
   },
   
   // $2003 (write): set SPR-RAM Address Register (OAMADDR)
@@ -284,7 +291,7 @@ var PPU = {
   // $2005 (write twice: vertical, then horizontal): PPU Background Scrolling Offset (PPUSCROLL)
   set_PPUSCROLL: value => {
 
-    // Latch 0: first write, horizontal scroll
+    // Latch equals 0: first write, update horizontal scroll
     if(PPU.latch == 0){
       
       // Update X bits of scroll register T (XXXXXxxx = value)
@@ -292,7 +299,7 @@ var PPU = {
       PPU.xxx = value & 0b111;
     }
     
-    // Latch 1: second write, vertical scroll
+    // Latch equals 1: second write, update vertical scroll
     // If value is between 240 and 255, it becomes negative (-16 to -1) and the rendering is glitchy (ignored here)
     else {
       
@@ -308,7 +315,7 @@ var PPU = {
   // $2006 (write twice): VRAM Address Register (PPUADDR)
   set_PPUADDR: value => {
     
-    // Latch 0: first write, high byte of address 
+    // Latch 0: first write, set high byte of address and update Y scrolling
     if(PPU.latch == 0){
       
       PPU.PPUADDR = value << 8;
@@ -319,7 +326,7 @@ var PPU = {
       PPU.T_YYYYY = (value & 0b11) << 3; // read the two high bits of YYYYY
     } 
     
-    // Latch 1: second write, low byte of address 
+    // Latch 1: second write, set low byte of address and update X and Y scrolling
     else {
       
       PPU.PPUADDR += value;
@@ -328,7 +335,7 @@ var PPU = {
       PPU.T_YYYYY += (value >> 5); // read the three low bits of YYYYY
       PPU.T_XXXXX = value & 0b11111;
       
-      // Copy T in V
+      // Copy T in V, containing the scroll values to be used in the next scanline
       PPU.V_yyy = PPU.T_yyy;
       PPU.V_YYYYY = PPU.T_YYYYY;
       PPU.V_XXXXX = PPU.T_XXXXX;
@@ -339,7 +346,7 @@ var PPU = {
     PPU.latch ^= 1;
   },
   
-  // $2007h (read/write): VRAM Data Register (PPUDATA, address must be set first)
+  // $2007h (read/write): VRAM Data Register (PPUDATA, an address must be set using PPUADDR before accessing this)
   
   // Write
   set_PPUDATA: value => {
@@ -350,22 +357,20 @@ var PPU = {
   // Read
   get_PPUDATA: () => {
     
-    var tmp;
-    
     // PPUADDR between $0000 and $3EFF: buffered read
     // Each read fills a 1-byte buffer and returns the value previously stored in that buffer
     if(PPU.PPUADDR <= 0x3F00){
-      tmp = PPU.PPUDATA_read_buffer;
+      t = PPU.PPUDATA_read_buffer;
       PPU.PPUDATA_read_buffer = PPU.load(PPU.PPUADDR);
     }
     
     // PPUADDR higher than $3EFF: direct read
     else {
-      tmp = PPU.load(PPU.PPUADDR);
+      t = PPU.load(PPU.PPUADDR);
     }
     
     PPU.PPUADDR += PPU.PPUCTRL_I === 1 ? 32 : 1; // increment address (1 or 32 depending on bit 2 of PPUCTRL)
-    return tmp;
+    return t;
   },
 
   // $4014: (write): copy a 256-byte page of CPU memory into the OAM memory (OAMDMA)
@@ -384,200 +389,276 @@ var PPU = {
   // Rendering
   // ---------
   
-  // Render one line of the VRAM visualizer (background) and fill a buffer with the opaque pixels
+  // Background:
+  // The data stored in VRAM represents a 512*480px background, separated in four 256*240px screens
+  // Each screen can contain 32*30 tiles, and each tile measures 8*8px and can use a 4-color palette
+  // For each screen, a nametable in VRAM tells which tiles to draw, and an attribute table tells which palettes to use
+  // Attributes hold four 2-bit values, each of these values indicates which background subpalette to use for a given tile
+  //
+  // Attribute table for a given nametable (8*8 attributes):
+  //
+  //        0  1  2  3  4  5  6  7
+  //      +--+--+--+--+--+--+--+--+
+  // 2xC0 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xC8 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xD0 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xD8 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xE0 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xE8 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xF0 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  // 2xF8 |  |  |  |  |  |  |  |  |
+  //      +--+--+--+--+--+--+--+--+
+  //
+  //  One attribute:    /    \  
+  //                  /       \
+  //                /          \
+  //              /             \
+  //            /                \
+  //
+  //           bits 0-1   bits 2-3
+  //          +-------------------+
+  //          |  Tile   |  Tile   |
+  //          |         |         |
+  //          |  X, Y   |  X+1, Y |
+  //          |---------+---------|
+  //          |  Tile   |   Tile  |
+  //          |         |         |
+  //          |  X, Y+1 | X+1,Y+1 |
+  //          +-------------------+
+  //           bits 4-5   bits 6-7
+  //
+  //
+  // Render one line of the VRAM visualizer and fill a buffer with all the non-transparent pixels
+  // The line number (y) is a value vetween 0 and 480
   drawVramScanline: y => {
     
-    var i, j, X, Y;
+    var i, j, X, Y, nametable, bits, colors, pixel;
+    
+    // Reset pixel buffer
     PPU.vramPixelBuffer = [];
 
-    // Y tile coordinate
+    // Y tile coordinate (0-60)
     Y = ~~(y/8); 
 
-    // For each tile of the scanline
+    // For each tile of the scanline (X tile coordinate between 0 and 64):
     for(X = 0; X < 64; X++){
       
-      // Name table address
-      var nametable = 0x2000 + (0x800 * (Y > 29)) + (0x400 * (X > 31));
+      // Get the nametable address in PPU memory:
+      // $2000-$23BF: top left screen
+      // $2400-$27BF: top right screen
+      // $2800-$2BBF: bottom left screen
+      // $2C00-$2FBF: bottom right screen
+      nametable = 0x2000 + (0x800 * (Y > 29)) + (0x400 * (X > 31));
       
-      // Attribute table coordinates
-      var X2 = (X%32) >> 2; // pixels 0-255 / 256-511 => tiles 0-32 => attributes 0-7
-      var Y2 = (Y%30) >> 2; // pixels 0-239 / 240-480 => tiles 0-30 => attributes 0-7
-      var attribute = PPU.load(nametable + 0x3C0 + Y2 * 8 + X2);
+      // Get the attribute table address in PPU memory:
+      // $23C0-$23FF: top left screen
+      // $27C0-$27FF: top right screen
+      // $2BC0-$2BFF: bottom left screen
+      // $2FC0-$2FFF: bottom right screen
+      // attributetable = nametable + 0x3C0;
       
-      // Coordinates of the 2x2 tiles subgroup inside the 4x4 tiles group represented by this attribute byte
-      var X3 = ((X%32) >> 1) & 1; // [pixels 0-31 / 32-63 / ... => tiles 0-3 / 4-7 / ... => coordinates 0-1]
-      var Y3 = ((Y%30) >> 1) & 1; // [pixels 0-31 / 32-63 / ... => tiles 0-3 / 4-7 / ... => coordinates 0-1]
+      // Get the attribute byte for the group including the current tile:
+      // attribute_X = (X%32) >> 2; // 0-7
+      // attribute_Y = (Y%30) >> 2; // 0-7
+      // attribute = PPU.load(attributetable + attribute_Y * 8 + attribute_X);
       
-      // Take the 2 bits representing this subgroup in the attribute byte
-      var bits = ((attribute >> (4*Y3 + 2*X3)) & 0b11);
+      // Get the attribute's 2-bit value for the current title:
+      // bits_X = ((X % 32) >> 1) & 1; // 0-1
+      // bits_Y = ((Y % 30) >> 1) & 1; // 0-1
+      // bits = ((attribute >> (4 * bits_Y + 2 * bits_X)) & 0b11); // 0-3
       
-      // Subpalette represented by these bits
-      // NB: during forced blanking (background and sprites disabled), if PPUADDR points to a palette's index 0, this color will be used as universal background color (ignored here) 
-      var colors = [
-        PPU.systemPalette[PPU.mem[0x3F00]],
-        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 1]],
-        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 2]],
-        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 3]],
+      // Golfed here:
+      bits = (
+        PPU.load(nametable + 0x3C0 + ((Y%30) >> 2) * 8 + ((X%32) >> 2))
+        >> 
+        (
+          4 * (((Y % 30) >> 1) & 1)
+          + 
+          2 * (((X % 32) >> 1) & 1)
+        )
+      ) & 0b11;
+
+      // Get the subpalette represented by these bits:
+      // Background palette is stored at $3F00-$3F0F (16 colors, 4 subpalette of 4 colors)
+      // The values stored in the palettes are indexes of the 64 system colors (PPU.systemPalette)
+      // The first color of each subpalette is ignored (*), the value at $3F00 (universal background color) is used instead
+      // (*) during forced blanking (background & sprites disabled), if PPUADDR points to a subpalette's color 0, this color is used as universal background color (ignored here)
+      colors = [
+        PPU.systemPalette[PPU.mem[0x3F00]],                 // universal background color
+        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 1]],  // color 1 of current subpalette
+        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 2]],  // color 2 of current subpalette
+        PPU.systemPalette[PPU.mem[0x3F00 + bits * 4 + 3]],  // color 3 of current subpalette
       ];
       
-      var byte1, byte2, pixel;
+      // Get the tile's address:
+      // The bit B of PPUCTRL tells if the tile's graphics are stored in the first or second CHR-ROM bank ($0000-$0FFF or $1000-$1FFF)
+      // The tile's index within the current CHR-ROM bank is stored in the nametable
+      // tile = PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable + (Y % 30) * 32 + (X % 32))
       
-      // Draw a line of each background tile
-      for(i = 0; i < 8; i++){
-        j = y % 8;
-        byte1 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y%30)*32+(X%32)) * 16 + j);
-        byte2 = PPU.load(PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y%30)*32+(X%32)) * 16 + j + 8); 
-          
-        // Pixel value
-        pixel = ((byte2 >> (7 - i)) & 1) * 2 + ((byte1 >> (7 - i)) & 1);
-        NES.vramBuffer32[(Y*8+j)*512+(X*8+i)] = colors[pixel];
-        if(pixel){
-          PPU.vramPixelBuffer[X*8+i] = colors[pixel];
+      // Get the pixels values:
+      // The pixels of each tile are encoded on 2 bits
+      // The value of a pixel (0-3) corresponds to a color from the current subpalette
+      // Each tile is stored on 16 bytes, the first 8 bytes represent the "high bit" of each pixel, and the last 8 bytes the "low bit"
+      
+      // Let x and y be the coordinates of the pixels to draw inside the current tile (x = 0-7, y = 0-7)
+      y %= 8;
+      for(x = 0; x < 8; x++){
+        
+        // The current line of 8 pixels is encoded on 2 bytes:
+        // byte1 = PPU.load(tile * 16 + y);
+        // byte2 = PPU.load(tile * 16 + y + 8);
+        
+        // And the current pixel's value is encoded as:
+        // pixel = ((byte2 >> (7 - x)) & 1) * 2 + ((byte1 >> (7 - x)) & 1);
+        
+        // If the pixel's value is 0, the pixel is considered transparent and the universal background color is rendered
+        // But if it's opaque (non-zero), its color is stored in the current line's pixel buffer
+        // This buffer will be useful to render the sprites either in the front or behind the background tiles
+        
+        // Golfed here:
+        t = PPU.PPUCTRL_B * 0x1000 + PPU.load(nametable+(Y % 30) * 32 + (X % 32)) * 16 + y;
+        if(pixel = ((PPU.load(t + 8) >> (7 - x)) & 1) * 2 + ((PPU.load(t) >> (7 - x)) & 1)){
+          PPU.vramPixelBuffer[X * 8 + x] = colors[pixel];
         }
+        
+        // Render the pixel on the VRAM visualizer
+        NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = colors[pixel];
       }
     }
   },
   
-  // Render one final scanline on screen (background + sprites)
+  // Screen:
+  // Backround rendering and sprite rendering can be enabled or disabled using bits b and s of PPUMASK
+  // Background pixels are stored in a buffer using drawVramScanline()
+  // Up to 64 sprites can be drawn on screen, either on the foreground or behind the background tiles
+  // Sprites are drawn from front to back (sprite 0 to sprite 63) and can overlap
+  // A background sprite can overlap a foreground sprite, in that case it behaves like a clipping mask (ex: SMB's mushroom coming out of a question block)
+  // Sprites can measure 8*8px or 8*16px (if bit H of PPUCTRL is set)
+  // If 8*16px sprites are enabled, two consecutive tiles from the CHR-ROM are drawn on screen (the first one on top, the second one on bottom) with the same palette
+  // Contrary to background tiles:
+  // - sprites tiles use a dedicated sprite color palette ($3F10-$3F1F), divided in 4 subpalettes
+  // - the first color of each subpalette is always "transparent"
+  // - sprites can be flipped horizontally and/or vertically
+  // As soon as an opaque pixel of the sprite 0 overlaps an opaque pixel of the background, a "sprite 0 hit" is detected (bit S of PPUSTATUS is set)
+  
+  // Each sprite is encoded on 4 bytes in the OAM memory:
+  // Byte 0: Y coordinate
+  // Byte 1: 
+  //  * 8x8 mode: tile index in current tile bank
+  //  * 8x16 mode: bit 0 = tile bank / bits 1-7 = top tile index
+  // Byte 2:
+  //  * bits 0-1: palette (4-7)
+  //  * bits 2-4: always 0
+  //  * bit 5: priority (0: in front of the background, 1: behind the background)
+  //  * bit 6: X flip
+  //  * bit 7: Y flip
+  // Byte 3: X coordinate
+  
+  // Render one final scanline on screen (background + sprites):
+  // The scanline number (y) is a value vetween 0 and 240
   drawScanline: y => {
-
-    var i, x, spriteScanlineAddress, bits, colors;
-
-    // Sprites are drawn from front (0) to back (63) and can overlap.
-    // They are encoded on 4 bytes in the OAM memory:
-    // - Byte 0: Y coordinate
-    // - Byte 1: 8x8 mode: tile index in current tile bank, 8x16 mode: bit 0 = tile bank / bits 1-7 = top tile index
-    // - Byte 2: bits 0-1: palette (4-7) / bits 2-4: always 0 / bit 5: priority / bit 6: X flip / bit 7: Y flip
-    // - Byte 3: X coordinate
-    // A sprite can be either in the foreground or behind the background (if the priority bit is set)
-    // NB: if a sprite is behind the background and overlaps another sprite that is in the froreground, the other sprite will still be hidden by it
-    // When an opaque pixel of the sprite 0 overlaps an opaque pixel of the background and both displays are enabled, a "sprite 0 hit" is detected
     
-    // Find the sprites present in this scanline
-    var scanlineSprites = [];
+    var i, x, scanlineSprites, spriteScanlineAddress, bits, colors;
+
+    // Find which sprites are present in the current scanline:
+    // Reset the list
+    scanlineSprites = [];
+    
+    // Loop on all the sprites
     for(i = 0; i < 64; i++){
-      if(y >= PPU.OAM[i*4] && y < PPU.OAM[i*4] + (PPU.PPUCTRL_H ? 16 : 8)){
+      
+      // If the current scanline is between the top of the sprite and its bottom (8px or 16px lower, depending on bit H of PPUCTRL)
+      if(y >= PPU.OAM[i * 4] && y < PPU.OAM[i * 4] + (PPU.PPUCTRL_H ? 16 : 8)){
         
-        // Set overflow flag if more than 8 sprites are present
+        // If more than 8 sprites are found, set overflow flag (bit 0 of PPUSTATUS) and stop checking
         if(scanlineSprites.length == 8) {
           PPU.PPUSTATUS_O = 1;
           break;
         }
+        
+        // Else, the sprite is visible in the current scanline. Add it to the list
         scanlineSprites.push(i);
       }
     }
     
-    // Set overflow flag if more than 8 sprites are present (useful?)
-    if(scanlineSprites.length > 8) {
-      PPU.PPUSTATUS_O = 1;
-    }
-    
     // Draw the scanline's pixels:
-    // - For each pixel, draw the sprite with the highest priority among the first 8
-    // - If the frontmost sprite is behind the background, draw a background tile pixel on top of it
     for(x = 0; x < 256; x++){
       
       // Draw background tiles if background rendering is enabled
+      // X and Y scrolling are applied when fetching the pixels values inside vramBuffer32
       if(PPU.PPUMASK_b){
-        NES.frameBuffer32[y*256+x] = NES.vramBuffer32[((y+PPU.scroll_y)%480)*512+(x+PPU.scroll_x)%512];
+        NES.frameBuffer32[y * 256 + x] = NES.vramBuffer32[((y + PPU.scroll_y) % 480) * 512 + (x + PPU.scroll_x) % 512];
       }
       
-      // For each sprite
-      for(i = scanlineSprites.length-1; i >= 0; i--){
+      // Then, for each sprite from back to front:
+      for(i = scanlineSprites.length - 1; i >= 0; i--){
         
-        // Retrieve the sprite's subpalette (index 0 is always considered transparent)
-        bits = PPU.OAM[scanlineSprites[i]*4+2] & 0b11;
-        colors = [
-          ,
-          PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 1]],
-          PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 2]],
-          PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 3]],
-        ];
-        
-        // If this sprite is present at this pixel
-        if(x >= PPU.OAM[scanlineSprites[i]*4+3] && x < PPU.OAM[scanlineSprites[i]*4+3] + 8){
+        // If this sprite is present at this pixel (if x is between the left column and right column of the sprite)
+        if(x >= PPU.OAM[scanlineSprites[i] *4 + 3] && x < PPU.OAM[scanlineSprites[i] * 4 + 3] + 8){
           
-          // Decode the current sprite scanline:
-          // 8x16:
-          if(PPU.PPUCTRL_H){
-            
-            spriteScanlineAddress = (PPU.OAM[scanlineSprites[i]*4+1] & 1) * 0x1000 + (PPU.OAM[scanlineSprites[i]*4+1] & 0b11111110) * 16;
-            
-            // Vertical flip: bottom tile is reversed on top, top tile is reversed on bottom
-            if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
-
-              // Top tile
-              if(y < PPU.OAM[scanlineSprites[i]*4] + 8){
-                spriteScanlineAddress += 7 + (16 - y + PPU.OAM[scanlineSprites[i]*4]);
-              }
+          // Retrieve the sprite's subpalette (bits 0-1 of byte 2 of sprite i in OAM memory)
+          bits = PPU.OAM[scanlineSprites[i] * 4 + 2] & 0b11;
+          colors = [
+            ,                                                   // transparent
+            PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 1]],  // color 1 of current subpalette
+            PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 2]],  // color 2 of current subpalette
+            PPU.systemPalette[PPU.mem[0x3F10 + bits * 4 + 3]],  // color 3 of current subpalette
+          ];
+          
+          // Retrieve the address of the current sprite's scanline in CHR-ROM:
+          t = scanlineSprites[i] * 4;
+          o = PPU.OAM[t];
+          spriteScanlineAddress =
+          
+            // CHR-ROM bank
+            (
+              PPU.PPUCTRL_H
               
-              // Bottom tile
-              else {
-                spriteScanlineAddress += (15 - y + PPU.OAM[scanlineSprites[i]*4]);
-              }
-            }
-            
-            // No flip
-            else {
-
-              // Top tile
-              if(y < PPU.OAM[scanlineSprites[i]*4] + 8){
-                spriteScanlineAddress += (y - PPU.OAM[scanlineSprites[i]*4]);
-              }
+              // 8*16
+              ? (PPU.OAM[t + 1] & 1)
               
-              // Bottom tile
-              else {
-                spriteScanlineAddress += 8 + (y - PPU.OAM[scanlineSprites[i]*4]);
-              }
-            }
-          }
-          
-          // 8x8:
-          else {
+              // 8*8
+              : PPU.PPUCTRL_S
+            ) * 0x1000
             
-            spriteScanlineAddress = PPU.PPUCTRL_S * 0x1000 + PPU.OAM[scanlineSprites[i]*4+1] * 16;
-          
-            // Vertical flip
-            if(PPU.OAM[scanlineSprites[i]*4+2] & 0b10000000){
-              spriteScanlineAddress += 7 - (y - PPU.OAM[scanlineSprites[i]*4]);
-            }
+            // Tile
+            + (PPU.OAM[t + 1] & (0xFF - PPU.PPUCTRL_H)) * 16
             
-            // No flip
-            else {
-              spriteScanlineAddress += (y - PPU.OAM[scanlineSprites[i]*4]);
-            }
-          }
+            // Scanline
+            + (PPU.OAM[t + 2] & 0b10000000
+              
+              // Y flip
+              ? (7 - y + o + 8 * ((y < o + 8 && PPU.PPUCTRL_H) + PPU.PPUCTRL_H))
+
+              // No Y flip
+              : (8 + y - o - 8 * (y < o + 8))
+            );
+
+          // Get pixel position within the sprite scanline
+          t = x - PPU.OAM[scanlineSprites[i] * 4 + 3];
           
-          byte1 = PPU.mem[spriteScanlineAddress];
-          byte2 = PPU.mem[spriteScanlineAddress + 8];
+          // Handle horizontal flip
+          o = (PPU.OAM[scanlineSprites[i] * 4 + 2] & 0b1000000) ? t : 7 - t;
           
-          // Decode current pixel:
-          // Horizontal flip
-          if(PPU.OAM[scanlineSprites[i]*4+2] & 0b1000000){
-            pixel = ((byte2 >> ((x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1) * 2 + ((byte1 >> ((x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1);
-          }
-          
-          // No flip
-          else{
-            pixel = ((byte2 >> (7 - (x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1) * 2 + ((byte1 >> (7 - (x - PPU.OAM[scanlineSprites[i]*4+3]))) & 1);
-          }
-          
-          // Non-transparent pixel (value: 1, 2 or 3)
-          if(pixel){
+          // Get current pixel value, and check if it's opaque (value: 1, 2 or 3)
+          if(pixel = ((PPU.load(spriteScanlineAddress + 8) >> o) & 1) * 2 + ((PPU.load(spriteScanlineAddress) >> o) & 1)){
             
             // If sprite rendering is enabled, draw it on the current frame
-            if(PPU.PPUMASK_s){
-              NES.frameBuffer32[y*256+x] = colors[pixel];
+            // But if priority bit is 1 and background rendering is enabled: let the background tile's pixel displayed on top if it's opaque
+            if(PPU.PPUMASK_s && !((PPU.OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && PPU.vramPixelBuffer[x+PPU.scroll_x] && PPU.PPUMASK_b)){
+              NES.frameBuffer32[y * 256 + x] = colors[pixel];
             }
             
-            // Sprite 0 hit
+            // Sprite 0 hit detection
             if(scanlineSprites[i] === 0 && !PPU.PPUSTATUS_S && pixel && PPU.vramPixelBuffer[x] && PPU.PPUMASK_s && PPU.PPUMASK_b){
               PPU.PPUSTATUS_S = 1;
-            }
-            
-            // If priority bit is 1 and background rendering enabled: draw current background tile pixel on top of sprite (if any)
-            if((PPU.OAM[scanlineSprites[i]*4+2] & 0b100000) && PPU.vramPixelBuffer[x+PPU.scroll_x] && PPU.PPUMASK_b){
-              NES.frameBuffer32[y*256+x] = PPU.vramPixelBuffer[x+PPU.scroll_x];
             }
           }
         }
@@ -593,10 +674,9 @@ var PPU = {
     
     PPU.dot++;
     
-    // The PPU renders one dot (pixel) per cycle
+    // The PPU renders one dot (one pixel) per cycle
     // At the end of each scanline (341 dots), a new scanline starts
-    // the PPU reads the name table 34 times per scanline (the 34th is garbage), some mappers need this to work properly (ignored here)
-    // On every odd frame, when background rendering is enabled, the pre-render line has 340 dots instead of 341 (ignored here)
+    // The screen is complete when 240 scanlines are rendered
     if(PPU.dot > 341){
       PPU.dot = 0;
       PPU.scanline++;
@@ -607,22 +687,23 @@ var PPU = {
       
       // Visible scanlines
       if(PPU.scanline < 241){
-        PPU.drawVramScanline((PPU.scanline+PPU.scroll_y)%480-1);
-        PPU.drawVramScanline(((PPU.scanline+PPU.scroll_y)%480-1)+240);
-        PPU.drawScanline(PPU.scanline-1);
+        PPU.drawVramScanline((PPU.scanline+PPU.scroll_y) % 480 - 1);
+        PPU.drawVramScanline(((PPU.scanline+PPU.scroll_y) % 480 - 1) + 240);
+        PPU.drawScanline(PPU.scanline - 1);
         
         // Update scroll
         PPU.scroll_x = (PPU.V_NN & 0b1) * 256 + PPU.V_XXXXX * 8 + PPU.xxx;
         
         // Debug
-        NES.vramCtx.fillStyle = "pink";
-        NES.vramCtx.rect(PPU.scroll_x-3, (PPU.scanline + PPU.scroll_y-3)%480, (PPU.scanline == 1 || PPU.scanline == 240) ? 256 : 6, 6);
-        NES.vramCtx.rect((PPU.scroll_x-3+256)%512, (PPU.scanline + PPU.scroll_y-3)%480, 6, 6);
-        //NES.vramCtx.fill();
+        //NES.vramCtx.fillStyle = "pink";
+        //NES.vramCtx.rect(PPU.scroll_x -3, (PPU.scanline + PPU.scroll_y-3) % 480, (PPU.scanline == 1 || PPU.scanline == 240) ? 256 : 6, 6);
+        //NES.vramCtx.rect((PPU.scroll_x - 3 + 256) % 512, (PPU.scanline + PPU.scroll_y - 3) % 480, 6, 6);
       }
       
-      // VBlank starts at scanline 241 (NMI is triggered, current frame is displayed on screen)
+      // VBlank starts at scanline 241 (a NMI interrupt is triggered, and the frame is displayed on the canvas)
       else if(PPU.scanline == 241){
+        
+        // VBlank + NMI
         PPU.PPUSTATUS_V = 1;
         CPU.requestIrq(CPU.NMI);
         
@@ -631,13 +712,11 @@ var PPU = {
         NES.frameCtx.putImageData(NES.frameData, 0, 0);
       
         // Debug (VRAM view)
-        NES.vramData.data.set(NES.vramBuffer8);
-        NES.vramCtx.putImageData(NES.vramData, 0, 0);
-        
-        // Debug (pink lines)
-        if(PPU.PPUMASK_b){
-          NES.vramCtx.fill();
-        }
+        //NES.vramData.data.set(NES.vramBuffer8);
+        //NES.vramCtx.putImageData(NES.vramData, 0, 0);
+        //if(PPU.PPUMASK_b){
+        //  NES.vramCtx.fill();
+        //}
       }
       
       // VBlank ends at the pre-render scanline, and PPUSTATUS is reset
@@ -657,15 +736,6 @@ var PPU = {
         PPU.V_yyy = PPU.T_yyy;
         PPU.V_NN = (PPU.V_NN & 0b01) + (PPU.T_NN & 0b10);
         PPU.scroll_y = (PPU.V_NN >> 1) * 240 + PPU.V_YYYYY * 8 + PPU.V_yyy;
-        
-        // Update VRAM view outside viewport (debug)
-        //for(var i = 0; i < PPU.scroll_y; i++){
-          //PPU.drawVramScanline(i);
-        //}
-        
-        //for(var i = PPU.scroll_y + 240; i < 480; i++){
-          //PPU.drawVramScanline(i);
-        //}
       }
     }
   },

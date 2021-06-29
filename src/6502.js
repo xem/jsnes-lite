@@ -4,11 +4,6 @@
 // Globals
 // -------
 
-// 16kb memory
-// Each chunk of 256 bytes in memory is called a page
-// The first chunk ($00-$FF) is called Zero page and is easier/faster to access
-m = [],
-
 // Registers
 A =           // accumulator
 X =           // X

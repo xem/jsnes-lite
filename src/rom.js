@@ -11,8 +11,8 @@
 // +------+-----------------------------------------------------------------------------------------+
 // | 0-3  | $4E $45 $53 $1A (ASCII chars "NES<EOF>")                                                |
 // +------+-----------------------------------------------------------------------------------------+
-// | 4    | Number of 16KiB PRG-ROM banks                                                           |
-// | 5    | Number of 8KiB CHR-ROM banks (if 0 => use 1 CHR-RAM bank)                               |
+// | 4    | Number of 16KB PRG-ROM banks                                                            |
+// | 5    | Number of 8KB CHR-ROM banks (if 0 => use 1 CHR-RAM bank)                                |
 // +------+-----------------------------------------------------------------------------------------+
 // | 6    | - bit 0: Nametable mirroring (0 => horizontal / 1 => vertical)                          |
 // |      | - bit 1: Cartridge contains battery-backed PRG-RAM (CPU $6000-$7FFF)                    |
@@ -21,11 +21,11 @@
 // |      | - bits 4-7: Bits 0-3 of mapper number                                                   |
 // +------+-----------------------------------------------------------------------------------------+
 // | 7    | - bit 0: Vs. arcade system                                                              |
-// |      | - bit 1: extra 8kib ROM bank for arcade systems                                         |
+// |      | - bit 1: extra 8KB ROM bank for arcade systems                                          |
 // |      | - bits 2-3: If bit 3 = 1 and bit 2 = 0: iNES 2.0. Else: iNES 1.0. (Unreliable)          |
 // |      | - bits 4-7: Bits 4-7 of mapper number                                                   |
 // +------+-----------------------------------------------------------------------------------------+
-// | 8    | - iNES 1.0: Number of 8KiB PRG-RAM banks (if 0 => add 1 bank for better compatibility)  |
+// | 8    | - iNES 1.0: Number of 8KB PRG-RAM banks (if 0 => add 1 bank for better compatibility)   |
 // |      | - iNES 2.0: Submapper (bits 0-4), bits 8-11 of mapper number (bits 5-8)                 |
 // +------+-----------------------------------------------------------------------------------------+
 // | 9    | - iNES 1.0: TV system (0: NTSC / 1: PAL). (Unreliable)                                  |
@@ -48,7 +48,7 @@
 // ------------------------------------
 // - Trainer, if present (0 or 512 bytes)
 // - PRG-ROM banks (16384 * x bytes)
-// - CHR-ROM banks (8192 * y bytes, a bank contains two 4KiB pages)
+// - CHR-ROM banks (8192 * y bytes, a bank contains two 4KB pages)
 // - Extra ROM banks, if present (arcade games only)
 
 // Banks not present in the ROM file:
@@ -92,15 +92,15 @@ var ROM = {
         ROM.header[i] = data.charCodeAt(i) & 0xff;
       }
       
-      // Read number of 16Kib PRG-ROM banks (byte 4)
+      // Read number of 16KB PRG-ROM banks (byte 4)
       // The game's program is stored here
       ROM.prg_rom_count = ROM.header[4];
       
-      // Read number of 8Kib CHR-ROM banks (byte 5)
+      // Read number of 8KB CHR-ROM banks (byte 5)
       // The game's graphics are stored here in the form of 8*8px, 4-color bitmaps
       ROM.chr_rom_count = ROM.header[5] * 2;
       
-      // Check if the game adds 2 extra Kib to the PPU's VRAM (byte 6, bit 4)
+      // Check if the game adds 2 extra KB to the PPU's VRAM (byte 6, bit 4)
       // Otherwise, read mirroring layout (byte 6, bit 0)
       // 0 => vertical mirroring (bit 0 on: the game can scroll horizontally)
       // 1 => horizontal mirroring (bit 0 off: the game can scroll vertically)

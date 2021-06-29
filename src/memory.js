@@ -10,12 +10,12 @@
 // - https://problemkaputt.de/everynes.htm#iomap
 // - https://wiki.nesdev.com/w/index.php/CPU_memory_map
 
-//  CPU memory map (64KiB):
+//  CPU memory map (64KB):
 
 //  +-------------+-------+-------------------------------------------------------+
 //  | Address     | Size  | Use                                                   |
 //  +-------------+-------+-------------------------------------------------------+
-//  | $0000-$07FF | 2KiB  | 2KiB internal RAM:                                    |
+//  | $0000-$07FF | 2KB   | 2KB internal RAM:                                     |
 //  | $0000-$000F | 16B   | - Zero page                                           |
 //  | $0010-$00FF | 240B  | - Global variables                                    |
 //  | $0100-$019F | 160B  | - Next VBlank's nametable data                        |
@@ -24,9 +24,9 @@
 //  | $0300-$03FF | 256B  | - Sound / misc                                        |
 //  | $0400-$07FF | 1024B | - Arrays / misc                                       |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
-//  | $0800-$0FFF | 2KiB  | Mirror of $0000-$07FF                                 |
-//  | $1000-$17FF | 2KiB  | Mirror of $0000-$07FF                                 |
-//  | $1800-$1FFF | 2KiB  | Mirror of $0000-$07FF                                 |
+//  | $0800-$0FFF | 2KB   | Mirror of $0000-$07FF                                 |
+//  | $1000-$17FF | 2KB   | Mirror of $0000-$07FF                                 |
+//  | $1800-$1FFF | 2KB   | Mirror of $0000-$07FF                                 |
 //  +-------------+-------+-------------------------------------------------------+
 //  | $2000-$2007 | 8B    | PPU I/O registers:                                    |
 //  | 2000        | 1B    | PPU Control Register 1                   (Write-only) |
@@ -71,12 +71,12 @@
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 //  | $4018-$401F | 8B    | APU I/O test registers (disabled)                     |
 //  +-------------+-------+-------------------------------------------------------+
-//  | $4020-$FFFF | 48KiB | Cartridge space:                                      |
+//  | $4020-$FFFF | 48KB  | Cartridge space:                                      |
 //  | $4020-$5FFF | 8160B | - Expansion ROM (some mappers add extra ROM/RAM here) |
-//  | $6000-$7FFF | 8KiB  | - PRG-RAM (if any)                                    |
+//  | $6000-$7FFF | 8KB   | - PRG-RAM (if any)                                    |
 //  | $7000-$71FF | 512B  | - trainer (if any)                                    |
-//  | $8000-$BFFF | 16KiB | - PRG-ROM low page                                    |
-//  | $C000-$FFFF | 16KiB | - PRG-ROM high page                                   |
+//  | $8000-$BFFF | 16KB  | - PRG-ROM low page                                    |
+//  | $C000-$FFFF | 16KB  | - PRG-ROM high page                                   |
 //  | $FFFA-$FFFB | 2B    | - NMI vector                                          |
 //  | $FFFC-$FFFD | 2B    | - Reset vector                                        |
 //  | $FFFE-$FFFF | 2B    | - IRQ/BRK vector                                      |

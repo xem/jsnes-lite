@@ -12,10 +12,10 @@
 // Only Mapper 0 (NROM) is handled for now:
 // https://wiki.nesdev.com/w/index.php/NROM
 
-// - 8, 16 or 32Kib PRG-ROM (mirrored if less than 32Kib)
-// - 0 or 8Kib PRG-RAM (only one game uses it: Family Basic)
-// - 0, 4 or 8Kib CHR-ROM (mirrored if it's just 4)
-// - 0 or 8Kib CHR-RAM (enable it if no CHR-ROM is present. Mapper 0 doesn't really support it, but some homebrew ROMs rely on it)
+// - 8, 16 or 32KB PRG-ROM (mirrored if less than 32KB)
+// - 0 or 8KB PRG-RAM (only one game uses it: Family Basic)
+// - 0, 4 or 8KB CHR-ROM (mirrored if it's just 4)
+// - 0 or 8KB CHR-RAM (enable it if no CHR-ROM is present. Mapper 0 doesn't really support it, but some homebrew ROMs rely on it)
 // - Horizontal or vertical nametable mirroring
 
 var Mapper = {

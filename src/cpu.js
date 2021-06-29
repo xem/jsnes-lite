@@ -1,6 +1,18 @@
 // CPU
 // ===
 
+// Resources:
+// - https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+// - https://wiki.nesdev.com/w/index.php/Status_flags
+// - http://wiki.nesdev.com/w/index.php/CPU_interrupts
+// - https://wiki.nesdev.com/w/index.php/Stack
+// - https://www.masswerk.at/6502/6502_instruction_set.html
+// - https://problemkaputt.de/everynes.htm#cpu65xxmicroprocessor
+// - https://www.npmjs.com/package/dict-tempering
+// - http://www.6502.org/tutorials/vflag.html
+// - https://retrocomputing.stackexchange.com/questions/145
+// - http://forum.6502.org/viewtopic.php?f=8&t=6370
+
 var CPU = {
 
   // Interrupt types
@@ -11,13 +23,8 @@ var CPU = {
   // Reset the CPU
   reset: () => {
     
-    var i;
-    
-    // CPU internal RAM (2kb)
+    // CPU internal memory (64KB)
     CPU.mem = [];
-    for(i = 0; i < 2 * 1024; i++){
-      CPU.mem[i] = 0;
-    }
 
     // Cycles to wait until next opcode
     CPU.halt_cycles = 0;
