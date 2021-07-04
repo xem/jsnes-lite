@@ -361,7 +361,7 @@ var APU = {
 
     // Frame IRQ handling:
     if(APU.frameIrqEnabled && APU.frameIrqActive){
-      CPU.requestIrq(CPU.IRQ);
+      /*if(!interrupt_requested)*/ interrupt_requested = 3;
     }
 
     // Clock frame counter at double CPU speed:
@@ -767,7 +767,7 @@ ChannelDM.prototype = {
     }
 
     if(this.irqGenerated){
-      CPU.requestIrq(CPU.IRQ);
+      /*if(!interrupt_requested)*/ interrupt_requested = 3;
     }
   },
 

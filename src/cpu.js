@@ -13,83 +13,46 @@
 // - https://retrocomputing.stackexchange.com/questions/145
 // - http://forum.6502.org/viewtopic.php?f=8&t=6370
 
-var CPU = {
+var
+cpu_mem,
+interrupt_requested,
 
-  // Interrupt types
-  IRQ: 0,   // IRQ/BRK
-  NMI: 1,   // Non-maskable
-  RESET: 2, // Reset
-
-  // Reset the CPU
-  reset: () => {
+// Reset the CPU
+cpu_reset = () => {
     
-    // CPU internal memory (64KB)
-    CPU.mem = [];
-
-    // Cycles to wait until next opcode
-    CPU.halt_cycles = 0;
-    
-    // Interrupts
-    CPU.interrupt_requested = false;
-    CPU.interrupt_type = null;
-  },
+  // CPU internal memory (64KB)
+  cpu_mem = [];
+},
   
-  // Clock 1 CPU cycle
-  // During this time, 3 PPU cycles and 1 APU cycles take place
-  tick: () => {
-    PPU.tick();
-    PPU.tick();
-    PPU.tick();
-    APU.tick();
-  },
+// Clock 1 CPU cycle
+// During this time, 3 PPU cycles and 1 APU cycle take place
+cpu_tick = () => {
+  ppu_tick();
+  ppu_tick();
+  ppu_tick();
+  //apu_tick();
+},
 
-  // Emulates a single CPU instruction, returns the number of cycles
-  emulate: () => {
+// Emulates a single CPU instruction or interrupt, returns the number of cycles
+emulate = () => {
 
-    // Check interrupts:
-    if(CPU.interrupt_requested){
-      switch (CPU.interrupt_type){
-        case 0: {
-          // Normal IRQ:
-          if(CPU.I !== 0){
-            break;
-          }
-          op(3);
-          break;
-        }
-        case 1: {
-          // NMI:
-          //console.log("nmi");
-          op(1);
-          break;
-        }
-        case 2: {
-          // Reset:
-          console.log("reset");
-          op(2);
-          break;
-        }
-      }
-      CPU.interrupt_requested = false;
-    }
+  // Execute the requested interrupt, if any
+  if(interrupt_requested){
+    
+    // 1: NMI
+    // 2: Reset
+    // 3: IRQ
+    op(interrupt_requested);
+    
+    // Reset interrupt requested flag
+    interrupt_requested = 0;
+  }
 
+  // Or execute next instruction
+  else {
     op();
-
-    return c;
-  },
-
-  requestIrq: type => {
-    if(CPU.interrupt_requested){
-      if(type === CPU.IRQ){
-        return;
-      }
-      // console.log("too fast irqs. type="+type);
-    }
-    CPU.interrupt_requested = true;
-    CPU.interrupt_type = type;
-  },
-
-  haltCycles: cycles => {
-    CPU.halt_cycles += cycles;
-  },
-};
+  }
+  
+  // Return the number of cycles spent
+  return c;
+}

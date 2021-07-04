@@ -55,22 +55,22 @@ var NES = {
   load_rom: data => {
     
     // Parse the ROM
-    ROM.load_rom(data);
+    parse_rom(data);
     
     // Add the right ROM banks to the CPU's memory
-    Mapper.load_rom();
+    load_rom();
   },
 
   // Boot or reset the system
   reset: () => {
     
     // Reset CPU, PPU, APU
-    CPU.reset();
-    PPU.reset();
+    cpu_reset();
+    ppu_reset();
     APU.reset();
     
-    // Send reset (IRQ) interrupt to the CPU
-    CPU.requestIrq(CPU.RESET);
+    // Send reset interrupt to the CPU
+    interrupt_requested = 2;
   },
 
   // Render a new frame
@@ -80,20 +80,20 @@ var NES = {
     vramCanvas.width ^= 0;
     
     var cycles;
-    NES.cpu_cycles = 0;
-    PPU.endFrame = 0;
+    cpu_cycles = 0;
+    endFrame = 0;
     
     // Repeatedly execute CPU instructions until the frame is fully rendered
-    while(!PPU.endFrame){
+    while(!endFrame){
       
       // Execute a CPU instruction, count elapsed CPU cycles
-      cycles = CPU.emulate();
-      NES.cpu_cycles += cycles;
+      cycles = emulate();
+      cpu_cycles += cycles;
       //console.log("emulate");
       
       // execute 3 PPU cycles and 1 APU cycle for each CPU tick
       for(var i = 0; i < cycles; i++){
-        CPU.tick();
+        cpu_tick();
       }
       //APU.clockFrameCounter(cycles/3);
     }

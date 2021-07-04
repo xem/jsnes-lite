@@ -2,13 +2,13 @@
 // ==============
 
 // This file handles the CPU's memory accesses
-// It assumes that the memory has been initialized (see CPU.reset())
+// It assumes that the memory has been initialized (see CPU_reset())
 // Reading and writing at specific addresses makes the CPU able to control other parts of the emulator (PPU, APU, controllers, mapper)
 
 // Resources:
 // - https://problemkaputt.de/everynes.htm#memorymaps
 // - https://problemkaputt.de/everynes.htm#iomap
-// - https://wiki.nesdev.com/w/index.php/CPU_memory_map
+// - https://wiki.nesdev.com/w/index.php/cpu_memory_map
 
 //  CPU memory map (64KB):
 
@@ -16,13 +16,9 @@
 //  | Address     | Size  | Use                                                   |
 //  +-------------+-------+-------------------------------------------------------+
 //  | $0000-$07FF | 2KB   | 2KB internal RAM:                                     |
-//  | $0000-$000F | 16B   | - Zero page                                           |
-//  | $0010-$00FF | 240B  | - Global variables                                    |
-//  | $0100-$019F | 160B  | - Next VBlank's nametable data                        |
-//  | $01A0-$01FF | 96B   | - Stack                                               |
-//  | $0200-$02FF | 256B  | - Next VBlank's OAM data                              |
-//  | $0300-$03FF | 256B  | - Sound / misc                                        |
-//  | $0400-$07FF | 1024B | - Arrays / misc                                       |
+//  | $0000-$00FF | 256B  | - Zero page                                           |
+//  | $0100-$01FF | 256B  | - Stack                                               |
+//  | $01FF-$07FF | 1.5KB | - General purpose                                     |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 //  | $0800-$0FFF | 2KB   | Mirror of $0000-$07FF                                 |
 //  | $1000-$17FF | 2KB   | Mirror of $0000-$07FF                                 |
@@ -76,152 +72,119 @@
 //  | $6000-$7FFF | 8KB   | - PRG-RAM (if any)                                    |
 //  | $7000-$71FF | 512B  | - trainer (if any)                                    |
 //  | $8000-$BFFF | 16KB  | - PRG-ROM low page                                    |
-//  | $C000-$FFFF | 16KB  | - PRG-ROM high page                                   |
-//  | $FFFA-$FFFB | 2B    | - NMI vector                                          |
-//  | $FFFC-$FFFD | 2B    | - Reset vector                                        |
-//  | $FFFE-$FFFF | 2B    | - IRQ/BRK vector                                      |
+//  | $C000-$FFFF | 16KB  | - PRG-ROM high page, including:                       |
+//  | $FFFA-$FFFB | 2B    |   * NMI vector                                        |
+//  | $FFFC-$FFFD | 2B    |   * Reset vector                                      |
+//  | $FFFE-$FFFF | 2B    |   * IRQ/BRK vector                                    |
 //  +-------------+-------+-------------------------------------------------------+
 
+
+// Read a 8-byte value in memory
+memory_read = address => {
   
-Memory = {
+  // Wrap around ($0000-$FFFF)
+  address &= 0xFFFF;
   
+  // Handle RAM mirrors ($0000-$07FF + $0800-$1FFF)
+  if(address < 0x2000) address &= 0x7FF;
   
-  // Read a 8-byte value in memory
-  load: address => {
+  // PPU registers ($2000-$2007) + mirrors ($2008-$3FFF)
+  else if(address < 0x4000){
     
-    // Wrap around ($0000-$FFFF)
-    address &= 0xFFFF;
+    // Mirroring
+    address &= 0x2007;
+
+    // $2002: PPU Status Register
+    if(address == 0x2002) return get_PPUSTATUS(); 
+
+    // $2004: Sprite Memory read
+    else if(address == 0x2004) return get_OAMDATA(); 
     
-    // Handle RAM mirrors ($0000-$07FF + $0800-$1FFF)
-    if(address < 0x2000){
-      address &= 0x7FF;
-    }
-    
-    // PPU registers ($2000-$2007) + mirrors ($2008-$3FFF)
-    else if(address < 0x4000){
-      
-      // Mirroring
-      address &= 0x2007;
-
-      // $2002: PPU Status Register
-      if(address == 0x2002) {//console.log("get_PPUSTATUS"); 
-        return PPU.get_PPUSTATUS(); 
-      }
-
-      // $2004: Sprite Memory read
-      else if(address == 0x2004) {//console.log("get_OAMDATA"); 
-        return PPU.get_OAMDATA(); 
-      }
-      
-      // $2007: VRAM read
-      else if(address == 0x2007) {//console.log("get_PPUDATA"); 
-        return PPU.get_PPUDATA(); 
-      }
-    }
-    
-    // Sound and I/O registers ($4000-$401F)
-    else if(address < 0x4020){
-      
-      // $4015: Sound channel enable, DMC Status
-      if(address == 0x4015) return APU.readReg(address);
-
-      // $4016: Joystick 1 + Strobe
-      else if(address == 0x4016) return joy1Read();
-
-      // $4017: Joystick 2 + Strobe
-      else if(address == 0x4017) return joy2Read();
-    }
-    
-    // Simply read in memory
-    return CPU.mem[address] || 0;
-  },
-
-  // Write a 8-bit value in memory
-  write: (address, value) => {
-    
-    // Wrap around ($0000-$FFFF)
-    address &= 0xFFFF;
-    
-    // Handle RAM mirrors ($0000-$07FF + $0800-$1FFF)
-    if(address < 0x2000){
-      address &= 0x7FF;
-    }
-    
-    // PPU registers ($2000-$2007) + mirrors ($2008-$3FFF)
-    else if(address < 0x4000){
-      
-      address &= 0x2007;
-      
-      // $2000: PPU Control register 1 (write-only)
-      if(address == 0x2000)
-        //console.log("set_PPUCTRL"), 
-        PPU.set_PPUCTRL(value);
-
-      // $2001: PPU Control register 2 (write-only)
-      else if(address == 0x2001) 
-        //console.log("set_PPUMASK"), 
-        PPU.set_PPUMASK(value);
-
-      // $2003: Set Sprite RAM address (write-only)
-      else if(address == 0x2003)
-        //console.log("set_OAMADDR"), 
-        PPU.set_OAMADDR(value);
-
-      // $2004: Write to Sprite RAM
-      else if(address == 0x2004)
-        //console.log("set_OAMDATA"), 
-        PPU.set_OAMDATA(value);
-
-      // $2005: Screen Scroll offsets (write-only)
-      else if(address == 0x2005)
-        //console.log("set_PPUSCROLL"), 
-        PPU.set_PPUSCROLL(value);
-
-      // $2006: Set VRAM address (write-only)
-      else if(address == 0x2006)
-        //console.log("set_PPUADDR"), 
-        PPU.set_PPUADDR(value);
-
-      // $2007: Write to VRAM
-      else if(address == 0x2007)
-        //console.log("set_PPUDATA"), 
-        PPU.set_PPUDATA(value);
-      
-    }
-    
-    // Sound registers ($4000-$4013)
-    else if(address < 0x4014){
-      APU.writeReg(address, value);
-    }
-    
-    // I/O registers ($4014-$401F)
-    else if(address < 0x4020){
-      
-      // $4014: Sprite Memory DMA Access
-      if(address == 0x4014) PPU.set_OAMDMA(value);
-
-      // $4015: Sound Channel Switch, DMC Status
-      else if(address == 0x4015) APU.writeReg(address, value);
-
-      // $4016: Joystick 1 + Strobe
-      else if(address == 0x4016){
-        if((value & 1) === 0 && (Mapper.joypadLastWrite & 1) === 1){
-          Mapper.joy1StrobeState = 0;
-          Mapper.joy2StrobeState = 0;
-        }
-        Mapper.joypadLastWrite = value;
-      }
-
-      // $4017: Sound channel frame sequencer:
-      else if(address == 0x4017) APU.writeReg(address, value);
-    }
-
-    // Write to persistent RAM
-    else if(address >= 0x6000 && address < 0x8000){
-      NES.onBatteryRamWrite(address, value);
-    }
-    
-    // Simply write in memory
-    CPU.mem[address] = value;
+    // $2007: VRAM read
+    else if(address == 0x2007) return get_PPUDATA(); 
   }
+  
+  // Sound and I/O registers ($4000-$401F)
+  else if(address < 0x4020){
+    
+    // $4015: Sound channel enable, DMC Status
+    if(address == 0x4015) return APU.readReg(address);
+
+    // $4016: Joystick 1 + Strobe
+    else if(address == 0x4016) return joy1Read();
+
+    // $4017: Joystick 2 + Strobe
+    else if(address == 0x4017) return joy2Read();
+  }
+  
+  // Simply read in memory
+  return cpu_mem[address] || 0;
+},
+
+// Write a 8-bit value in memory
+memory_write = (address, value) => {
+  
+  // Wrap around ($0000-$FFFF)
+  address &= 0xFFFF;
+  
+  // Handle RAM mirrors ($0000-$07FF + $0800-$1FFF)
+  if(address < 0x2000) address &= 0x7FF;
+  
+  // PPU registers ($2000-$2007) + mirrors ($2008-$3FFF)
+  else if(address < 0x4000){
+    
+    address &= 0x2007;
+    
+    // $2000: PPU Control register 1 (write-only)
+    if(address == 0x2000) set_PPUCTRL(value);
+
+    // $2001: PPU Control register 2 (write-only)
+    else if(address == 0x2001) set_PPUMASK(value);
+
+    // $2003: Set Sprite RAM address (write-only)
+    else if(address == 0x2003) set_OAMADDR(value);
+
+    // $2004: Write to Sprite RAM
+    else if(address == 0x2004) set_OAMDATA(value);
+
+    // $2005: Screen Scroll offsets (write-only)
+    else if(address == 0x2005) set_PPUSCROLL(value);
+
+    // $2006: Set VRAM address (write-only)
+    else if(address == 0x2006) set_PPUADDR(value);
+
+    // $2007: Write to VRAM
+    else if(address == 0x2007) set_PPUDATA(value);
+  }
+  
+  // Sound registers ($4000-$4013)
+  else if(address < 0x4014) APU.writeReg(address, value);
+  
+  // I/O registers ($4014-$401F)
+  else if(address < 0x4020){
+    
+    // $4014: Sprite Memory DMA Access
+    if(address == 0x4014) set_OAMDMA(value);
+
+    // $4015: Sound Channel Switch, DMC Status
+    else if(address == 0x4015) APU.writeReg(address, value);
+
+    // $4016: Joystick 1 + Strobe
+    else if(address == 0x4016){
+      if((value & 1) === 0 && (joypadLastWrite & 1) === 1){
+        joy1StrobeState = 0;
+        joy2StrobeState = 0;
+      }
+      joypadLastWrite = value;
+    }
+
+    // $4017: Sound channel frame sequencer:
+    else if(address == 0x4017) APU.writeReg(address, value);
+  }
+
+  // Write to persistent RAM
+  else if(address >= 0x6000 && address < 0x8000) NES.onBatteryRamWrite(address, value);
+  
+  // Simply write in memory
+  cpu_mem[address] = value;
 }

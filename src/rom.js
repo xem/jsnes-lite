@@ -1,10 +1,10 @@
-// ROM manager
-// ===========
+// ROM loader
+// ==========
 
-// This file exposes one function: ROM.load_rom(data)
-// It parses a ROM file (iNES 1.0 or 2.0) and sets up the ROM banks, tilesets and various emulator options.
+// This file exposes one function: parse_rom(data)
+// It parses a ROM file (iNES 1.0) and sets up the ROM banks and various emulator options.
 
-// iNes ROM file header (15 bytes):
+// iNes ROM file header (16 bytes):
 
 // +------+-----------------------------------------------------------------------------------------+
 // | Byte | Use                                                                                     |
@@ -56,8 +56,8 @@
 // - PRG-RAM banks (save slot) - emulators usually use a save file to simulate this
 // - CHR-RAM banks (same as CHR-ROM, readable & writeable) - this is filled directly by the CPU
 
-// How to detect the iNES format version:
-// --------------------------------------
+// How to detect the iNES format version (ignored here):
+// -----------------------------------------------------
 // - If (byte 7 AND $0C) == $08, and the size encoded in bytes 4, 5 and 9 does not exceed the file size, then iNES 2.0
 // - Else if (byte 7 AND $0C) == $00, and bytes 12-15 are 0, then iNES 1.0
 // - Else, archaic iNES format
@@ -68,87 +68,63 @@
 // - The filename can contain "(E)", "(EUR)" or "(Europe)" for PAL / "(U)", "(USA)", "(J)" or "(Japan)" for NTSC / "(EU)" or "(World)" for both
 // - You can also fallback to NTSC if you don't know (if the game is PAL, it will still work, but it'll run 20% faster)
 
-var ROM = {
-  header: [],
-  mapper: 0,
-  mirroring: 0,
-  trainer: 0,
-  prg_rom_count: 0,
-  prg_rom: [],
-  chr_rom_count: 0,
-  chr_rom: [[],[]],
-  chr_rom_tiles: [[],[]],
+var
+mapper,
+mirroring,
+prg_rom,
+chr_rom,
+offset,
 
-  // Load a ROM file:
-  load_rom: data => {
+// Load a ROM file:
+parse_rom = (data, i, j) => {
+  
+  // Ensure file starts with chars "NES\x1a"
+  if(data.includes("NES")){
+  
+    // Read useful information from the rom header:
     
-    var i, j, k, l;
+    // Check if the game adds 2 extra KB to the PPU's VRAM to have a 4-screen nametable (byte 6, bit 3)
+    // Otherwise, read mirroring layout (byte 6, bit 0)
+    // 0 => vertical mirroring (bit 0 on: the game can scroll horizontally)
+    // 1 => horizontal mirroring (bit 0 off: the game can scroll vertically)
+    // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically)
+    mirroring = (data.charCodeAt(6) & 0b00001000) ? 2 : (data.charCodeAt(6) & 0b0000001) ? 0 : 1;
     
-    // Ensure file starts with chars "NES\x1a"
-    if(!data.indexOf("NES\x1a")){
+    // Check if the game has at least one battery-backed PRG-RAM bank (byte 6, bit 1)
+    // This is a persistent save slot that can be used to save the player's progress in a game
+    // If present, it can be accessed by the CPU at the addresses $6000-$7FFF (ignored for now)
+    // batteryRam = (data.charCodeAt(6) & 0b0000010);
     
-      // Parse ROM header (first 16 bytes)
-      for(i = 0; i < 16; i++){
-        ROM.header[i] = data.charCodeAt(i) & 0xff;
+    // Mapper number (byte 6, bits 4-7 >> 4 + byte 7, bits 4-7)
+    // iNes 2.0 ROMs contain more mapper bits on byte 8
+    mapper = (data.charCodeAt(6) >> 4) + (data.charCodeAt(7) & 0b11110000);
+    
+    // Skip header
+    offset = 16;
+    
+    // Skip 512b trainer, if it's present (byte 6, bit 2)
+    // This ROM bank is only used by special hardware or rom hacks, so it can be ignored
+    // (if present, it's usually mapped to the memory addresses $7000-$71FF)
+    if(data.charCodeAt(6) & 0b00000100) offset += 512;
+    
+    // Load the PRG-ROM banks containing the game's code
+    // The number of 16KB PRG-ROM banks is stored on byte 4 of the header
+    prg_rom = [];
+    for(i = 0; i < data.charCodeAt(4); i++){
+      prg_rom[i] = [];
+      for(j = 0; j < 16 * 1024; j++){
+        prg_rom[i][j] = data.charCodeAt(offset++) & 0xff;
       }
-      
-      // Read number of 16KB PRG-ROM banks (byte 4)
-      // The game's program is stored here
-      ROM.prg_rom_count = ROM.header[4];
-      
-      // Read number of 8KB CHR-ROM banks (byte 5)
-      // The game's graphics are stored here in the form of 8*8px, 4-color bitmaps
-      ROM.chr_rom_count = ROM.header[5] * 2;
-      
-      // Check if the game adds 2 extra KB to the PPU's VRAM (byte 6, bit 4)
-      // Otherwise, read mirroring layout (byte 6, bit 0)
-      // 0 => vertical mirroring (bit 0 on: the game can scroll horizontally)
-      // 1 => horizontal mirroring (bit 0 off: the game can scroll vertically)
-      // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically)
-      ROM.mirroring = (ROM.header[6] & 0b00001000) ? 2 : (ROM.header[6] & 0b0000001) ? 0 : 1;
-
-      PPU.nametable_mirroring = ROM.mirroring;
-      
-      // Check if the game has at least one battery-backed PRG-RAM bank (byte 6, bit 2)
-      // This is a persistent save slot that can be used to save the player's progress in a game
-      // If present, it can be accessed by the CPU at the addresses $6000-$7FFF
-      ROM.batteryRam = (ROM.header[6] & 0b0000010);
-      
-      // Check if the game contains a 512b trainer (byte 6, bit 3)
-      // This bank contains subroutines executed by some Mappers
-      // If present, it can be accessed by the CPU at the addresses $7000-$71FF
-      ROM.trainer = (ROM.header[6] & 0b00000100);
-      
-      // Mapper number (byte 6, bits 5-8 >> 4 + byte 7, bits 5-8)
-      // iNes 2.0 ROMs contain more mapper bits on byte 8
-      // (Mapper number is ignored for now as we only support Mapper 0)
-      ROM.mapper = (ROM.header[6] >> 4) + (ROM.header[7] & 0b11110000);
-      
-      // Skip header
-      var offset = 16;
-      
-      // Skip trainer, if it's present
-      if(ROM.trainer) offset += 512;
-      
-      // Load the PRG-ROM banks
-      for(i = 0; i < ROM.prg_rom_count; i++){
-        ROM.prg_rom[i] = [];
-        for(j = 0; j < 16 * 1024; j++){
-          ROM.prg_rom[i][j] = data.charCodeAt(offset++) & 0xff;
-        }
-      }
-      
-      // Load the CHR-ROM pages and prepare 256 tiles for each of them
-      for(i = 0; i < ROM.chr_rom_count; i++){
-        ROM.chr_rom[i] = [];
-        ROM.chr_rom_tiles[i] = [];
-        for(j = 0; j < 4 * 1024; j++){
-          ROM.chr_rom[i][j] = data.charCodeAt(offset++) & 0xff;
-        }
-
-        for(j = 0; j < 256; j++){
-          ROM.chr_rom_tiles[i][j] = { pixels: [] };
-        }
+    }
+    
+    // Load the CHR-ROM pages
+    // The number of pairs of 4KB CHR-ROM pages is stored on byte 5 of the header
+    // Each bank contains 256 8*8px, 4-color bitmap tiles
+    chr_rom = [];
+    for(i = 0; i < data.charCodeAt(5) * 2; i++){
+      chr_rom[i] = [];
+      for(j = 0; j < 4 * 1024; j++){
+        chr_rom[i][j] = data.charCodeAt(offset++) & 0xff;
       }
     }
   }

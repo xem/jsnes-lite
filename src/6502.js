@@ -23,9 +23,9 @@ c = 0,       // cycle counter
 // -------
 
 // Read/write a byte in memory. Costs 1 cycle
-// "Memory" handles mirrors, persistent save slots, and Mapper-specific features like bank switches
-r = v => (c++, Memory.load(v)),
-w = (v, w) => (c++, Memory.write(v, w)),
+// These functions handle mirrors, persistent save slots, and Mapper-specific features like bank switches
+r = v => (c++, memory_read(v)),
+w = (v, w) => (c++, memory_write(v, w)),
 
 // Update N and Z status flags:
 // - The value v is clamped on 8 bits and returned
@@ -837,19 +837,21 @@ op = (v, z) => (
     // then jump to address stored at $FFFE-$FFFF
     // This costs 7 cycles
 
-    (v > 1 || r(0x2000) >> 7) && ( // NES-specific test, commented here
-
+    // Only execute NMI if VBlank (bit 7 of $2000) is set
+    (v > 1 || r(0x2000) >> 7)
+    
+    // Only execute IRQ if I is not set
+    && (v < 3 || !I)
+    
+    && (
       (
-        (
-          (v - 2) 
-          ? (h(PC >> 8), h(255 & PC), h(z ? (P|16) : (239 & P))) // NMI/IRQ/BRK
-          : (S = (S-3) & 255) // Reset
-        ),
+        (v - 2) 
+        ? (h(PC >> 8), h(255 & PC), h(z ? (P|16) : (239 & P))) // NMI/IRQ/BRK
+        : (S = (S-3) & 255) // Reset
+      ),
 
-        I = 1,
-        PC = r(65528 + v * 2) + 256 * r(65528 + v * 2 + 1)
-      )
-
+      I = 1,
+      PC = r(65528 + v * 2) + 256 * r(65528 + v * 2 + 1)
     )
   )
 

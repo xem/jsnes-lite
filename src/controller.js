@@ -28,7 +28,7 @@ Controller.prototype = {
 joy1Read = function(){
   var ret;
 
-  switch (Mapper.joy1StrobeState){
+  switch (joy1StrobeState){
     case 0:
     case 1:
     case 2:
@@ -37,7 +37,7 @@ joy1Read = function(){
     case 5:
     case 6:
     case 7:
-      ret = NES.controllers[1].state[Mapper.joy1StrobeState];
+      ret = NES.controllers[1].state[joy1StrobeState];
       break;
     case 8:
     case 9:
@@ -59,9 +59,9 @@ joy1Read = function(){
       ret = 0;
   }
 
-  Mapper.joy1StrobeState++;
-  if(Mapper.joy1StrobeState === 24){
-    Mapper.joy1StrobeState = 0;
+  joy1StrobeState++;
+  if(joy1StrobeState === 24){
+    joy1StrobeState = 0;
   }
 
   return ret;
@@ -70,7 +70,7 @@ joy1Read = function(){
 joy2Read = function(){
   var ret;
 
-  switch (Mapper.joy2StrobeState){
+  switch (joy2StrobeState){
     case 0:
     case 1:
     case 2:
@@ -79,7 +79,7 @@ joy2Read = function(){
     case 5:
     case 6:
     case 7:
-      ret = NES.controllers[2].state[Mapper.joy2StrobeState];
+      ret = NES.controllers[2].state[joy2StrobeState];
       break;
     case 8:
     case 9:
@@ -101,16 +101,16 @@ joy2Read = function(){
       ret = 0;
   }
 
-  Mapper.joy2StrobeState++;
-  if(Mapper.joy2StrobeState === 24){
-    Mapper.joy2StrobeState = 0;
+  joy2StrobeState++;
+  if(joy2StrobeState === 24){
+    joy2StrobeState = 0;
   }
 
   return ret;
 }
 
 
-// From Mapper.s.js
+// From s.js
   /*reset: function(){
     this.joy1StrobeState = 0;
     this.joy2StrobeState = 0;
@@ -124,17 +124,17 @@ joy2Read = function(){
   
 /*NES.zapperMove: function(x, y){
   if(!NES.mmap) return;
-  Mapper.zapperX = x;
-  Mapper.zapperY = y;
+  zapperX = x;
+  zapperY = y;
 },
 
 NES.zapperFireDown: function(){
   if(!NES.mmap) return;
-  Mapper.zapperFired = true;
+  zapperFired = true;
 },
 
 NES.zapperFireUp: function(){
   if(!NES.mmap) return;
-  Mapper.zapperFired = false;
+  zapperFired = false;
 },*/
 
