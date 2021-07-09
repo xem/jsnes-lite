@@ -16,12 +16,12 @@ var NES = {
     // Display
     NES.frameCtx = options.frameCanvas.getContext("2d");
     NES.vramCtx = options.vramCanvas.getContext("2d");
-    NES.frameData = NES.frameCtx.getImageData(0,0,256,240);
-    NES.vramData = NES.vramCtx.getImageData(0,0,512,480);
-    NES.frameBuffer = new ArrayBuffer(NES.frameData.data.length);
-    NES.vramBuffer = new ArrayBuffer(NES.vramData.data.length);
-    NES.frameBuffer8 = new Uint8ClampedArray(NES.frameBuffer);
-    NES.vramBuffer8 = new Uint8ClampedArray(NES.vramBuffer);
+    NES.frameData = NES.frameCtx.getImageData(0, 0, 256, 240);
+    NES.vramData = NES.vramCtx.getImageData(0, 0, 512, 480);
+    NES.frameBuffer = new ArrayBuffer(256 * 240 * 4);
+    NES.vramBuffer = new ArrayBuffer(512 * 480 * 4);
+    NES.frameBuffer8 = new Uint8Array(NES.frameBuffer);
+    NES.vramBuffer8 = new Uint8Array(NES.vramBuffer);
     NES.frameBuffer32 = new Uint32Array(NES.frameBuffer);
     NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
     

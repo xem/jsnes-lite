@@ -37,11 +37,11 @@
 // | $3F00-$3F1F | 32B   | Palettes:                                                 |
 // | $3F00       | 1B    | Universal background color                                |
 // | $3F01-$3F03 | 3B    | Background palette 0                                      |
-// | $3F04       | 1B    | Used by Background palette 1 only during forced blanking  |
+// | $3F04       | 1B    | Universal bg color replaces it except in forced blanking  |
 // | $3F05-$3F07 | 3B    | Background palette 1                                      |
-// | $3F08       | 1B    | Used by background palette 2 only during forced blanking  |
+// | $3F08       | 1B    | Universal bg color replaces it except in forced blanking  |
 // | $3F09-$3F0B | 3B    | Background palette 2                                      |
-// | $3F0C       | 1B    | Used by background palette 3 only during forced blanking  |
+// | $3F0C       | 1B    | Universal bg color replaces it except in forced blanking  |
 // | $3F0D-$3F0F | 3B    | Background palette 3                                      |
 // | $3F10       | 1B    | Mirror of $3F00                                           |
 // | $3F11-$3F13 | 3B    | Sprite palette 0                                          |
@@ -73,9 +73,9 @@
 //         | (this is rendered | (prepare sprites  |
 //  y=239  | on the screen)    | for the next      |
 //  y=239  |                   | scanline)         |
-//      ---+-------------------+-------------------|
+//      ---+-------------------+-------------------+
 //  y=240  | idle scanline                         |
-//      ---+---------------------------------------|
+//      ---+---------------------------------------+
 //  y=241  | vertical blanking (idle)              |
 //         | - 20 scanlines long on NTSC consoles  |
 //  y=260  | - 70 scanlines on PAL consoles        |
@@ -126,14 +126,10 @@ endFrame,
 // System palette
 // An array of 64 RGB colors, inspired by the 3DS VC palette, stored in AABBGGRR format.
 systemPalette = (
-    "777812a0090470810a00a007"+
-    "024040050130531000000000"+
-    "bbbe70e32f08b0b50e02d04c"+
-    "0780900a0390880111000000"+
-    "ffffb3f95f8af7fb7f67f39f"+
-    "3bf1d84d49f5de0333000000"+
-    "ffffeafdcfcdfcfdcfbbfadf"+
-    "aefafebfacfbff9888000000"
+    "777812a0090470810a00a007024040050130531000000000"+
+    "bbbe70e32f08b0b50e02d04c0780900a0390880111000000"+
+    "ffffb3f95f8af7fb7f67f39f3bf1d84d49f5de0333000000"+
+    "ffffeafdcfcdfcfdcfbbfadfaefafebfacfbff9888000000"
   )
   .match(/.../g)
   .map(c => +("0xff" + c[0] + c[0] + c[1] + c[1] + c[2] + c[2])),
@@ -187,7 +183,7 @@ ppu_reset = () => {
   // It's toggled between 0 and 1 every time PPUSCROLL or PPUADDR get written, and reset to 0 when PPUSTATUS is read
   latch = 0;
 
-  // PPUCTRL and PPUMASK registers
+  // Reset PPUCTRL and PPUMASK registers
   set_PPUCTRL(0);
   set_PPUMASK(0);
 },
@@ -206,7 +202,7 @@ mirrorAddress = address => {
     
     address &= 0x3F1F;
 
-    // $3F10: mirror of $3F00 (universal background color)
+    // $3F10: mirror of $3F00
     if(address == 0x3F10) address = 0x3F00;
   }
   
@@ -221,55 +217,50 @@ mirrorAddress = address => {
     // 0: vertical mirroring:
     // - $2800-$2BFF is a mirror of $2000-$23FF
     // - $2C00-$2FFF is a mirror of $2400-$27FF
-    if(mirroring == 0){
-      address &= 0x37ff;
-    }
     
     // 1: horizontal mirroring:
     // - $2400-$27FF is a mirror of $2000-$23FF
     // - $2C00-$2FFF is a mirror of $2800-$2BFF
-    else if(mirroring == 1){
-      address &= 0x3bff;
-    }
     
     // 2: four-screen nametable
     // There's no mirroring in this case, the address is not modified
+    address &= (0x37ff + 0x400 * mirroring);
   }
   
   return address;
 },
 
-// Read a byte in from memory
-load = address => {
+// Read a byte in memory
+ppu_read = address => {
+  
+  // $3F04, $3F08, $3F0C: replaced by $3F00 (universal background color) except during forced blanging (TODO)
+  if((address & 0x3F03) == 0x3F00) address = 0x3F00;
   return PPU_mem[mirrorAddress(address)];
 },
 
-// Write a byte in memory
-write = (address, value) => {
-  PPU_mem[mirrorAddress(address)] = value;
-},
-
-// CPU I/O registers
+// PPU I/O registers
 // -----------------
+
+// TODO: move all this in memory.js
 
 // The CPU can read/write at the following addresses in memory to interact with the PPU
 
 // $2000 (write): set PPU Control Register 1 (PPUCTRL)
 set_PPUCTRL = value => {
-  PPUCTRL_V = (value >> 7) & 1; // bit 7: trigger a NMI on VBlank
-                                    // bit 6: ignored (external pin)
-  PPUCTRL_H = (value >> 5) & 1; // bit 5: sprite size (0: 8x8, 1: 8x16)
-  PPUCTRL_B = (value >> 4) & 1; // bit 4: background pattern table (0: $0000, 1: $1000)
-  PPUCTRL_S = (value >> 3) & 1; // bit 3: sprite pattern table (0: $0000, 1: $1000, ignored in 8x16 mode)
-  PPUCTRL_I = (value >> 2) & 1; // bit 2: VRAM address increment after reading from PPUDATA (0: 1, 1: 32)
-  T_NN = value & 0b11;          // bits 0-1: update nametable bits in scroll register T
+  PPUCTRL_V = (value >> 7) & 1;   // bit 7: trigger a NMI on VBlank
+  //PPUCTRL_P = (value >> 6) & 1  // bit 6: external pin controlling backdrop color (ignored here)
+  PPUCTRL_H = (value >> 5) & 1;   // bit 5: sprite size (0: 8x8, 1: 8x16)
+  PPUCTRL_B = (value >> 4) & 1;   // bit 4: background pattern table (0: $0000, 1: $1000)
+  PPUCTRL_S = (value >> 3) & 1;   // bit 3: sprite pattern table (0: $0000, 1: $1000, ignored in 8x16 mode)
+  PPUCTRL_I = (value >> 2) & 1;   // bit 2: VRAM address increment after reading from PPUDATA (0: 1, 1: 32)
+  T_NN = value & 0b11;            // bits 0-1: update nametable bits in scroll register T
 },
 
 // $2001 (write): set PPU Control Register 2 (PPUMASK)
 set_PPUMASK = value => {
   //PPUMASK_RGB = (value >> 5) & 7; // Bits 5-7: red/green/blue emphasis on NTSC, red/blue/green on PAL (ignored here)
-  PPUMASK_s = (value >> 4) & 1;   // Bit 4: show sprites
-  PPUMASK_b = (value >> 3) & 1;   // Bit 3: show background
+  PPUMASK_s = (value >> 4) & 1;     // Bit 4: show sprites
+  PPUMASK_b = (value >> 3) & 1;     // Bit 3: show background
   //PPUMASK_M = (value >> 2) & 1;   // Bit 2: show sprites on leftmost 8px-wide column (ignored here)
   //PPUMASK_m = (value >> 1) & 1;   // Bit 1: show background on leftmost 8px-wide column (ignored here)
   //PPUMASK_G = value & 1;          // Bit 0: greyscale (all colors are ANDed with $30; ignored here)
@@ -280,8 +271,8 @@ get_PPUSTATUS = () => {
   
   // Update status
   t = cpu_mem[0x2002] = 
-    0                         // Bits 0-4: copy of last 5 bits written to a PPU register (can be ignored)
-    + (PPUSTATUS_O << 5)  // Bit 5 (O): Sprite overflow (set during sprite evaluation if more than 8 sprites in next scanline, cleared at pre-render line, buggy on the NES)
+    // 0 +                // Bits 0-4: copy of last 5 bits written to a PPU register (can be ignored)
+    (PPUSTATUS_O << 5)    // Bit 5 (O): Sprite overflow (set during sprite evaluation if more than 8 sprites in next scanline, cleared at pre-render line, buggy on the NES)
     + (PPUSTATUS_S << 6)  // Bit 6 (S): Sprite 0 hit (set when an opaque pixel from sprite 0 overlaps an opaque pixel of the background if both displays are enabled, cleared at pre-render line)
     + (PPUSTATUS_V << 7); // Bit 7 (V): VBlank (set at line 241, cleared after reading PPUSTATUS and at pre-render line)
   
@@ -344,7 +335,7 @@ set_PPUADDR = value => {
     PPUADDR = value << 8;
     
     // Update Y bits of scroll register T (00yyNNYY)
-    T_yyy = (value >> 4) & 0b11; // only bits 1 and 2 of yyy are set. Bit 3 is corrupted to 0
+    T_yyy = (value >> 4) & 0b11;   // only bits 1 and 2 of yyy are set. Bit 3 is corrupted to 0
     T_NN = (value >> 2) & 0b11;
     T_YYYYY = (value & 0b11) << 3; // read the two high bits of YYYYY
   } 
@@ -373,7 +364,7 @@ set_PPUADDR = value => {
 
 // Write
 set_PPUDATA = value => {
-  write(PPUADDR, value);
+  PPU_mem[mirrorAddress(PPUADDR)] = value;
   PPUADDR += PPUCTRL_I ? 32 : 1; // increment address (1 or 32 depending on bit 2 of PPUCTRL)
 },
 
@@ -384,12 +375,12 @@ get_PPUDATA = () => {
   // Each read fills a 1-byte buffer and returns the value previously stored in that buffer
   if(PPUADDR <= 0x3F00){
     t = PPUDATA_read_buffer;
-    PPUDATA_read_buffer = load(PPUADDR);
+    PPUDATA_read_buffer = ppu_read(PPUADDR);
   }
   
   // PPUADDR higher than $3EFF: direct read
   else {
-    t = load(PPUADDR);
+    t = ppu_read(PPUADDR);
   }
   
   PPUADDR += PPUCTRL_I === 1 ? 32 : 1; // increment address (1 or 32 depending on bit 2 of PPUCTRL)
@@ -462,7 +453,7 @@ set_OAMDMA = value => {
 // The line number (y) is a value vetween 0 and 480
 drawVramScanline = y => {
   
-  var i, j, X, Y, nametable, bits, colors, pixel;
+  var i, j, X, Y, nametable, bits, pixel;
   
   // Reset pixel buffer
   vramPixelBuffer = [];
@@ -471,7 +462,7 @@ drawVramScanline = y => {
   Y = ~~(y/8); 
 
   // For each tile of the scanline (X tile coordinate between 0 and 64):
-  for(X = 0; X < 64; X++){
+  for(X = 64; X--;){
     
     // Get the nametable address in PPU memory:
     // $2000-$23BF: top left screen
@@ -488,9 +479,9 @@ drawVramScanline = y => {
     // attributetable = nametable + 0x3C0;
     
     // Get the attribute byte for the group including the current tile:
-    // attribute_X = (X%32) >> 2; // 0-7
-    // attribute_Y = (Y%30) >> 2; // 0-7
-    // attribute = load(attributetable + attribute_Y * 8 + attribute_X);
+    // attribute_X = (X % 32) >> 2; // 0-7
+    // attribute_Y = (Y % 30) >> 2; // 0-7
+    // attribute = ppu_read(attributetable + attribute_Y * 8 + attribute_X);
     
     // Get the attribute's 2-bit value for the current title:
     // bits_X = ((X % 32) >> 1) & 1; // 0-1
@@ -499,7 +490,7 @@ drawVramScanline = y => {
     
     // Golfed here:
     bits = (
-      load(nametable + 0x3C0 + ((Y%30) >> 2) * 8 + ((X%32) >> 2))
+      ppu_read(nametable + 0x3C0 + ((Y % 30) >> 2) * 8 + ((X % 32) >> 2))
       >> 
       (
         4 * (((Y % 30) >> 1) & 1)
@@ -512,18 +503,18 @@ drawVramScanline = y => {
     // Background palette is stored at $3F00-$3F0F (16 colors, 4 subpalette of 4 colors)
     // The values stored in the palettes are indexes of the 64 system colors (systemPalette)
     // The first color of each subpalette is ignored (*), the value at $3F00 (universal background color) is used instead
-    // (*) during forced blanking (background & sprites disabled), if PPUADDR points to a subpalette's color 0, this color is used as universal background color (ignored here)
-    colors = [
-      systemPalette[PPU_mem[0x3F00]],                 // universal background color
-      systemPalette[PPU_mem[0x3F00 + bits * 4 + 1]],  // color 1 of current subpalette
-      systemPalette[PPU_mem[0x3F00 + bits * 4 + 2]],  // color 2 of current subpalette
-      systemPalette[PPU_mem[0x3F00 + bits * 4 + 3]],  // color 3 of current subpalette
-    ];
+    // (*) during forced blanking (background & sprites disabled), if PPUADDR points to a subpalette's color 0, this color is used as universal background color (TODO)
+    /*colors = [
+      systemPalette[ppu_read(0x3F00 + bits * 4)],  // universal background color
+      systemPalette[ppu_read(0x3F00 + bits * 4 + 1)],  // color 1 of current subpalette
+      systemPalette[ppu_read(0x3F00 + bits * 4 + 2)],  // color 2 of current subpalette
+      systemPalette[ppu_read(0x3F00 + bits * 4 + 3)],  // color 3 of current subpalette
+    ];*/
     
     // Get the tile's address:
     // The bit B of PPUCTRL tells if the tile's graphics are stored in the first or second CHR-ROM bank ($0000-$0FFF or $1000-$1FFF)
     // The tile's index within the current CHR-ROM bank is stored in the nametable
-    // tile = PPUCTRL_B * 0x1000 + load(nametable + (Y % 30) * 32 + (X % 32))
+    // tile = PPUCTRL_B * 0x1000 + ppu_read(nametable + (Y % 30) * 32 + (X % 32))
     
     // Get the pixels values:
     // The pixels of each tile are encoded on 2 bits
@@ -532,11 +523,11 @@ drawVramScanline = y => {
     
     // Let x and y be the coordinates of the pixels to draw inside the current tile (x = 0-7, y = 0-7)
     y %= 8;
-    for(x = 0; x < 8; x++){
+    for(x = 8; x--;){
       
       // The current line of 8 pixels is encoded on 2 bytes:
-      // byte1 = load(tile * 16 + y);
-      // byte2 = load(tile * 16 + y + 8);
+      // byte1 = ppu_read(tile * 16 + y);
+      // byte2 = ppu_read(tile * 16 + y + 8);
       
       // And the current pixel's value is encoded as:
       // pixel = ((byte2 >> (7 - x)) & 1) * 2 + ((byte1 >> (7 - x)) & 1);
@@ -546,13 +537,13 @@ drawVramScanline = y => {
       // This buffer will be useful to render the sprites either in the front or behind the background tiles
       
       // Golfed here:
-      t = PPUCTRL_B * 0x1000 + load(nametable+(Y % 30) * 32 + (X % 32)) * 16 + y;
-      if(pixel = ((load(t + 8) >> (7 - x)) & 1) * 2 + ((load(t) >> (7 - x)) & 1)){
-        vramPixelBuffer[X * 8 + x] = colors[pixel];
+      t = PPUCTRL_B * 0x1000 + ppu_read(nametable + (Y % 30) * 32 + (X % 32)) * 16 + y;
+      if(pixel = ((ppu_read(t + 8) >> (7 - x)) & 1) * 2 + ((ppu_read(t) >> (7 - x)) & 1)){
+        vramPixelBuffer[X * 8 + x] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
       }
       
-      // Render the pixel on the VRAM visualizer
-      NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = colors[pixel];
+      // Debug: Render the pixel on the VRAM visualizer
+      // NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
     }
   }
 },
@@ -588,7 +579,7 @@ drawVramScanline = y => {
 // The scanline number (y) is a value vetween 0 and 240
 drawScanline = y => {
   
-  var i, x, scanlineSprites, spriteScanlineAddress, bits, colors, pixel;
+  var i, x, scanlineSprites, spriteScanlineAddress, bits, pixel;
 
   // Find which sprites are present in the current scanline:
   // Reset the list
@@ -615,9 +606,10 @@ drawScanline = y => {
   for(x = 0; x < 256; x++){
     
     // Draw background tiles if background rendering is enabled
+    // Use universal background color if no background tile is present
     // X and Y scrolling are applied when fetching the pixels values inside vramBuffer32
     if(PPUMASK_b){
-      NES.frameBuffer32[y * 256 + x] = NES.vramBuffer32[((y + scroll_y) % 480) * 512 + (x + scroll_x) % 512];
+      NES.frameBuffer32[y * 256 + x] = vramPixelBuffer[(x + scroll_x) % 512] || systemPalette[ppu_read(mirrorAddress(0x3F00))];
     }
     
     // Then, for each sprite from back to front:
@@ -628,12 +620,12 @@ drawScanline = y => {
         
         // Retrieve the sprite's subpalette (bits 0-1 of byte 2 of sprite i in OAM memory)
         bits = OAM[scanlineSprites[i] * 4 + 2] & 0b11;
-        colors = [
-          ,                                                   // transparent
+        /*colors = [
+          ,                                               // transparent
           systemPalette[PPU_mem[0x3F10 + bits * 4 + 1]],  // color 1 of current subpalette
           systemPalette[PPU_mem[0x3F10 + bits * 4 + 2]],  // color 2 of current subpalette
           systemPalette[PPU_mem[0x3F10 + bits * 4 + 3]],  // color 3 of current subpalette
-        ];
+        ];*/
         
         // Retrieve the address of the current sprite's scanline in CHR-ROM:
         t = scanlineSprites[i] * 4;
@@ -671,16 +663,16 @@ drawScanline = y => {
         o = (OAM[scanlineSprites[i] * 4 + 2] & 0b1000000) ? t : 7 - t;
         
         // Get current pixel value, and check if it's opaque (value: 1, 2 or 3)
-        if(pixel = ((load(spriteScanlineAddress + 8) >> o) & 1) * 2 + ((load(spriteScanlineAddress) >> o) & 1)){
+        if(pixel = ((ppu_read(spriteScanlineAddress + 8) >> o) & 1) * 2 + ((ppu_read(spriteScanlineAddress) >> o) & 1)){
           
           // If sprite rendering is enabled, draw it on the current frame
           // But if priority bit is 1 and background rendering is enabled: let the background tile's pixel displayed on top if it's opaque
-          if(PPUMASK_s && !((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && vramPixelBuffer[x+scroll_x] && PPUMASK_b)){
-            NES.frameBuffer32[y * 256 + x] = colors[pixel];
+          if(!((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && vramPixelBuffer[(x + scroll_x) % 512] && PPUMASK_s && PPUMASK_b)){
+            NES.frameBuffer32[y * 256 + x] = systemPalette[PPU_mem[0x3F10 + bits * 4 + pixel]];
           }
           
           // Sprite 0 hit detection
-          if(scanlineSprites[i] === 0 && !PPUSTATUS_S && pixel && vramPixelBuffer[x] && PPUMASK_s && PPUMASK_b){
+          if(scanlineSprites[i] === 0 && !PPUSTATUS_S && vramPixelBuffer[(x + scroll_x) % 512] && PPUMASK_s && PPUMASK_b){
             PPUSTATUS_S = 1;
           }
         }
@@ -710,8 +702,8 @@ ppu_tick = () => {
     
     // Visible scanlines
     if(scanline < 241){
-      drawVramScanline((scanline+scroll_y) % 480 - 1);
-      drawVramScanline(((scanline+scroll_y) % 480 - 1) + 240);
+      drawVramScanline((scanline + scroll_y) % 480 - 1);
+      //drawVramScanline(((scanline + scroll_y) % 480 - 1) + 240); // Debug
       drawScanline(scanline - 1);
       
       // Update scroll
