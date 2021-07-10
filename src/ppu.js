@@ -233,8 +233,9 @@ mirrorAddress = address => {
 // Read a byte in memory
 ppu_read = address => {
   
-  // $3F04, $3F08, $3F0C: replaced by $3F00 (universal background color) except during forced blanging (TODO)
-  if((address & 0x3F03) == 0x3F00) address = 0x3F00;
+  // $3F04, $3F08, $3F0C: replaced by $3F00 (universal background color) except during forced blanking (TODO)
+  if((address & 0xFFF3) == 0x3F00) address = 0x3F00;
+    
   return PPU_mem[mirrorAddress(address)];
 },
 
@@ -305,21 +306,21 @@ set_OAMDATA = value => {
 // $2005 (write twice: vertical, then horizontal): PPU Background Scrolling Offset (PPUSCROLL)
 set_PPUSCROLL = value => {
 
-  // Latch equals 0: first write, update horizontal scroll
-  if(latch == 0){
-    
-    // Update X bits of scroll register T (XXXXXxxx = value)
-    T_XXXXX = value >> 3;
-    xxx = value & 0b111;
-  }
-  
   // Latch equals 1: second write, update vertical scroll
-  // If value is between 240 and 255, it becomes negative (-16 to -1) and the rendering is glitchy (ignored here)
-  else {
+  // If value is between 240 and 255, it becomes negative (-16 to -1) and the rendering gets glitchy (ignored here)
+  if(latch){
     
     // Update Y bits of scroll register T (YYYYYyyy = value)
     T_YYYYY = value >> 3;
     T_yyy = value & 0b111;
+  }
+  
+  // Latch equals 0: first write, update horizontal scroll
+  else {
+    
+    // Update X bits of scroll register T (XXXXXxxx = value)
+    T_XXXXX = value >> 3;
+    xxx = value & 0b111;
   }
   
   // Toggle latch
@@ -329,19 +330,8 @@ set_PPUSCROLL = value => {
 // $2006 (write twice): VRAM Address Register (PPUADDR)
 set_PPUADDR = value => {
   
-  // Latch 0: first write, set high byte of address and update Y scrolling
-  if(latch == 0){
-    
-    PPUADDR = value << 8;
-    
-    // Update Y bits of scroll register T (00yyNNYY)
-    T_yyy = (value >> 4) & 0b11;   // only bits 1 and 2 of yyy are set. Bit 3 is corrupted to 0
-    T_NN = (value >> 2) & 0b11;
-    T_YYYYY = (value & 0b11) << 3; // read the two high bits of YYYYY
-  } 
-  
-  // Latch 1: second write, set low byte of address and update X and Y scrolling
-  else {
+  // Latch equals 1: second write, set low byte of address and update X and Y scrolling
+  if(latch) {
     
     PPUADDR += value;
     
@@ -355,6 +345,16 @@ set_PPUADDR = value => {
     V_XXXXX = T_XXXXX;
     V_NN = T_NN;
   }
+  // Latch equals 0: first write, set high byte of address and update Y scrolling
+  else {
+    
+    PPUADDR = value << 8;
+    
+    // Update Y bits of scroll register T (00yyNNYY)
+    T_yyy = (value >> 4) & 0b11;   // only bits 0 and 1 of yyy are set. Bit 2 is corrupted to 0
+    T_NN = (value >> 2) & 0b11;
+    T_YYYYY = (value & 0b11) << 3; // read the two high bits of YYYYY
+  }
   
   // Toggle latch
   latch ^= 1;
@@ -365,7 +365,9 @@ set_PPUADDR = value => {
 // Write
 set_PPUDATA = value => {
   PPU_mem[mirrorAddress(PPUADDR)] = value;
-  PPUADDR += PPUCTRL_I ? 32 : 1; // increment address (1 or 32 depending on bit 2 of PPUCTRL)
+  
+  // increment address (1 or 32 depending on bit 2 of PPUCTRL)
+  PPUADDR += PPUCTRL_I ? 32 : 1;
 },
 
 // Read
@@ -383,7 +385,9 @@ get_PPUDATA = () => {
     t = ppu_read(PPUADDR);
   }
   
-  PPUADDR += PPUCTRL_I === 1 ? 32 : 1; // increment address (1 or 32 depending on bit 2 of PPUCTRL)
+  // increment address (1 or 32 depending on bit 2 of PPUCTRL)
+  PPUADDR += PPUCTRL_I === 1 ? 32 : 1; 
+  
   return t;
 },
 
@@ -543,7 +547,7 @@ drawVramScanline = y => {
       }
       
       // Debug: Render the pixel on the VRAM visualizer
-      // NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
+      NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
     }
   }
 },
@@ -616,7 +620,7 @@ drawScanline = y => {
     for(i = scanlineSprites.length - 1; i >= 0; i--){
       
       // If this sprite is present at this pixel (if x is between the left column and right column of the sprite)
-      if(x >= OAM[scanlineSprites[i] *4 + 3] && x < OAM[scanlineSprites[i] * 4 + 3] + 8){
+      if(x >= OAM[scanlineSprites[i] * 4 + 3] && x < OAM[scanlineSprites[i] * 4 + 3] + 8){
         
         // Retrieve the sprite's subpalette (bits 0-1 of byte 2 of sprite i in OAM memory)
         bits = OAM[scanlineSprites[i] * 4 + 2] & 0b11;
@@ -667,7 +671,9 @@ drawScanline = y => {
           
           // If sprite rendering is enabled, draw it on the current frame
           // But if priority bit is 1 and background rendering is enabled: let the background tile's pixel displayed on top if it's opaque
-          if(!((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && vramPixelBuffer[(x + scroll_x) % 512] && PPUMASK_s && PPUMASK_b)){
+          // Temp hack: don't show sprite 0 behind background if its priority bit is set
+          // (I don't know why yet, but if I don't do that, Excitebike shows a black sprite that shouldn't be there above the HUD)
+          if((!((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && (vramPixelBuffer[(x + scroll_x) % 512] || scanlineSprites[i] == 0)) && PPUMASK_s && PPUMASK_b)){
             NES.frameBuffer32[y * 256 + x] = systemPalette[PPU_mem[0x3F10 + bits * 4 + pixel]];
           }
           
@@ -692,7 +698,8 @@ ppu_tick = () => {
   // The PPU renders one dot (one pixel) per cycle
   // At the end of each scanline (341 dots), a new scanline starts
   // The screen is complete when 240 scanlines are rendered
-  if(dot > 341){
+  if(dot > 340){
+
     dot = 0;
     scanline++;
     
@@ -700,23 +707,23 @@ ppu_tick = () => {
     V_XXXXX = T_XXXXX;
     V_NN = (V_NN & 0b10) + (T_NN & 0b01);
     
-    // Visible scanlines
-    if(scanline < 241){
-      drawVramScanline((scanline + scroll_y) % 480 - 1);
-      //drawVramScanline(((scanline + scroll_y) % 480 - 1) + 240); // Debug
-      drawScanline(scanline - 1);
+    // Visible scanlines (0-239)
+    if(scanline < 240){
+      drawVramScanline(((scanline + scroll_y) % 480) + 240); // Debug
+      drawVramScanline((scanline + scroll_y) % 480);
+      drawScanline(scanline);
       
       // Update scroll
       scroll_x = (V_NN & 0b1) * 256 + V_XXXXX * 8 + xxx;
       
       // Debug
-      //NES.vramCtx.fillStyle = "pink";
-      //NES.vramCtx.rect(scroll_x -3, (scanline + scroll_y-3) % 480, (scanline == 1 || scanline == 240) ? 256 : 6, 6);
-      //NES.vramCtx.rect((scroll_x - 3 + 256) % 512, (scanline + scroll_y - 3) % 480, 6, 6);
+      NES.vramCtx.fillStyle = "pink";
+      NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
+      NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
     }
     
     // VBlank starts at scanline 241 (a NMI interrupt is triggered, and the frame is displayed on the canvas)
-    else if(scanline == 241){
+    else if(scanline == 240){
       
       // VBlank flag
       PPUSTATUS_V = 1;
@@ -729,23 +736,23 @@ ppu_tick = () => {
       NES.frameCtx.putImageData(NES.frameData, 0, 0);
     
       // Debug (VRAM view)
-      //NES.vramData.data.set(NES.vramBuffer8);
-      //NES.vramCtx.putImageData(NES.vramData, 0, 0);
-      //if(PPUMASK_b){
-      //  NES.vramCtx.fill();
-      //}
+      NES.vramData.data.set(NES.vramBuffer8);
+      NES.vramCtx.putImageData(NES.vramData, 0, 0);
+      if(PPUMASK_b){
+        NES.vramCtx.fill();
+      }
     }
     
     // VBlank ends at the pre-render scanline, and PPUSTATUS is reset
-    else if(scanline == 261){
+    else if(scanline == 260){
       PPUSTATUS_O =
       PPUSTATUS_S =
       PPUSTATUS_V = 0;
     }
     
     // When the pre-render scanline is completed, a new frame starts
-    else if(scanline == 262){
-      scanline = 0;
+    else if(scanline == 261){
+      scanline = -1;
       endFrame = 1;
       
       // Update scroll
