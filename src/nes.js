@@ -26,11 +26,11 @@ var NES = {
     NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
     
     NES.preferredFrameRate = 60;  // frames per second
-    NES.frameTime = 16.67;        // ms per frame
+    NES.frameTime = 15;        // ms per frame
     
     // Audio
     NES.onAudioSample = options.onAudioSample;
-    NES.sampleRate = 48000;
+    NES.sampleRate = 44100;
     
     // Logs
     NES.onStatusUpdate = options.onStatusUpdate;
@@ -71,12 +71,13 @@ var NES = {
     
     // Send reset interrupt to the CPU
     interrupt_requested = 2;
+    
+    cyclesToHalt = 0
   },
 
   // Render a new frame
   frame: () => {
     
-    //NES.vramCtx.clearRect(0,0,512,512);
     vramCanvas.width ^= 0;
     
     var cycles;
@@ -86,15 +87,36 @@ var NES = {
     // Repeatedly execute CPU instructions until the frame is fully rendered
     while(!endFrame){
       
-      // Execute a CPU instruction, count elapsed CPU cycles
-      cycles = emulate();
-      cpu_cycles += cycles;
-      //console.log("emulate");
       
-      // execute 3 PPU cycles and 1 APU cycle for each CPU tick
-      for(var i = 0; i < cycles; i++){
-        cpu_tick();
+      //if (cyclesToHalt === 0) {
+        cycles = emulate();
+        
+        // execute 3 PPU cycles and 1 APU cycle for each CPU tick
+        for(var i = 0; i < cycles; i++){
+          cpu_tick();
+        }
+      
+        /*APU.clockFrameCounter(cycles);
+        cycles *= 3;
+      } else {
+        if (cyclesToHalt > 8) {
+          cycles = 24;
+          APU.clockFrameCounter(8);
+          cyclesToHalt -= 8;
+        } else {
+          cycles = cyclesToHalt * 3;
+          APU.clockFrameCounter(cyclesToHalt);
+          cyclesToHalt = 0;
+        }
       }
+      
+    */  
+      
+      // Execute a CPU instruction, count elapsed CPU cycles
+      //cycles = emulate();
+      //cpu_cycles += cycles;
+      
+
       //APU.clockFrameCounter(cycles/3);
     }
   },
@@ -105,5 +127,9 @@ var NES = {
 
   keyup: (controller, button) => {
     NES.controllers[controller].keyup(button);
+  },
+  
+  haltCycles: (cycles) => {
+    cyclesToHalt += cycles;
   }
 }

@@ -402,6 +402,8 @@ set_OAMDMA = value => {
   for(i = 0; i < 513; i++){
     cpu_tick();
   }
+  
+  NES.haltCycles(513)
 },
 
 // Rendering
@@ -463,7 +465,7 @@ drawVramScanline = y => {
   vramPixelBuffer = [];
 
   // Y tile coordinate (0-60)
-  Y = ~~(y/8); 
+  Y = ~~(y / 8); 
 
   // For each tile of the scanline (X tile coordinate between 0 and 64):
   for(X = 64; X--;){
@@ -473,7 +475,7 @@ drawVramScanline = y => {
     // $2400-$27BF: top right screen
     // $2800-$2BBF: bottom left screen
     // $2C00-$2FBF: bottom right screen
-    nametable = 0x2000 + (0x800 * (Y > 29)) + (0x400 * (X > 31));
+    nametable = 0x2000 + (0x800 * (Y > 29 ? 1 : 0)) + (0x400 * (X > 31 ? 1 : 0));
     
     // Get the attribute table address in PPU memory:
     // $23C0-$23FF: top left screen
@@ -508,12 +510,12 @@ drawVramScanline = y => {
     // The values stored in the palettes are indexes of the 64 system colors (systemPalette)
     // The first color of each subpalette is ignored (*), the value at $3F00 (universal background color) is used instead
     // (*) during forced blanking (background & sprites disabled), if PPUADDR points to a subpalette's color 0, this color is used as universal background color (TODO)
-    /*colors = [
+    colors = [
       systemPalette[ppu_read(0x3F00 + bits * 4)],  // universal background color
       systemPalette[ppu_read(0x3F00 + bits * 4 + 1)],  // color 1 of current subpalette
       systemPalette[ppu_read(0x3F00 + bits * 4 + 2)],  // color 2 of current subpalette
       systemPalette[ppu_read(0x3F00 + bits * 4 + 3)],  // color 3 of current subpalette
-    ];*/
+    ];
     
     // Get the tile's address:
     // The bit B of PPUCTRL tells if the tile's graphics are stored in the first or second CHR-ROM bank ($0000-$0FFF or $1000-$1FFF)
@@ -543,11 +545,11 @@ drawVramScanline = y => {
       // Golfed here:
       t = PPUCTRL_B * 0x1000 + ppu_read(nametable + (Y % 30) * 32 + (X % 32)) * 16 + y;
       if(pixel = ((ppu_read(t + 8) >> (7 - x)) & 1) * 2 + ((ppu_read(t) >> (7 - x)) & 1)){
-        vramPixelBuffer[X * 8 + x] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
+        vramPixelBuffer[X * 8 + x] = colors[pixel];
       }
       
       // Debug: Render the pixel on the VRAM visualizer
-      NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
+      //NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
     }
   }
 },
@@ -588,6 +590,7 @@ drawScanline = y => {
   // Find which sprites are present in the current scanline:
   // Reset the list
   scanlineSprites = [];
+  colors = [];
   
   // Loop on all the sprites
   for(i = 0; i < 64; i++){
@@ -603,11 +606,20 @@ drawScanline = y => {
       
       // Else, the sprite is visible in the current scanline. Add it to the list
       scanlineSprites.push(i);
+      
+      // Retrieve the sprite's subpalette (bits 0-1 of byte 2 of sprite i in OAM memory)
+      bits = OAM[i * 4 + 2] & 0b11;
+      colors.push([
+        0,                                              // transparent
+        systemPalette[PPU_mem[0x3F10 + bits * 4 + 1]],  // color 1 of current subpalette
+        systemPalette[PPU_mem[0x3F10 + bits * 4 + 2]],  // color 2 of current subpalette
+        systemPalette[PPU_mem[0x3F10 + bits * 4 + 3]],  // color 3 of current subpalette
+      ]);
     }
   }
   
   // Draw the scanline's pixels:
-  for(x = 0; x < 256; x++){
+  for(x = 256; x--;){
     
     // Draw background tiles if background rendering is enabled
     // Use universal background color if no background tile is present
@@ -621,15 +633,6 @@ drawScanline = y => {
       
       // If this sprite is present at this pixel (if x is between the left column and right column of the sprite)
       if(x >= OAM[scanlineSprites[i] * 4 + 3] && x < OAM[scanlineSprites[i] * 4 + 3] + 8){
-        
-        // Retrieve the sprite's subpalette (bits 0-1 of byte 2 of sprite i in OAM memory)
-        bits = OAM[scanlineSprites[i] * 4 + 2] & 0b11;
-        /*colors = [
-          ,                                               // transparent
-          systemPalette[PPU_mem[0x3F10 + bits * 4 + 1]],  // color 1 of current subpalette
-          systemPalette[PPU_mem[0x3F10 + bits * 4 + 2]],  // color 2 of current subpalette
-          systemPalette[PPU_mem[0x3F10 + bits * 4 + 3]],  // color 3 of current subpalette
-        ];*/
         
         // Retrieve the address of the current sprite's scanline in CHR-ROM:
         t = scanlineSprites[i] * 4;
@@ -674,7 +677,7 @@ drawScanline = y => {
           // Temp hack: don't show sprite 0 behind background if its priority bit is set
           // (I don't know why yet, but if I don't do that, Excitebike shows a black sprite that shouldn't be there above the HUD)
           if((!((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && (vramPixelBuffer[(x + scroll_x) % 512] || scanlineSprites[i] == 0)) && PPUMASK_s && PPUMASK_b)){
-            NES.frameBuffer32[y * 256 + x] = systemPalette[PPU_mem[0x3F10 + bits * 4 + pixel]];
+            NES.frameBuffer32[y * 256 + x] = colors[i][pixel];
           }
           
           // Sprite 0 hit detection
@@ -709,7 +712,7 @@ ppu_tick = () => {
     
     // Visible scanlines (0-239)
     if(scanline < 240){
-      drawVramScanline(((scanline + scroll_y) % 480) + 240); // Debug
+      //drawVramScanline(((scanline + scroll_y) % 480) + 240); // Debug
       drawVramScanline((scanline + scroll_y) % 480);
       drawScanline(scanline);
       
@@ -717,9 +720,9 @@ ppu_tick = () => {
       scroll_x = (V_NN & 0b1) * 256 + V_XXXXX * 8 + xxx;
       
       // Debug
-      NES.vramCtx.fillStyle = "pink";
-      NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
-      NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
+      //NES.vramCtx.fillStyle = "pink";
+      //NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
+      //NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
     }
     
     // VBlank starts at scanline 241 (a NMI interrupt is triggered, and the frame is displayed on the canvas)
@@ -736,11 +739,11 @@ ppu_tick = () => {
       NES.frameCtx.putImageData(NES.frameData, 0, 0);
     
       // Debug (VRAM view)
-      NES.vramData.data.set(NES.vramBuffer8);
-      NES.vramCtx.putImageData(NES.vramData, 0, 0);
-      if(PPUMASK_b){
-        NES.vramCtx.fill();
-      }
+      //NES.vramData.data.set(NES.vramBuffer8);
+      //NES.vramCtx.putImageData(NES.vramData, 0, 0);
+      //if(PPUMASK_b){
+      //  NES.vramCtx.fill();
+      //}
     }
     
     // VBlank ends at the pre-render scanline, and PPUSTATUS is reset

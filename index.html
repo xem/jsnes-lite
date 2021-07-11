@@ -43,15 +43,15 @@ debug = 0;
 // =============================================
 
 var audio = new AudioContext();
-var audioprocessor = audio.createScriptProcessor(2048, 0, 2);
+var audioprocessor = audio.createScriptProcessor(512, 0, 2);
 audioprocessor.connect(audio.destination);
 
 // When the Audio processor requests new samples to play
 audioprocessor.onaudioprocess = audioEvent => {
 
   // Ensure that we've buffered enough samples
-  if(leftSamples.length > currentSample + 2048){
-    for(var i = 0; i < 2048; i++){
+  if(leftSamples.length > currentSample + 512){
+    for(var i = 0; i < 512; i++){
     
       // Output (play) the buffers
       audioEvent.outputBuffer.getChannelData(0)[i] = leftSamples[currentSample];
@@ -154,8 +154,22 @@ start = file => {
   //console.log(Date.now());
   //NES.frame();
   
-  clearInterval(interval);
-  interval = setInterval(NES.frame, pal.checked ? 20 : 16);
+  //clearInterval(interval);
+  //interval = setInterval(NES.frame, pal.checked ? 20 : 16.67);
+  date = new Date();
+  wait = 50;
+  loop = () => {
+    NES.frame();
+    wait--;
+    if(wait == 0){
+      document.title = (1000 * 50 / (new Date() - date)).toFixed(2);
+      date = new Date();
+      wait = 50;
+    }
+    //requestAnimationFrame(loop);
+  }
+  //loop();
+  setInterval(loop, 16.67);
   
   // Controller #1 keys listeners
   onkeydown = onkeyup = e => {

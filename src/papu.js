@@ -795,7 +795,7 @@ ChannelDM.prototype = {
   nextSample: function(){
     // Fetch byte:
     this.data = CPU.load(this.playAddress);
-    CPU.haltCycles(4);
+    NES.haltCycles(4);
 
     this.playLengthCounter--;
     this.playAddress++;

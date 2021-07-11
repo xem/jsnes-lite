@@ -32,7 +32,7 @@ w = (v, w) => (c++, memory_write(v, w)),
 // - The Zero flag (bit 1 of P) is set if v is zero, otherwise it's cleared
 // - The Negative flag (bit 7 of P) is set if byte 7 of v is 1, otherwise it's cleared
 F = v => (
-  Z = (v &= 255) < 1,
+  Z = (v &= 255) < 1 ? 1 : 0,
   N = v >> 7,
   v
 ),
@@ -117,7 +117,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles addr.: 2-3
       // Cycles opc. : 0-1
       // * Cross-page read (if address and address + Y are on different pages) costs 1 extra cycle
-      + "a=r(p)+256*r(p+1&255)+Y,c+=a-Y>>8<a>>8||o>>4==9,PC++;"
+      + "a=r(p)+256*r(p+1&255)+Y,c+=(a-Y>>8<a>>8||o>>4==9)?1:0,PC++;"
 
       // "4": Zero page X
       // The target address is equal to zero page address (stored at PC+1) + X, wrapping between $00 and $FF
@@ -158,7 +158,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles addr.: 1-2
       // Cycles opc. : 0-2
       // * Cross-page read (if address and address + Y are on different pages) costs 1 extra cycle
-      + "t=p+256*r(PC+=2),c+=t>>8<t+Y>>8||o>>4==9,a=t+Y;"
+      + "t=p+256*r(PC+=2),c+=(t>>8<t+Y>>8||o>>4==9)?1:0,a=t+Y;"
 
       // "9": Absolute X
       // The target address is equal to absolute address (stored at PC+1 and PC+2) + X
@@ -167,7 +167,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles addr.: 1-2
       // Cycles opc. : 0-4
       // * Cross-page read (if address and address + X are on different pages) costs 1 extra cycle
-      + "t=p+256*r(PC+=2),c+=t>>8<t+X>>8||o>>4==9||(15&o)>13,a=t+X"
+      + "t=p+256*r(PC+=2),c+=(t>>8<t+X>>8||o>>4==9||(15&o)>13)?1:0,a=t+X"
 
       // "Z": implicit or Accumulator
       // The target is either a flag or a CPU register (no need to compute an address)
@@ -229,7 +229,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2,   3,   4
       // Cycles addr.: -1,  0,   1
       // Cycles opc. : 1,   1,   1
-      + "p=r(a),C=X-p>=0,F(X-p);"
+      + "p=r(a),C=X-(p>=0?1:0),F(X-p);"
 
       // '"': CPY (compare memory and Y)
       // N, Z and C are set with the result of Y minus a byte in memory
@@ -239,7 +239,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2,   3,   4
       // Cycles addr.: -1,  0,   1
       // Cycles opc. : 1,   1,   1
-      + "p=r(a),C=Y-p>=0,F(Y-p);"
+      + "p=r(a),C=Y-(p>=0?1:0),F(Y-p);"
 
       // "#": ASL (shift left)
       // A byte in memory is left shifted. Flags: N, Z, C
@@ -436,7 +436,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr.: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc. : 1,   1,   1,    1,   1,    1,    1,    1
-      + "p=r(a),C=A-p>=0,F(A-p);"
+      + "p=r(a),C=(A-p>=0)?1:0,F(A-p);"
 
       // "8": SBC (subtract from accumulator with carry)
       // A = A - a byte from memory - (1 - Carry). Flags: N, Z, C, V
@@ -447,7 +447,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr.: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc. : 1,   1,   1,    1,   1,    1,    1,    1
-      + "p=r(a),t=A+C-1-p,V=!!(128&(A^p))&&!!(128&(A^t)),C=t>=0,A=F(t);"
+      + "p=r(a),t=A+C-1-p,V=(!!(128&(A^p))&&!!(128&(A^t))?1:0),C=(t>=0)?1:0,A=F(t);"
 
       // "9": ADC (add to accumulator with carry)
       // A = A + a byte in memory + Carry. Flags: N, Z, C, V
@@ -458,7 +458,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2,   3,   4,    4,   4*,   4*,   6,    5*
       // Cycles addr.: -1,  0,   1,    1,   1*,   1*    3,    3*
       // Cycles opc. : 1,   1,   1,    1,   1,    1,    1,    1
-      + "p=r(a),t=A+C+p,V=!(128&(A^p))&&!!(128&(A^t)),C=t>255,A=F(t);"
+      + "p=r(a),t=A+C+p,V=(!(128&(A^p))&&!!(128&(A^t))?1:0),C=(t>255)?1:0,A=F(t);"
       
       // ":": BCS (branch on carry set)
       // PC = address if C is 1
@@ -467,7 +467,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "C&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "C&&(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // ";": BMI (branch on minus)
       // PC = address if N is 1
@@ -476,7 +476,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "N&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "N&&(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // "<": BEQ (branch if equal)
       // PC = address if Z is 0
@@ -485,7 +485,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "Z&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "Z&&(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // "=": BPL (branch on plus)
       // PC = address if N is 0
@@ -494,7 +494,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "N||(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "N||(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // ">": BVS (branch on overflow set)
       // PC = address if V is 1
@@ -503,7 +503,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "V&&(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "V&&(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // "?": BNE (branch if not equal)
       // PC = address if Z is 1
@@ -512,7 +512,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "Z||(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "Z||(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // "@": BVC (branch on overflow clear)
       // PC = address if V is 0
@@ -521,7 +521,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "V||(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "V||(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // "A": LDX (load X with memory)
       // X = a byte from memory. Flags: N, Z
@@ -659,7 +659,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 2**
       // Cycles addr.: 0
       // Cycles opc. : 0**
-      + "C||(c+=1+(a>>8!=PC+1>>8),PC=a);"
+      + "C||(c+=1+(a>>8!=PC+1>>8)?1:0,PC=a);"
       
       // "P": BRK (force break)
       // Interrupt, push PC+2 (PC+1 is a padding byte), push P with B flag set to 1, set I to 1
@@ -771,7 +771,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles total: 5
       // Cycles addr.: 3
       // Cycles opc. : 2
-      + "PC=r(a)+256*r(a+1-256*((a&255)==255))-1"
+      + "PC=r(a)+256*r(a+1-256*((a&255)==255?1:0))-1"
 
       // "z": NOP (no operation)
       // (When a "z" is read, the generated JavaScript code will just contain "undefined;")
