@@ -402,6 +402,7 @@ set_OAMDMA = value => {
   for(i = 0; i < 513; i++){
     cpu_tick();
   }
+  NES.haltCycles(513)
 },
 
 // Rendering
@@ -547,7 +548,7 @@ drawVramScanline = y => {
       }
       
       // Debug: Render the pixel on the VRAM visualizer
-      NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
+      //NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
     }
   }
 },
@@ -671,9 +672,8 @@ drawScanline = y => {
           
           // If sprite rendering is enabled, draw it on the current frame
           // But if priority bit is 1 and background rendering is enabled: let the background tile's pixel displayed on top if it's opaque
-          // Temp hack: don't show sprite 0 behind background if its priority bit is set
-          // (I don't know why yet, but if I don't do that, Excitebike shows a black sprite that shouldn't be there above the HUD)
-          if((!((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && (vramPixelBuffer[(x + scroll_x) % 512] || scanlineSprites[i] == 0)) && PPUMASK_s && PPUMASK_b)){
+          // TODO: fix excitebike black sprite 0 that shows up behind background 
+          if(((!((OAM[scanlineSprites[i] * 4 + 2] & 0b100000) && vramPixelBuffer[(x + scroll_x) % 512])) || !PPUMASK_b) && PPUMASK_s){
             NES.frameBuffer32[y * 256 + x] = systemPalette[PPU_mem[0x3F10 + bits * 4 + pixel]];
           }
           
@@ -709,7 +709,7 @@ ppu_tick = () => {
     
     // Visible scanlines (0-239)
     if(scanline < 240){
-      drawVramScanline(((scanline + scroll_y) % 480) + 240); // Debug
+      //drawVramScanline(((scanline + scroll_y) % 480) + 240); // Debug
       drawVramScanline((scanline + scroll_y) % 480);
       drawScanline(scanline);
       
@@ -717,9 +717,9 @@ ppu_tick = () => {
       scroll_x = (V_NN & 0b1) * 256 + V_XXXXX * 8 + xxx;
       
       // Debug
-      NES.vramCtx.fillStyle = "pink";
-      NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
-      NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
+      //NES.vramCtx.fillStyle = "pink";
+      //NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
+      //NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
     }
     
     // VBlank starts at scanline 241 (a NMI interrupt is triggered, and the frame is displayed on the canvas)
@@ -736,11 +736,11 @@ ppu_tick = () => {
       NES.frameCtx.putImageData(NES.frameData, 0, 0);
     
       // Debug (VRAM view)
-      NES.vramData.data.set(NES.vramBuffer8);
-      NES.vramCtx.putImageData(NES.vramData, 0, 0);
-      if(PPUMASK_b){
-        NES.vramCtx.fill();
-      }
+      //NES.vramData.data.set(NES.vramBuffer8);
+      //NES.vramCtx.putImageData(NES.vramData, 0, 0);
+      //if(PPUMASK_b){
+      //  NES.vramCtx.fill();
+      //}
     }
     
     // VBlank ends at the pre-render scanline, and PPUSTATUS is reset

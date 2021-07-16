@@ -13,9 +13,6 @@
 <button onclick='play("roms/nestest.nes")'>nestest</button>
 <button><label for=fileInput>Browse...</label></button>
 <input type=file id=fileInput hidden>
-&nbsp;
-<label><input type=radio name=tv id=ntsc checked>NTSC</label>
-<label><input type=radio name=tv id=pal>PAL</label>
 <style>
 body { font: 14px Arial; background:#888; }
 #dk, #smb, #ic, #eb, #g, #dw, #lr { display: none; }
@@ -42,16 +39,16 @@ debug = 0;
 // AudioContext + audio buffers + samples lists
 // =============================================
 
-var audio = new AudioContext();
-var audioprocessor = audio.createScriptProcessor(2048, 0, 2);
+var audio = new AudioContext({sampleRate: 48000});
+var audioprocessor = audio.createScriptProcessor(4096, 0, 2);
 audioprocessor.connect(audio.destination);
 
 // When the Audio processor requests new samples to play
 audioprocessor.onaudioprocess = audioEvent => {
 
   // Ensure that we've buffered enough samples
-  if(leftSamples.length > currentSample + 2048){
-    for(var i = 0; i < 2048; i++){
+  if(leftSamples.length > currentSample + 4096){
+    for(var i = 0; i < 4096; i++){
     
       // Output (play) the buffers
       audioEvent.outputBuffer.getChannelData(0)[i] = leftSamples[currentSample];
@@ -155,7 +152,7 @@ start = file => {
   //NES.frame();
   
   clearInterval(interval);
-  interval = setInterval(NES.frame, pal.checked ? 20 : 16);
+  interval = setInterval(NES.frame, 16.67);
   
   // Controller #1 keys listeners
   onkeydown = onkeyup = e => {

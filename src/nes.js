@@ -26,11 +26,11 @@ var NES = {
     NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
     
     NES.preferredFrameRate = 60;  // frames per second
-    NES.frameTime = 16.67;        // ms per frame
+    NES.frameTime = 17;        // ms per frame
     
     // Audio
     NES.onAudioSample = options.onAudioSample;
-    NES.sampleRate = 48000;
+    NES.sampleRate = 44100;//audio.sampleRate;
     
     // Logs
     NES.onStatusUpdate = options.onStatusUpdate;
@@ -48,6 +48,10 @@ var NES = {
     
     // Memory map (handled by the mapper)
     //NES.mmap = null;
+    
+    //APU = new Apu();
+    //APU.setCpu(this);
+    //APU.bootup();
   },
   
   // Load a ROM file
@@ -71,31 +75,32 @@ var NES = {
     
     // Send reset interrupt to the CPU
     interrupt_requested = 2;
+    
+    cyclesToHalt = 0;
   },
 
   // Render a new frame
   frame: () => {
     
-    //NES.vramCtx.clearRect(0,0,512,512);
     vramCanvas.width ^= 0;
     
     var cycles;
-    cpu_cycles = 0;
+    totalCycles = 0;
     endFrame = 0;
     
     // Repeatedly execute CPU instructions until the frame is fully rendered
     while(!endFrame){
-      
-      // Execute a CPU instruction, count elapsed CPU cycles
-      cycles = emulate();
-      cpu_cycles += cycles;
-      //console.log("emulate");
-      
-      // execute 3 PPU cycles and 1 APU cycle for each CPU tick
-      for(var i = 0; i < cycles; i++){
+      if (cyclesToHalt === 0) {
+        cycles = emulate();
+        APU.clockFrameCounter(cycles);
+      } else {
+        APU.clockFrameCounter(Math.min(cyclesToHalt, 8));
+        cyclesToHalt -= Math.min(cyclesToHalt, 8);
+      }
+
+      for (i = cycles; i--;) {
         cpu_tick();
       }
-      //APU.clockFrameCounter(cycles/3);
     }
   },
   
@@ -105,5 +110,9 @@ var NES = {
 
   keyup: (controller, button) => {
     NES.controllers[controller].keyup(button);
+  },
+  
+  haltCycles: (cycles) => {
+    cyclesToHalt += cycles;
   }
 }

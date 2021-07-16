@@ -108,7 +108,11 @@ memory_read = address => {
   else if(address < 0x4020){
     
     // $4015: Sound channel enable, DMC Status
-    if(address == 0x4015) return APU.readReg(address);
+    if(address == 0x4015){
+      console.log("4015");
+      return APU.readReg(address);
+      return get_4015();
+    }
 
     // $4016: Joystick 1 + Strobe
     else if(address == 0x4016) return joy1Read();
@@ -158,7 +162,32 @@ memory_write = (address, value) => {
   }
   
   // Sound registers ($4000-$4013)
-  else if(address < 0x4014) APU.writeReg(address, value);
+  else if(address < 0x4014) {
+    //APU.storeRegister(address, value);
+    APU.writeReg(address, value);
+    /*if(address == 0x4000) set_4000(value);
+    if(address == 0x4001) set_4001(value);
+    if(address == 0x4002) set_4002(value);
+    if(address == 0x4003) set_4003(value);
+    
+    if(address == 0x4004) set_4004(value);
+    if(address == 0x4005) set_4005(value);
+    if(address == 0x4006) set_4006(value);
+    if(address == 0x4007) set_4007(value);
+    
+    if(address == 0x4008) set_4008(value);
+    if(address == 0x400a) set_400a(value);
+    if(address == 0x400b) set_400b(value);
+    
+    if(address == 0x400c) set_400c(value);
+    if(address == 0x400e) set_400e(value);
+    if(address == 0x400f) set_400f(value);
+    
+    if(address == 0x4010) set_4010(value);
+    if(address == 0x4011) set_4011(value);
+    if(address == 0x4012) set_4012(value);
+    if(address == 0x4013) set_4013(value);*/
+  }
   
   // I/O registers ($4014-$401F)
   else if(address < 0x4020){
@@ -167,7 +196,11 @@ memory_write = (address, value) => {
     if(address == 0x4014) set_OAMDMA(value);
 
     // $4015: Sound Channel Switch, DMC Status
-    else if(address == 0x4015) APU.writeReg(address, value);
+    else if(address == 0x4015) {
+      //APU.storeRegister(address, value);
+      APU.writeReg(address, value);
+      //set_4015(value);
+    }
 
     // $4016: Joystick 1 + Strobe
     else if(address == 0x4016){
@@ -179,7 +212,11 @@ memory_write = (address, value) => {
     }
 
     // $4017: Sound channel frame sequencer:
-    else if(address == 0x4017) APU.writeReg(address, value);
+    else if(address == 0x4017){
+      // APU.storeRegister(address, value);
+      APU.writeReg(address, value);
+      //set_4017(value);
+    }
   }
 
   // Write to persistent RAM
