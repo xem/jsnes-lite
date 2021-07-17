@@ -26,7 +26,7 @@ var NES = {
     NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
     
     NES.preferredFrameRate = 60;  // frames per second
-    NES.frameTime = 17;        // ms per frame
+    NES.frameTime = 16.6;        // ms per frame
     
     // Audio
     NES.onAudioSample = options.onAudioSample;

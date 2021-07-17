@@ -69,14 +69,11 @@ var APU = {
     
     APU.square1 = new ChannelSquare(this, true);
     APU.square2 = new ChannelSquare(this, false);
-    APU.triangle = new ChannelTriangle(this);
-    APU.noise = new ChannelNoise(this);
-    APU.dmc = new ChannelDM(this);
   
     APU.setPanning(APU.panning);
     APU.initLengthLookup();
-    APU.initDmcFrequencyLookup();
-    APU.initNoiseWavelengthLookup();
+    //APU.initDmcFrequencyLookup();
+    //APU.initNoiseWavelengthLookup();
     APU.initDACtables();
   
     // Init sound registers:
@@ -103,15 +100,10 @@ var APU = {
 
     APU.square1.reset();
     APU.square2.reset();
-    APU.triangle.reset();
-    APU.noise.reset();
-    APU.dmc.reset();
 
     APU.accCount = 0;
     APU.smpSquare1 = 0;
     APU.smpSquare2 = 0;
-    APU.smpTriangle = 0;
-    APU.smpDmc = 0;
 
     APU.frameIrqEnabled = false;
     APU.frameIrqCounterMax = 4;
@@ -140,11 +132,7 @@ var APU = {
     var tmp = 0;
     tmp |= APU.square1.getLengthStatus();
     tmp |= APU.square2.getLengthStatus() << 1;
-    tmp |= APU.triangle.getLengthStatus() << 2;
-    tmp |= APU.noise.getLengthStatus() << 3;
-    tmp |= APU.dmc.getLengthStatus() << 4;
     tmp |= (APU.frameIrqActive && APU.frameIrqEnabled ? 1 : 0) << 6;
-    tmp |= APU.dmc.getIrqStatus() << 7;
 
     APU.frameIrqActive = false;
     APU.dmc.irqGenerated = false;
@@ -160,24 +148,6 @@ var APU = {
     } else if(address >= 0x4004 && address < 0x4008){
       // Square 2 Control
       APU.square2.writeReg(address, value);
-    } else if(address >= 0x4008 && address < 0x400c){
-      // Triangle Control
-      APU.triangle.writeReg(address, value);
-    } else if(address >= 0x400c && address <= 0x400f){
-      // Noise Control
-      APU.noise.writeReg(address, value);
-    } else if(address === 0x4010){
-      // DMC Play mode & DMA frequency
-      APU.dmc.writeReg(address, value);
-    } else if(address === 0x4011){
-      // DMC Delta Counter
-      APU.dmc.writeReg(address, value);
-    } else if(address === 0x4012){
-      // DMC Play code starting address
-      APU.dmc.writeReg(address, value);
-    } else if(address === 0x4013){
-      // DMC Play code length
-      APU.dmc.writeReg(address, value);
     } else if(address === 0x4015){
       // Channel enable
       APU.updateChannelEnable(value);
@@ -188,7 +158,7 @@ var APU = {
       }
 
       // DMC/IRQ Status
-      APU.dmc.writeReg(address, value);
+      //APU.dmc.writeReg(address, value);
     } else if(address === 0x4017){
       // Frame counter control
       APU.countSequence = (value >> 7) & 1;
@@ -231,9 +201,6 @@ var APU = {
     APU.channelEnableValue = value & 0xffff;
     APU.square1.setEnabled((value & 1) !== 0);
     APU.square2.setEnabled((value & 2) !== 0);
-    APU.triangle.setEnabled((value & 4) !== 0);
-    APU.noise.setEnabled((value & 8) !== 0);
-    APU.dmc.setEnabled((value & 16) !== 0);
   },
 
   // Clocks the frame counter. It should be clocked at
@@ -261,43 +228,9 @@ var APU = {
       APU.extraCycles = 0;
     }
 
-    var dmc = APU.dmc;
-    var triangle = APU.triangle;
     var square1 = APU.square1;
     var square2 = APU.square2;
-    var noise = APU.noise;
 
-    // Clock DMC:
-    if(dmc.isEnabled){
-      dmc.shiftCounter -= nCycles << 3;
-      while (dmc.shiftCounter <= 0 && dmc.dmaFrequency > 0){
-        dmc.shiftCounter += dmc.dmaFrequency;
-        dmc.clockDmc();
-      }
-    }
-
-    // Clock Triangle channel Prog timer:
-    if(triangle.progTimerMax > 0){
-      triangle.progTimerCount -= nCycles;
-      while (triangle.progTimerCount <= 0){
-        triangle.progTimerCount += triangle.progTimerMax + 1;
-        if(triangle.linearCounter > 0 && triangle.lengthCounter > 0){
-          triangle.triangleCounter++;
-          triangle.triangleCounter &= 0x1f;
-
-          if(triangle.isEnabled){
-            if(triangle.triangleCounter >= 0x10){
-              // Normal value.
-              triangle.sampleValue = triangle.triangleCounter & 0xf;
-            } else {
-              // Inverted value.
-              triangle.sampleValue = 0xf - (triangle.triangleCounter & 0xf);
-            }
-            triangle.sampleValue <<= 4;
-          }
-        }
-      }
-    }
 
     // Clock Square channel 1 Prog timer:
     square1.progTimerCount -= nCycles;
@@ -321,43 +254,6 @@ var APU = {
 
     // Clock noise channel Prog timer:
     var acc_c = nCycles;
-    if(noise.progTimerCount - acc_c > 0){
-      // Do all cycles at once:
-      noise.progTimerCount -= acc_c;
-      noise.accCount += acc_c;
-      noise.accValue += acc_c * noise.sampleValue;
-    } else {
-      // Slow-step:
-      while (acc_c-- > 0){
-        if(--noise.progTimerCount <= 0 && noise.progTimerMax > 0){
-          // Update noise shift register:
-          noise.shiftReg <<= 1;
-          noise.tmp =
-            ((noise.shiftReg << (noise.randomMode === 0 ? 1 : 6)) ^
-              noise.shiftReg) &
-            0x8000;
-          if(noise.tmp !== 0){
-            // Sample value must be 0.
-            noise.shiftReg |= 0x01;
-            noise.randomBit = 0;
-            noise.sampleValue = 0;
-          } else {
-            // Find sample value:
-            noise.randomBit = 1;
-            if(noise.isEnabled && noise.lengthCounter > 0){
-              noise.sampleValue = noise.masterVolume;
-            } else {
-              noise.sampleValue = 0;
-            }
-          }
-
-          noise.progTimerCount += noise.progTimerMax;
-        }
-
-        noise.accValue += noise.sampleValue;
-        noise.accCount++;
-      }
-    }
 
     // Frame IRQ handling:
     if(APU.frameIrqEnabled && APU.frameIrqActive){
@@ -385,38 +281,18 @@ var APU = {
   },
 
   accSample: cycles => {
-    // Special treatment for triangle channel - need to interpolate.
-    if(APU.triangle.sampleCondition){
-      APU.triValue = Math.floor(
-        (APU.triangle.progTimerCount << 4) / (APU.triangle.progTimerMax + 1)
-      );
-      if(APU.triValue > 16){
-        APU.triValue = 16;
-      }
-      if(APU.triangle.triangleCounter >= 16){
-        APU.triValue = 16 - APU.triValue;
-      }
-
-      // Add non-interpolated sample value:
-      APU.triValue += APU.triangle.sampleValue;
-    }
+    
 
     // Now sample normally:
     if(cycles === 2){
-      APU.smpTriangle += APU.triValue << 1;
-      APU.smpDmc += APU.dmc.sample << 1;
       APU.smpSquare1 += APU.square1.sampleValue << 1;
       APU.smpSquare2 += APU.square2.sampleValue << 1;
       APU.accCount += 2;
     } else if(cycles === 4){
-      APU.smpTriangle += APU.triValue << 2;
-      APU.smpDmc += APU.dmc.sample << 2;
       APU.smpSquare1 += APU.square1.sampleValue << 2;
       APU.smpSquare2 += APU.square2.sampleValue << 2;
       APU.accCount += 4;
     } else {
-      APU.smpTriangle += cycles * APU.triValue;
-      APU.smpDmc += cycles * APU.dmc.sample;
       APU.smpSquare1 += cycles * APU.square1.sampleValue;
       APU.smpSquare2 += cycles * APU.square2.sampleValue;
       APU.accCount += cycles;
@@ -431,10 +307,8 @@ var APU = {
 
     if(APU.derivedFrameCounter === 1 || APU.derivedFrameCounter === 3){
       // Clock length & sweep:
-      APU.triangle.clockLengthCounter();
       APU.square1.clockLengthCounter();
       APU.square2.clockLengthCounter();
-      APU.noise.clockLengthCounter();
       APU.square1.clockSweep();
       APU.square2.clockSweep();
     }
@@ -443,8 +317,6 @@ var APU = {
       // Clock linear & decay:
       APU.square1.clockEnvDecay();
       APU.square2.clockEnvDecay();
-      APU.noise.clockEnvDecay();
-      APU.triangle.clockLinearCounter();
     }
 
     if(APU.derivedFrameCounter === 3 && APU.countSequence === 0){
@@ -466,22 +338,11 @@ var APU = {
       APU.smpSquare2 <<= 4;
       APU.smpSquare2 = Math.floor(APU.smpSquare2 / APU.accCount);
 
-      APU.smpTriangle = Math.floor(APU.smpTriangle / APU.accCount);
-
-      APU.smpDmc <<= 4;
-      APU.smpDmc = Math.floor(APU.smpDmc / APU.accCount);
-
       APU.accCount = 0;
     } else {
       APU.smpSquare1 = APU.square1.sampleValue << 4;
       APU.smpSquare2 = APU.square2.sampleValue << 4;
-      APU.smpTriangle = APU.triangle.sampleValue;
-      APU.smpDmc = APU.dmc.sample << 4;
     }
-
-    var smpNoise = Math.floor((APU.noise.accValue << 4) / APU.noise.accCount);
-    APU.noise.accValue = smpNoise >> 4;
-    APU.noise.accCount = 1;
 
     // Stereo sound.
 
@@ -490,11 +351,7 @@ var APU = {
       (APU.smpSquare1 * APU.stereoPosLSquare1 +
         APU.smpSquare2 * APU.stereoPosLSquare2) >>
       8;
-    tnd_index =
-      (3 * APU.smpTriangle * APU.stereoPosLTriangle +
-        (smpNoise << 1) * APU.stereoPosLNoise +
-        APU.smpDmc * APU.stereoPosLDMC) >>
-      8;
+    tnd_index = 0;
     if(sq_index >= APU.square_table.length){
       sq_index = APU.square_table.length - 1;
     }
@@ -509,11 +366,7 @@ var APU = {
       (APU.smpSquare1 * APU.stereoPosRSquare1 +
         APU.smpSquare2 * APU.stereoPosRSquare2) >>
       8;
-    tnd_index =
-      (3 * APU.smpTriangle * APU.stereoPosRTriangle +
-        (smpNoise << 1) * APU.stereoPosRNoise +
-        APU.smpDmc * APU.stereoPosRDMC) >>
-      8;
+    tnd_index = 0;
     if(sq_index >= APU.square_table.length){
       sq_index = APU.square_table.length - 1;
     }
@@ -550,26 +403,10 @@ var APU = {
     // Reset sampled values:
     APU.smpSquare1 = 0;
     APU.smpSquare2 = 0;
-    APU.smpTriangle = 0;
-    APU.smpDmc = 0;
   },
 
   getLengthMax: value => {
     return APU.lengthLookup[value >> 3];
-  },
-
-  getDmcFrequency: value => {
-    if(value >= 0 && value < 0x10){
-      return APU.dmcFreqLookup[value];
-    }
-    return 0;
-  },
-
-  getNoiseWaveLength: value => {
-    if(value >= 0 && value < 0x10){
-      return APU.noiseWavelengthLookup[value];
-    }
-    return 0;
   },
 
   setPanning: pos => {
@@ -593,15 +430,9 @@ var APU = {
   updateStereoPos: () => {
     APU.stereoPosLSquare1 = (APU.panning[0] * APU.masterVolume) >> 8;
     APU.stereoPosLSquare2 = (APU.panning[1] * APU.masterVolume) >> 8;
-    APU.stereoPosLTriangle = (APU.panning[2] * APU.masterVolume) >> 8;
-    APU.stereoPosLNoise = (APU.panning[3] * APU.masterVolume) >> 8;
-    APU.stereoPosLDMC = (APU.panning[4] * APU.masterVolume) >> 8;
 
     APU.stereoPosRSquare1 = APU.masterVolume - APU.stereoPosLSquare1;
     APU.stereoPosRSquare2 = APU.masterVolume - APU.stereoPosLSquare2;
-    APU.stereoPosRTriangle = APU.masterVolume - APU.stereoPosLTriangle;
-    APU.stereoPosRNoise = APU.masterVolume - APU.stereoPosLNoise;
-    APU.stereoPosRDMC = APU.masterVolume - APU.stereoPosLDMC;
   },
 
   initLengthLookup: () => {
@@ -624,49 +455,6 @@ var APU = {
             0x10, 0x1C,
             0x20, 0x1E
         ];
-  },
-
-  initDmcFrequencyLookup: () => {
-    APU.dmcFreqLookup = new Array(16);
-
-    APU.dmcFreqLookup[0x0] = 0xd60;
-    APU.dmcFreqLookup[0x1] = 0xbe0;
-    APU.dmcFreqLookup[0x2] = 0xaa0;
-    APU.dmcFreqLookup[0x3] = 0xa00;
-    APU.dmcFreqLookup[0x4] = 0x8f0;
-    APU.dmcFreqLookup[0x5] = 0x7f0;
-    APU.dmcFreqLookup[0x6] = 0x710;
-    APU.dmcFreqLookup[0x7] = 0x6b0;
-    APU.dmcFreqLookup[0x8] = 0x5f0;
-    APU.dmcFreqLookup[0x9] = 0x500;
-    APU.dmcFreqLookup[0xa] = 0x470;
-    APU.dmcFreqLookup[0xb] = 0x400;
-    APU.dmcFreqLookup[0xc] = 0x350;
-    APU.dmcFreqLookup[0xd] = 0x2a0;
-    APU.dmcFreqLookup[0xe] = 0x240;
-    APU.dmcFreqLookup[0xf] = 0x1b0;
-    //for(int i=0;i<16;i++)dmcFreqLookup[i]/=8;
-  },
-
-  initNoiseWavelengthLookup: () => {
-    APU.noiseWavelengthLookup = new Array(16);
-
-    APU.noiseWavelengthLookup[0x0] = 0x004;
-    APU.noiseWavelengthLookup[0x1] = 0x008;
-    APU.noiseWavelengthLookup[0x2] = 0x010;
-    APU.noiseWavelengthLookup[0x3] = 0x020;
-    APU.noiseWavelengthLookup[0x4] = 0x040;
-    APU.noiseWavelengthLookup[0x5] = 0x060;
-    APU.noiseWavelengthLookup[0x6] = 0x080;
-    APU.noiseWavelengthLookup[0x7] = 0x0a0;
-    APU.noiseWavelengthLookup[0x8] = 0x0ca;
-    APU.noiseWavelengthLookup[0x9] = 0x0fe;
-    APU.noiseWavelengthLookup[0xa] = 0x17c;
-    APU.noiseWavelengthLookup[0xb] = 0x1fc;
-    APU.noiseWavelengthLookup[0xc] = 0x2fa;
-    APU.noiseWavelengthLookup[0xd] = 0x3f8;
-    APU.noiseWavelengthLookup[0xe] = 0x7f2;
-    APU.noiseWavelengthLookup[0xf] = 0xfe4;
   },
 
   initDACtables: () => {
@@ -886,131 +674,6 @@ ChannelDM.prototype = {
   }
 };
 
-var ChannelNoise = function(papu){
-  this.papu = papu;
-
-  this.isEnabled = null;
-  this.envDecayDisable = null;
-  this.envDecayLoopEnable = null;
-  this.lengthCounterEnable = null;
-  this.envReset = null;
-  this.shiftNow = null;
-
-  this.lengthCounter = null;
-  this.progTimerCount = null;
-  this.progTimerMax = null;
-  this.envDecayRate = null;
-  this.envDecayCounter = null;
-  this.envVolume = null;
-  this.masterVolume = null;
-  this.shiftReg = 1 << 14;
-  this.randomBit = null;
-  this.randomMode = null;
-  this.sampleValue = null;
-  this.accValue = 0;
-  this.accCount = 1;
-  this.tmp = null;
-
-  this.reset();
-};
-
-ChannelNoise.prototype = {
-  reset: function(){
-    this.progTimerCount = 0;
-    this.progTimerMax = 0;
-    this.isEnabled = false;
-    this.lengthCounter = 0;
-    this.lengthCounterEnable = false;
-    this.envDecayDisable = false;
-    this.envDecayLoopEnable = false;
-    this.shiftNow = false;
-    this.envDecayRate = 0;
-    this.envDecayCounter = 0;
-    this.envVolume = 0;
-    this.masterVolume = 0;
-    this.shiftReg = 1;
-    this.randomBit = 0;
-    this.randomMode = 0;
-    this.sampleValue = 0;
-    this.tmp = 0;
-  },
-
-  clockLengthCounter: function(){
-    if(this.lengthCounterEnable && this.lengthCounter > 0){
-      this.lengthCounter--;
-      if(this.lengthCounter === 0){
-        this.updateSampleValue();
-      }
-    }
-  },
-
-  clockEnvDecay: function(){
-    if(this.envReset){
-      // Reset envelope:
-      this.envReset = false;
-      this.envDecayCounter = this.envDecayRate + 1;
-      this.envVolume = 0xf;
-    } else if(--this.envDecayCounter <= 0){
-      // Normal handling:
-      this.envDecayCounter = this.envDecayRate + 1;
-      if(this.envVolume > 0){
-        this.envVolume--;
-      } else {
-        this.envVolume = this.envDecayLoopEnable ? 0xf : 0;
-      }
-    }
-    if(this.envDecayDisable){
-      this.masterVolume = this.envDecayRate;
-    } else {
-      this.masterVolume = this.envVolume;
-    }
-    this.updateSampleValue();
-  },
-
-  updateSampleValue: function(){
-    if(this.isEnabled && this.lengthCounter > 0){
-      this.sampleValue = this.randomBit * this.masterVolume;
-    }
-  },
-
-  writeReg: function(address, value){
-    if(address === 0x400c){
-      // Volume/Envelope decay:
-      this.envDecayDisable = (value & 0x10) !== 0;
-      this.envDecayRate = value & 0xf;
-      this.envDecayLoopEnable = (value & 0x20) !== 0;
-      this.lengthCounterEnable = (value & 0x20) === 0;
-      if(this.envDecayDisable){
-        this.masterVolume = this.envDecayRate;
-      } else {
-        this.masterVolume = this.envVolume;
-      }
-    } else if(address === 0x400e){
-      // Programmable timer:
-      this.progTimerMax = APU.getNoiseWaveLength(value & 0xf);
-      this.randomMode = value >> 7;
-    } else if(address === 0x400f){
-      // Length counter
-      this.lengthCounter = APU.getLengthMax(value & 248);
-      this.envReset = true;
-    }
-    // Update:
-    //updateSampleValue();
-  },
-
-  setEnabled: function(value){
-    this.isEnabled = value;
-    if(!value){
-      this.lengthCounter = 0;
-    }
-    this.updateSampleValue();
-  },
-
-  getLengthStatus: function(){
-    return this.lengthCounter === 0 || !this.isEnabled ? 0 : 1;
-  }
-};
-
 var ChannelSquare = function(papu, square1){
   this.papu = papu;
 
@@ -1215,141 +878,5 @@ ChannelSquare.prototype = {
 
   getLengthStatus: function(){
     return this.lengthCounter === 0 || !this.isEnabled ? 0 : 1;
-  }
-};
-
-var ChannelTriangle = function(papu){
-  this.papu = papu;
-
-  this.isEnabled = null;
-  this.sampleCondition = null;
-  this.lengthCounterEnable = null;
-  this.lcHalt = null;
-  this.lcControl = null;
-
-  this.progTimerCount = null;
-  this.progTimerMax = null;
-  this.triangleCounter = null;
-  this.lengthCounter = null;
-  this.linearCounter = null;
-  this.lcLoadValue = null;
-  this.sampleValue = null;
-  this.tmp = null;
-
-  this.reset();
-};
-
-ChannelTriangle.prototype = {
-  reset: function(){
-    this.progTimerCount = 0;
-    this.progTimerMax = 0;
-    this.triangleCounter = 0;
-    this.isEnabled = false;
-    this.sampleCondition = false;
-    this.lengthCounter = 0;
-    this.lengthCounterEnable = false;
-    this.linearCounter = 0;
-    this.lcLoadValue = 0;
-    this.lcHalt = true;
-    this.lcControl = false;
-    this.tmp = 0;
-    this.sampleValue = 0xf;
-  },
-
-  clockLengthCounter: function(){
-    if(this.lengthCounterEnable && this.lengthCounter > 0){
-      this.lengthCounter--;
-      if(this.lengthCounter === 0){
-        this.updateSampleCondition();
-      }
-    }
-  },
-
-  clockLinearCounter: function(){
-    if(this.lcHalt){
-      // Load:
-      this.linearCounter = this.lcLoadValue;
-      this.updateSampleCondition();
-    } else if(this.linearCounter > 0){
-      // Decrement:
-      this.linearCounter--;
-      this.updateSampleCondition();
-    }
-    if(!this.lcControl){
-      // Clear halt flag:
-      this.lcHalt = false;
-    }
-  },
-
-  getLengthStatus: function(){
-    return this.lengthCounter === 0 || !this.isEnabled ? 0 : 1;
-  },
-
-  // eslint-disable-next-line no-unused-vars
-  readReg: function(address){
-    return 0;
-  },
-
-  writeReg: function(address, value){
-    if(address === 0x4008){
-      // New values for linear counter:
-      this.lcControl = (value & 0x80) !== 0;
-      this.lcLoadValue = value & 0x7f;
-
-      // Length counter enable:
-      this.lengthCounterEnable = !this.lcControl;
-    } else if(address === 0x400a){
-      // Programmable timer:
-      this.progTimerMax &= 0x700;
-      this.progTimerMax |= value;
-    } else if(address === 0x400b){
-      // Programmable timer, length counter
-      this.progTimerMax &= 0xff;
-      this.progTimerMax |= (value & 0x07) << 8;
-      this.lengthCounter = APU.getLengthMax(value & 0xf8);
-      this.lcHalt = true;
-    }
-
-    this.updateSampleCondition();
-  },
-
-  clockProgrammableTimer: function(nCycles){
-    if(this.progTimerMax > 0){
-      this.progTimerCount += nCycles;
-      while (
-        this.progTimerMax > 0 &&
-        this.progTimerCount >= this.progTimerMax
-      ){
-        this.progTimerCount -= this.progTimerMax;
-        if(
-          this.isEnabled &&
-          this.lengthCounter > 0 &&
-          this.linearCounter > 0
-        ){
-          this.clockTriangleGenerator();
-        }
-      }
-    }
-  },
-
-  clockTriangleGenerator: function(){
-    this.triangleCounter++;
-    this.triangleCounter &= 0x1f;
-  },
-
-  setEnabled: function(value){
-    this.isEnabled = value;
-    if(!value){
-      this.lengthCounter = 0;
-    }
-    this.updateSampleCondition();
-  },
-
-  updateSampleCondition: function(){
-    this.sampleCondition =
-      this.isEnabled &&
-      this.progTimerMax > 7 &&
-      this.linearCounter > 0 &&
-      this.lengthCounter > 0;
   }
 };
