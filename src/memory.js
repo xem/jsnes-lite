@@ -165,11 +165,12 @@ memory_write = (address, value) => {
   else if(address < 0x4014) {
     //APU.storeRegister(address, value);
     APU.writeReg(address, value);
-    /*if(address == 0x4000) set_4000(value);
+    if(address == 0x4000) set_4000(value);
     if(address == 0x4001) set_4001(value);
     if(address == 0x4002) set_4002(value);
     if(address == 0x4003) set_4003(value);
     
+    /*
     if(address == 0x4004) set_4004(value);
     if(address == 0x4005) set_4005(value);
     if(address == 0x4006) set_4006(value);
@@ -198,8 +199,8 @@ memory_write = (address, value) => {
     // $4015: Sound Channel Switch, DMC Status
     else if(address == 0x4015) {
       //APU.storeRegister(address, value);
-      APU.writeReg(address, value);
-      //set_4015(value);
+      //APU.writeReg(address, value);
+      set_4015(value);
     }
 
     // $4016: Joystick 1 + Strobe
@@ -214,8 +215,8 @@ memory_write = (address, value) => {
     // $4017: Sound channel frame sequencer:
     else if(address == 0x4017){
       // APU.storeRegister(address, value);
-      APU.writeReg(address, value);
-      //set_4017(value);
+      //APU.writeReg(address, value);
+      set_4017(value);
     }
   }
 

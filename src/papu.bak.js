@@ -98,47 +98,7 @@ square1updateSampleValue = () => {
   }
 }
   
-set_4015 = (value) => {
-  console.log(0x4015.toString(16), value.toString(16));
-  
-  //APU.channelEnableValue = value & 0xffff;
-  APU.square1.setEnabled((value & 0b0001) !== 0);
-  //APU.square2.setEnabled((value & 0b0010) !== 0);
-  //APU.triangle.setEnabled((value & 4) !== 0);
-  //APU.noise.setEnabled((value & 8) !== 0);
-  //APU.dmc.setEnabled((value & 16) !== 0);
-  
-  //if(value !== 0 && APU.initCounter > 0) APU.initingHardware = true;
-  //APU.dmc.writeReg(0x4015, value);
-  
-  // Square 1
-  if(value & 0b0001){
-    square1enabled = true;
-  }
-  else {
-    square1lengthCounter = 0;
-  }
-  square1updateSampleValue();
-  
-  
-  //APU.square2.setEnabled((value & 0b0010) !== 0);
-}
 
-set_4017 = (value) => {
-  console.log(0x4017.toString(16), value.toString(16));
-  APU.countSequence = (value >> 7) & 1;
-  APU.masterFrameCounter = 0;
-  APU.frameIrqActive = false;
-
-  if(((value >> 6) & 0x1) === 0) APU.frameIrqEnabled = true;
-  else APU.frameIrqEnabled = false;
-
-  // NTSC:
-  //if(APU.countSequence === 0){
-    APU.frameIrqCounterMax = 4;
-    APU.derivedFrameCounter = 4;
-  //}
-}
 
 
 
