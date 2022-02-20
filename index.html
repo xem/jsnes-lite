@@ -38,22 +38,23 @@ debug = 0;
 
 // AudioContext + audio buffers + samples lists
 // =============================================
+onclick = () => {
+  var audio = new AudioContext({sampleRate: 48000});
+  var audioprocessor = audio.createScriptProcessor(4096, 0, 2);
+  audioprocessor.connect(audio.destination);
 
-var audio = new AudioContext({sampleRate: 48000});
-var audioprocessor = audio.createScriptProcessor(4096, 0, 2);
-audioprocessor.connect(audio.destination);
+  // When the Audio processor requests new samples to play
+  audioprocessor.onaudioprocess = audioEvent => {
 
-// When the Audio processor requests new samples to play
-audioprocessor.onaudioprocess = audioEvent => {
-
-  // Ensure that we've buffered enough samples
-  if(leftSamples.length > currentSample + 4096){
-    for(var i = 0; i < 4096; i++){
-    
-      // Output (play) the buffers
-      audioEvent.outputBuffer.getChannelData(0)[i] = leftSamples[currentSample];
-      audioEvent.outputBuffer.getChannelData(1)[i] = rightSamples[currentSample];
-      currentSample++;
+    // Ensure that we've buffered enough samples
+    if(leftSamples.length > currentSample + 4096){
+      for(var i = 0; i < 4096; i++){
+      
+        // Output (play) the buffers
+        audioEvent.outputBuffer.getChannelData(0)[i] = leftSamples[currentSample];
+        audioEvent.outputBuffer.getChannelData(1)[i] = rightSamples[currentSample];
+        currentSample++;
+      }
     }
   }
 }
