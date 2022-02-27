@@ -226,7 +226,6 @@ mirrorAddress = address => {
     // There's no mirroring in this case, the address is not modified
     address &= (0x37ff + 0x400 * mirroring);
   }
-  
   return address;
 },
 
@@ -236,7 +235,7 @@ ppu_read = address => {
   // $3F04, $3F08, $3F0C: replaced by $3F00 (universal background color) except during forced blanking (TODO)
   if((address & 0xFFF3) == 0x3F00) address = 0x3F00;
     
-  return PPU_mem[mirrorAddress(address)];
+  return PPU_mem[mirrorAddress(address)] || 0;
 },
 
 // PPU I/O registers
@@ -458,6 +457,7 @@ set_OAMDMA = value => {
 // The line number (y) is a value vetween 0 and 480
 drawVramScanline = y => {
   
+  
   var i, j, X, Y, nametable, bits, pixel;
   
   // Reset pixel buffer
@@ -525,6 +525,7 @@ drawVramScanline = y => {
     // The pixels of each tile are encoded on 2 bits
     // The value of a pixel (0-3) corresponds to a color from the current subpalette
     // Each tile is stored on 16 bytes, the first 8 bytes represent the "high bit" of each pixel, and the last 8 bytes the "low bit"
+    //if(X == 0 && Y > 54 && Y < 57 && debug) console.log(y, Y, X, nametable.toString(16), bits, PPUCTRL_B);
     
     // Let x and y be the coordinates of the pixels to draw inside the current tile (x = 0-7, y = 0-7)
     y %= 8;
@@ -543,12 +544,13 @@ drawVramScanline = y => {
       
       // Golfed here:
       t = PPUCTRL_B * 0x1000 + ppu_read(nametable + (Y % 30) * 32 + (X % 32)) * 16 + y;
+      
       if(pixel = ((ppu_read(t + 8) >> (7 - x)) & 1) * 2 + ((ppu_read(t) >> (7 - x)) & 1)){
         vramPixelBuffer[X * 8 + x] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
       }
       
       // Debug: Render the pixel on the VRAM visualizer
-      //NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
+      NES.vramBuffer32[(Y * 8 + y) * 512 + (X * 8 + x)] = systemPalette[ppu_read(0x3F00 + bits * 4 + pixel)];
     }
   }
 },
@@ -709,7 +711,7 @@ ppu_tick = () => {
     
     // Visible scanlines (0-239)
     if(scanline < 240){
-      //drawVramScanline(((scanline + scroll_y) % 480) + 240); // Debug
+      drawVramScanline((((scanline + scroll_y) % 480) + 240) % 480); // Debug
       drawVramScanline((scanline + scroll_y) % 480);
       drawScanline(scanline);
       
@@ -717,9 +719,9 @@ ppu_tick = () => {
       scroll_x = (V_NN & 0b1) * 256 + V_XXXXX * 8 + xxx;
       
       // Debug
-      //NES.vramCtx.fillStyle = "pink";
-      //NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
-      //NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
+      NES.vramCtx.fillStyle = "pink";
+      NES.vramCtx.rect(scroll_x - 2, (scanline + scroll_y - 2) % 480, (scanline == 0 || scanline == 239) ? 256 : 4, 4);
+      NES.vramCtx.rect((scroll_x - 2 + 256) % 512, (scanline + scroll_y - 2) % 480, 4, 4);
     }
     
     // VBlank starts at scanline 241 (a NMI interrupt is triggered, and the frame is displayed on the canvas)
@@ -736,11 +738,11 @@ ppu_tick = () => {
       NES.frameCtx.putImageData(NES.frameData, 0, 0);
     
       // Debug (VRAM view)
-      //NES.vramData.data.set(NES.vramBuffer8);
-      //NES.vramCtx.putImageData(NES.vramData, 0, 0);
-      //if(PPUMASK_b){
-      //  NES.vramCtx.fill();
-      //}
+      NES.vramData.data.set(NES.vramBuffer8);
+      NES.vramCtx.putImageData(NES.vramData, 0, 0);
+      if(PPUMASK_b){
+        NES.vramCtx.fill();
+      }
     }
     
     // VBlank ends at the pre-render scanline, and PPUSTATUS is reset

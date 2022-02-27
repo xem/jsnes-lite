@@ -109,7 +109,7 @@ memory_read = address => {
     
     // $4015: Sound channel enable, DMC Status
     if(address == 0x4015){
-      console.log("4015");
+      //console.log("4015");
       return APU.readReg(address);
       return get_4015();
     }

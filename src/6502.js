@@ -858,7 +858,8 @@ op = (v, z) => (
   // Or execute the next instruction:
   : (
     o && O[o](),
-    PC++
+    PC++,
+    PC &= 0xFFFF
   ),
 
   // Update status register P according to the new flags values

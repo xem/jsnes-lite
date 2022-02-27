@@ -5,6 +5,9 @@ var Controller = function(){
   }
 };
 
+joy1StrobeState = 0
+joy2StrobeState = 0
+
 Controller.BUTTON_A = 0;
 Controller.BUTTON_B = 1;
 Controller.BUTTON_SELECT = 2;

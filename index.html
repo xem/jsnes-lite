@@ -10,6 +10,7 @@
 <button id=dw onclick='play("roms/dw.nes")'>DW</button>
 <button id=dw onclick='play("roms/lr.nes")'>LR</button>
 <button id=g onclick='play("roms/g.nes")'>G</button>
+<button id=hb1 onclick='play("roms/hb1.nes")'>hb1</button>
 <button onclick='play("roms/nestest.nes")'>nestest</button>
 <button><label for=fileInput>Browse...</label></button>
 <input type=file id=fileInput hidden>
@@ -149,8 +150,7 @@ start = file => {
   NES.frame();
   NES.frame();
   NES.frame();*/
-  //console.log(Date.now());
-  //NES.frame();
+
   
   clearInterval(interval);
   interval = setInterval(NES.frame, 16.67);
