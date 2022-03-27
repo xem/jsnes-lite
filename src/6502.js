@@ -282,7 +282,7 @@ O = [...Array(255)].map((t,o) =>
       + "C=1&A,A=F(A>>1);"
 
       // "'": LSR (shift right)
-      // A or a byte in memory is shifted right. Flags: N, Z, C
+      // A byte in memory is shifted right. Flags: N, Z, C
       // The shifted-out bit 0 is saved in C
       // Addressings:  zpg, zpgX, abs, absX
       // Opcodes:      46,  56,   4E,  5E
@@ -310,7 +310,7 @@ O = [...Array(255)].map((t,o) =>
       + "p=r(a),F(p&A),N=p>>7&1,V=p>>6&1;"
 
       // "*": ROR A (rotate right accumulator)
-      // Rotate right A or a byte in memory. Same as left shift but C flag is put into bit 7. Flags: N, Z, C
+      // Rotate right A. Same as right shift but C flag is put into bit 7. Flags: N, Z, C
       // The shifted-out bit 0 is saved in C
       // Addressing:   A
       // Opcode:       6A
@@ -383,7 +383,7 @@ O = [...Array(255)].map((t,o) =>
       // Cycles opc. : 0
       + "C=0;"
 
-      // "2": SEI  (set interrupt disable flag)
+      // "2": SEI (set interrupt disable flag)
       // I is set to 1
       // Addressing:   imp
       // Opcode:       78
@@ -623,7 +623,6 @@ O = [...Array(255)].map((t,o) =>
       // Cycles opc. : 1
       + "h(P|16);"
       
-      // A=F(g()),c++
       // "L": PLA (pull accumulator)
       // Pull A. Flags: N, Z.
       // Addressing:   imp
@@ -824,7 +823,7 @@ op = (v, z) => (
     // Push PC and P with B flag set to 0, then set I to 1,
     // then jump to address stored at $FFFA-$FFFB
     // This costs 7 cycles
-    // On NES, it only works when VBlank is enabled (bit 7 of PPU register $2000 = 1), otherwise it's skipped and only costs 2 cycles
+    // On NES, it is triggered at the beginning of VBlank if bit 7 of PPU register $2000 is set, otherwise it's skipped and only costs 2 cycles
 
     // 2: Reset:
     // Push PC and P with B flag set to 0, then set I to 1,

@@ -1,11 +1,3 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-roms/dk.nes
-roms/smb.nes
-roms/ic.nes
-roms/smb3.nes
-roms/bf.nes
-roms/eb.nes
-roms/g.nes
-roms/lr.nes
-roms/dw.nes
+roms/commercial

@@ -18,7 +18,7 @@
 //  | $0000-$07FF | 2KB   | 2KB internal RAM:                                     |
 //  | $0000-$00FF | 256B  | - Zero page                                           |
 //  | $0100-$01FF | 256B  | - Stack                                               |
-//  | $01FF-$07FF | 1.5KB | - General purpose                                     |
+//  | $0200-$07FF | 1.5KB | - General purpose                                     |
 //  +- - - - - - -+- - - -+- - - - - - - - - - - - - - - - - - - - - - - - - - - -+
 //  | $0800-$0FFF | 2KB   | Mirror of $0000-$07FF                                 |
 //  | $1000-$17FF | 2KB   | Mirror of $0000-$07FF                                 |

@@ -68,15 +68,8 @@
 // - The filename can contain "(E)", "(EUR)" or "(Europe)" for PAL / "(U)", "(USA)", "(J)" or "(Japan)" for NTSC / "(EU)" or "(World)" for both
 // - You can also fallback to NTSC if you don't know (if the game is PAL, it will still work, but it'll run 20% faster)
 
-var
-mapper,
-mirroring,
-prg_rom,
-chr_rom,
-offset,
-
-// Load a ROM file:
-parse_rom = (data, i, j) => {
+// Parse a ROM file:
+NES.parse = (data, i, j, offset) => {
   
   // Ensure file starts with chars "NES\x1a"
   if(data.includes("NES")){
@@ -88,7 +81,7 @@ parse_rom = (data, i, j) => {
     // 0 => vertical mirroring (bit 0 on: the game can scroll horizontally)
     // 1 => horizontal mirroring (bit 0 off: the game can scroll vertically)
     // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically)
-    mirroring = (data.charCodeAt(6) & 0b00001000) ? 2 : (data.charCodeAt(6) & 0b0000001) ? 0 : 1;
+    NES.mirroring = (data.charCodeAt(6) & 0b00001000) ? 2 : (data.charCodeAt(6) & 0b0000001) ? 0 : 1;
     
     // Check if the game has at least one battery-backed PRG-RAM bank (byte 6, bit 1)
     // This is a persistent save slot that can be used to save the player's progress in a game
@@ -97,7 +90,7 @@ parse_rom = (data, i, j) => {
     
     // Mapper number (byte 6, bits 4-7 >> 4 + byte 7, bits 4-7)
     // iNes 2.0 ROMs contain more mapper bits on byte 8
-    mapper = (data.charCodeAt(6) >> 4) + (data.charCodeAt(7) & 0b11110000);
+    NES.mapper = (data.charCodeAt(6) >> 4) + (data.charCodeAt(7) & 0b11110000);
     
     // Skip header
     offset = 16;
@@ -109,22 +102,22 @@ parse_rom = (data, i, j) => {
     
     // Load the PRG-ROM banks containing the game's code
     // The number of 16KB PRG-ROM banks is stored on byte 4 of the header
-    prg_rom = [];
+    NES.prg = [];
     for(i = 0; i < data.charCodeAt(4); i++){
-      prg_rom[i] = [];
+      NES.prg[i] = [];
       for(j = 0; j < 16 * 1024; j++){
-        prg_rom[i][j] = data.charCodeAt(offset++) & 0xff;
+        NES.prg[i][j] = data.charCodeAt(offset++) & 0xff;
       }
     }
     
     // Load the CHR-ROM pages
     // The number of pairs of 4KB CHR-ROM pages is stored on byte 5 of the header
     // Each bank contains 256 8*8px, 4-color bitmap tiles
-    chr_rom = [];
+    NES.chr = [];
     for(i = 0; i < data.charCodeAt(5) * 2; i++){
-      chr_rom[i] = [];
+      NES.chr[i] = [];
       for(j = 0; j < 4 * 1024; j++){
-        chr_rom[i][j] = data.charCodeAt(offset++) & 0xff;
+        NES.chr[i][j] = data.charCodeAt(offset++) & 0xff;
       }
     }
   }

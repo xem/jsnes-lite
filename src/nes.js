@@ -2,71 +2,112 @@
 // ==============
 
 // This file exposes six functions that help handle the inputs and outputs of the emulator:
-// - NES.init({onFrame, onAudioSample,onBatteryRamWrite})
-// - NES.load_rom(data)
+// - NES.start({rom, save, frame, vram, audio})
 // - NES.reset()
 // - NES.frame()
 // - NES.buttonDown(controller, button)
 // - NES.buttonUp(controller, button)
 var NES = {
   
-  // Initialize the emulator
-  init: options => {
+  // Emulator globals
+  loop: null,
+  fps: 60,
+  frameTime: 1000 / 60,
+  cpu_cycles: 0,
+  
+  // ROM globals
+  mapper: 0,
+  mirroring: 0,
+  prg: [],
+  chr: [],
+  
+  // Graphics globals
+  frameCtx: null,
+  vramCtx: null,
+  frameData: null,
+  vramData: null,
+  frameBuffer: null,
+  vramBuffer: null,
+  frameBuffer8: null,
+  vramBuffer8: null,
+  frameBuffer32: null,
+  vramBuffer32: null,
+  
+  // Audio globals
+  leftSamples: [],
+  rightSamples: [],
+  currentSample: 0,
+  sampleRate: 44100,
+  cyclesToHalt: 0,
+  
+  // Controllers globals
+  controllers: null,
+  
+  // Init the emulator with the rom (binary string), the save file, the 2 canvases and the audio context
+  init: ({rom, save, frame, vram, audio}) => {
+
+    // Reset emulator
+    NES.reset();
     
-    // Display
-    NES.frameCtx = options.frameCanvas.getContext("2d");
-    NES.vramCtx = options.vramCanvas.getContext("2d");
+    // Parse ROM
+    NES.parse(rom);
+    
+    // Load ROM's content in memory according to current mapper
+    NES.load();
+    
+    // Init display
+    NES.frameCtx = frame.getContext("2d");
     NES.frameData = NES.frameCtx.getImageData(0, 0, 256, 240);
-    NES.vramData = NES.vramCtx.getImageData(0, 0, 512, 480);
     NES.frameBuffer = new ArrayBuffer(256 * 240 * 4);
     NES.vramBuffer = new ArrayBuffer(512 * 480 * 4);
     NES.frameBuffer8 = new Uint8Array(NES.frameBuffer);
-    NES.vramBuffer8 = new Uint8Array(NES.vramBuffer);
     NES.frameBuffer32 = new Uint32Array(NES.frameBuffer);
-    NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
+    if(vram){
+      NES.vramCtx = vram.getContext("2d");
+      NES.vramData = NES.vramCtx.getImageData(0, 0, 512, 480);
+      NES.vramBuffer32 = new Uint32Array(NES.vramBuffer);
+      NES.vramBuffer8 = new Uint8Array(NES.vramBuffer);
+    }
     
-    NES.preferredFrameRate = 60;  // frames per second
-    NES.frameTime = 16.7;        // ms per frame
-    
-    // Audio
-    NES.onAudioSample = options.onAudioSample;
-    NES.sampleRate = 44100;//audio.sampleRate;
-    
-    // Logs
-    NES.onStatusUpdate = options.onStatusUpdate;
-    
-    // Save slot
-    NES.onBatteryRamWrite = options.onBatteryRamWrite;
-    
-    // Controllers
+    // Init controllers
     NES.controllers = {
       1: new Controller(),
       2: new Controller()
     };
-
-    NES.cpu_cycles = 0;
     
-    // Memory map (handled by the mapper)
-    //NES.mmap = null;
-    
-    //APU = new Apu();
-    //APU.setCpu(this);
-    //APU.bootup();
+    // Controller #1 keys listeners
+    onkeydown = onkeyup = e => {
+      NES[e.type](
+        1,
+        {
+          37: Controller.BUTTON_LEFT,
+          38: Controller.BUTTON_UP,
+          39: Controller.BUTTON_RIGHT,
+          40: Controller.BUTTON_DOWN,
+          88: Controller.BUTTON_A, // X = A
+          67: Controller.BUTTON_B, // C = B
+          27: Controller.BUTTON_SELECT, // Esc = Select
+          13: Controller.BUTTON_START   // Enter = Start
+        }[e.keyCode]
+      )
+    }
   },
   
-  // Load a ROM file
-  // data: binary string
-  load_rom: data => {
-    
-    // Parse the ROM
-    parse_rom(data);
-    
-    // Add the right ROM banks to the CPU's memory
-    load_rom();
+  // Play
+  play: () => {
+    NES.loop = setInterval(NES.frame, NES.frameTime);
+  },
+  
+  // Pause
+  pause: () => {
+    clearInterval(NES.loop);
   },
 
-  // Boot or reset the system
+  // Reset
   reset: () => {
+    
+    // Stop 60 fps loop (if any)
+    NES.pause();
     
     // Reset CPU, PPU, APU
     cpu_reset();
@@ -76,7 +117,9 @@ var NES = {
     // Send reset interrupt to the CPU
     interrupt_requested = 2;
     
-    cyclesToHalt = 0;
+    NES.cyclesToHalt = 0;
+    
+    //NES.cpu_cycles = 0;
   },
 
   // Render a new frame
@@ -90,12 +133,12 @@ var NES = {
     
     // Repeatedly execute CPU instructions until the frame is fully rendered
     while(!endFrame){
-      if (cyclesToHalt === 0) {
+      if (NES.cyclesToHalt === 0) {
         cycles = emulate();
-        APU.clockFrameCounter(cycles);
+        //APU.clockFrameCounter(cycles);
       } else {
-        APU.clockFrameCounter(Math.min(cyclesToHalt, 8));
-        cyclesToHalt -= Math.min(cyclesToHalt, 8);
+        //APU.clockFrameCounter(Math.min(NES.cyclesToHalt, 8));
+        NES.cyclesToHalt -= Math.min(NES.cyclesToHalt, 8);
       }
 
       for (i = cycles; i--;) {
@@ -113,6 +156,6 @@ var NES = {
   },
   
   haltCycles: (cycles) => {
-    cyclesToHalt += cycles;
+    NES.cyclesToHalt += cycles;
   }
 }

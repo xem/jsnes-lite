@@ -119,7 +119,6 @@ PPUMASK_s,
 PPUMASK_b,
 OAMADDR,
 PPUADDR,
-mirroring,
 endFrame,
 
   
@@ -214,17 +213,26 @@ mirrorAddress = address => {
   // $2000-$2FFF: RAM (name tables + attributes tables)
   else if(address > 0x1FFF){
     
-    // 0: vertical mirroring:
-    // - $2800-$2BFF is a mirror of $2000-$23FF
-    // - $2C00-$2FFF is a mirror of $2400-$27FF
+    if(NES.mirroring < 3){
     
-    // 1: horizontal mirroring:
-    // - $2400-$27FF is a mirror of $2000-$23FF
-    // - $2C00-$2FFF is a mirror of $2800-$2BFF
+      // 0: vertical mirroring:
+      // - $2800-$2BFF is a mirror of $2000-$23FF
+      // - $2C00-$2FFF is a mirror of $2400-$27FF
+      
+      // 1: horizontal mirroring:
+      // - $2400-$27FF is a mirror of $2000-$23FF
+      // - $2C00-$2FFF is a mirror of $2800-$2BFF
+      
+      // 2: four-screen nametable
+      // There's no mirroring in this case, the address is not modified
+      address &= (0x37ff + 0x400 * NES.mirroring);
+    }
     
-    // 2: four-screen nametable
-    // There's no mirroring in this case, the address is not modified
-    address &= (0x37ff + 0x400 * mirroring);
+    else if(mirroring == 3){
+      // 3: 1-screen mirroring
+      // $2400-$27FF, $2800-$2BFF and $2C00-$2FFF are mirrors of $2000-$23FF
+      address &= 0x23FF;
+    }
   }
   return address;
 },
@@ -252,7 +260,7 @@ set_PPUCTRL = value => {
   PPUCTRL_H = (value >> 5) & 1;   // bit 5: sprite size (0: 8x8, 1: 8x16)
   PPUCTRL_B = (value >> 4) & 1;   // bit 4: background pattern table (0: $0000, 1: $1000)
   PPUCTRL_S = (value >> 3) & 1;   // bit 3: sprite pattern table (0: $0000, 1: $1000, ignored in 8x16 mode)
-  PPUCTRL_I = (value >> 2) & 1;   // bit 2: VRAM address increment after reading from PPUDATA (0: 1, 1: 32)
+  PPUCTRL_I = (value >> 2) & 1;   // bit 2: VRAM address increment after reading/writing in PPUDATA (0: 1, 1: 32)
   T_NN = value & 0b11;            // bits 0-1: update nametable bits in scroll register T
 },
 
@@ -393,7 +401,7 @@ get_PPUDATA = () => {
 // $4014: (write): copy a 256-byte page of CPU memory into the OAM memory (OAMDMA)
 set_OAMDMA = value => {
   for(var i = OAMADDR; i < 256; i++){
-    OAM[i] = cpu_mem[value * 0x100 + i];;
+    OAM[i] = cpu_mem[value * 0x100 + i];
   }
   
   // Consume 513 CPU cycles

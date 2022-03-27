@@ -16,6 +16,7 @@
 var
 cpu_mem,
 interrupt_requested,
+clk = 0,
 
 // Reset the CPU
 cpu_reset = () => {
@@ -23,10 +24,11 @@ cpu_reset = () => {
   // CPU internal memory (64KB)
   cpu_mem = [];
 },
-  
+
 // Clock 1 CPU cycle
 // During this time, 3 PPU cycles and 1 APU cycle take place
 cpu_tick = () => {
+  //console.log(clk++);
   ppu_tick();
   ppu_tick();
   ppu_tick();
