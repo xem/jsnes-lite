@@ -43,6 +43,11 @@ var NES = {
   // Controllers globals
   controllers: null,
   
+  // Mapper globals
+  prg_1_bank: 0,
+  prg_2_bank: 1,
+  chr_bank: 0,
+  
   // Init the emulator with the rom (binary string), the save file, the 2 canvases and the audio context
   init: ({rom, save, frame, vram, audio}) => {
 

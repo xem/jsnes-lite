@@ -1,7 +1,7 @@
 ﻿<!doctype html>
 <title>JSNES lite</title>
 <h3>JSNES-lite</h3>
-<canvas id=frameCanvas width=256 height=240 style="background: #000"></canvas>
+<canvas id=frameCanvas width=256 height=240></canvas>
 <p><b>Controls</b>: arrow keys + X + C + Start + Esc
 
 <p><b>How to use:</b>
@@ -10,20 +10,25 @@
 2) Load ROM: <button id=dk onclick='play("roms/commercial/dk.nes")'>DK</button>
 <button id=smb onclick='play("roms/commercial/smb.nes")'>SMB</button>
 <button id=g onclick='play("roms/commercial/g.nes")'>G</button>
-<button onclick='play("roms/nestest.nes")'>nestest</button>
+<button onclick='play("roms/nestest/nestest.nes")'>nestest</button>
+<button onclick='play("roms/mapper30/H.nes")'>M30-H</button>
+<button onclick='play("roms/mapper30/V.nes")'>M30-V</button>
+<button onclick='play("roms/mapper30/1.nes")'>M30-1</button>
 <button><label for=fileInput>Browse...</label></button>
 <input type=file id=fileInput hidden>
-<p>3) <button id=b_play>Play</button> <button id=b_pause>Pause</button> <button id=b_frame>1 frame</button> <button id=b_reset>Reset</button> <button id=b_debug>Debug</button>
+<label><input type=checkbox id=i_start checked> Start after load</label>
+<p>3) <button id=b_play>Play</button> <button id=b_pause>Pause</button> <button id=b_frame>next frame</button> <button id=b_reset>Reset</button>
 <p>
 <details id=p_debug>
 <summary>Debug panel</summary>
-<canvas id=vramCanvas width=512 height=480 style="background: #000; width:256px;height:240px;"></canvas>
+<canvas id=vramCanvas width=512 height=480></canvas>
 </details>
 
 <style>
 body { font: 14px Arial; background:#888; }
 #dk, #smb, #ic, #eb, #g, #dw, #lr { display: none; }
 .local #dk, .local #smb, .local #ic, .local #eb, .local #g, .local #dw, .local #lr { display: inline; }
+canvas { background: #000 }
 </style>
 <script src="src/nes.js"></script>
 <script src="src/rom.js"></script>
@@ -37,10 +42,7 @@ body { font: 14px Arial; background:#888; }
 <script>
 
 // Debug mode
-debug = 0;
-b_debug.onclick = () => {
-  debug = 1;
-}
+debug = 1;
 
 // If hostname is localhost, show ROM shortcuts
 document.body.className = location.host.includes("localhost") ? "local" : "prod";
@@ -55,21 +57,27 @@ b_sound.onclick = () => {
 // Load ROM from file input
 fileInput.onchange = (fileReader) => {
   fileReader = new FileReader();
-  fileReader.readAsBinaryString(fileInput.files[0]);
-  fileReader.onload = () => NES.init({rom: fileReader.result, frame: frameCanvas, vram: vramCanvas, audio});
+  fileReader.readAsArrayBuffer(fileInput.files[0]);
+  fileReader.onload = () => {
+    NES.init({rom: new Uint8Array(fileReader.result), frame: frameCanvas, vram: vramCanvas, audio});
+    if(i_start.checked) NES.play();
+  }
 }
 
 // load ROM from disk
 play = (path, file) => {
-  file = new XMLHttpRequest;
-  file.open('GET', path);
-  file.overrideMimeType("text/plain; charset=x-user-defined");
-  file.send();
-  file.onload = () => NES.init({rom: file.responseText, frame: frameCanvas, vram: vramCanvas, audio});
+  fetch(path).then(x=>x.arrayBuffer()).then(x=>{
+    NES.init({rom: new Uint8Array(x), frame: frameCanvas, vram: vramCanvas, audio});
+    if(i_start.checked) NES.play();
+  });
 }
 
 b_play.onclick = NES.play;
 b_pause.onclick = NES.pause;
-b_reset.onclick = NES.reset;
+b_reset.onclick = () => {
+  frameCanvas.width ^= 0;
+  vramCanvas.width ^= 0;
+  NES.reset();
+}
 b_frame.onclick = NES.frame;
 </script>

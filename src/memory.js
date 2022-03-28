@@ -121,6 +121,14 @@ memory_read = address => {
     else if(address == 0x4017) return joy2Read();
   }
   
+  // PRG-ROM
+  else if(address >= 0x8000 && address < 0xC000){
+    return NES.prg[NES.prg_0_bank][address - 0x8000];
+  }
+  else if(address >= 0xC000){
+    return NES.prg[NES.prg_1_bank][address - 0xC000];
+  }
+  
   // Simply read in memory
   return cpu_mem[address] || 0;
 },
@@ -224,4 +232,7 @@ memory_write = (address, value) => {
   
   // Simply write in memory
   cpu_mem[address] = value;
+  
+  // Inform the Mapper that a write has been made
+  mapper_write(address, value);
 }

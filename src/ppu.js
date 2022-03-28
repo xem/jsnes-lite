@@ -234,15 +234,21 @@ mirrorAddress = address => {
       address &= 0x23FF;
     }
   }
+  
   return address;
 },
 
 // Read a byte in memory
 ppu_read = address => {
   
-  // $3F04, $3F08, $3F0C: replaced by $3F00 (universal background color) except during forced blanking (TODO)
+  // $0000-$1FFF: CHR-ROM/RAM
+  if(address < 0x2000){
+    return NES.chr[NES.chr_bank][address];
+  }
+
+  // $3F04, $3F08, $3F0C: mirrors of $3F00 (universal background color) except during forced blanking (TODO)
   if((address & 0xFFF3) == 0x3F00) address = 0x3F00;
-    
+      
   return PPU_mem[mirrorAddress(address)] || 0;
 },
 

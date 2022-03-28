@@ -11,13 +11,8 @@
 // --------
 
 
-
-
-
 // Load ROM's content in memory
 NES.load = () => {
-  
-  console.log(NES.prg, NES.chr, NES.mirroring);
   
   // Mapper 0
   // --------
@@ -29,20 +24,16 @@ NES.load = () => {
   // - Horizontal or vertical nametable mirroring
   if(!NES.mapper){
     
-    // Load PRG-ROM banks in CPU memory:
-    // If there are two banks or more, the first two banks are placed at addresses $8000 and $C000
+    // Set PRG-ROM banks:
+    // If there are two banks, they are placed at addresses $8000 and $C000
     // If there's only one bank, it's mirrored at both locations (ex: Donkey Kong, Galaxian)
-    copy_array(NES.prg[0], cpu_mem, 0x8000);
-    copy_array(NES.prg[NES.prg.length > 1 ? 1 : 0], cpu_mem, 0xC000);
+    NES.prg_0_bank = 0;
+    NES.prg_1_bank = NES.prg.length - 1;
 
-    // Load CHR-ROM pages in PPU memory:
-    // If there are two pages or more, the first ones are placed at addresses $0000 and $1000
-    // If there's only one page, it's mirrored at both locations
-    // But if the game has no CHR-ROM banks, do nothing (CHR-RAM is used instead)
-    if(NES.chr.length){
-      copy_array(NES.chr[0], PPU_mem, 0x0000);
-      copy_array(NES.chr[NES.chr.length > 1 ? 1 : 0], PPU_mem, 0x1000);
-    }
+    // Set CHR-ROM/RAM bank: 0
+    // If there are many banks, the first one is placed at address $0000
+    // If the game has no banks, do nothing (it means a CHR-RAM bank is present, and this bank is empty on load)
+    NES.chr_bank = 0;
   }
   
   // Mapper 30 (incomplete)
@@ -57,19 +48,27 @@ NES.load = () => {
   // - Routines not implemented: chip-erase, Software ID entry and Software ID exit.
   else if(NES.mapper == 30){
     
-    // Initialize the 8 4KB CHR-RAM banks (empty on boot)
-    NES.chr = [[], [], [], [], [], [], [], []];
+    // Initialize the 4 8KB CHR-RAM banks (empty on boot)
+    NES.chr = [[], [], [], []];
     
-    // Load PRG-ROM banks: 0 and "-1" (the last one)
-    copy_array(NES.prg[0], cpu_mem, 0x8000);
-    copy_array(NES.prg[NES.prg.length - 1], cpu_mem, 0xC000);
+    // Set PRG-ROM banks: 0 and the last one
+    NES.prg_0_bank = 0;
+    NES.prg_1_bank = NES.prg.length.length - 1;
     
+    // Set CHR-RAM bank: 0
+    NES.chr_bank = 0;
   }
 },
 
-// Copy the values of an array into a specific position in another array
-copy_array = (src, dest, address) => {
-  for(var i = 0; i < src.length; i++){
-    dest[address + i] = src[i];
+// Some mappers do special things when some addresses are written in CPU memory. This is handled here:
+mapper_write = (address, value) => {
+  
+  // Mapper 0: nothing
+  
+  // Mapper 30
+  if(NES.mapper == 30){
+    if(address >= 0xC000){
+      
+    }
   }
 }
