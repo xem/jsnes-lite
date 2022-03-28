@@ -2,12 +2,12 @@
 <title>JSNES lite</title>
 <h3>JSNES-lite</h3>
 <canvas id=frameCanvas width=256 height=240></canvas>
-<p><b>Controls</b>: arrow keys + X + C + Start + Esc
+<p><b>Gamepad 1</b>: arrow keys + X + C + Start + Esc
 
 <p><b>How to use:</b>
-<p>1) Enable sound: <span id=s_sound><button id=b_sound>🔊</button> (optional)</span>
+<!--p>1) Enable sound: <span id=s_sound><button id=b_sound>🔊</button> (optional)</span-->
 <p>
-2) Load ROM: <button id=dk onclick='play("roms/commercial/dk.nes")'>DK</button>
+ROM: <button id=dk onclick='play("roms/commercial/dk.nes")'>DK</button>
 <button id=smb onclick='play("roms/commercial/smb.nes")'>SMB</button>
 <button id=g onclick='play("roms/commercial/g.nes")'>G</button>
 <button onclick='play("roms/nestest/nestest.nes")'>nestest</button>
@@ -17,7 +17,7 @@
 <button><label for=fileInput>Browse...</label></button>
 <input type=file id=fileInput hidden>
 <label><input type=checkbox id=i_start checked> Start after load</label>
-<p>3) <button id=b_play>Play</button> <button id=b_pause>Pause</button> <button id=b_frame>next frame</button> <button id=b_reset>Reset</button>
+<p>Controls: <button id=b_play>Play</button> <button id=b_pause>Pause</button> <button id=b_frame>next frame</button> <button id=b_reset>Reset</button>
 <p>
 <details id=p_debug>
 <summary>Debug panel</summary>
@@ -49,10 +49,11 @@ document.body.className = location.host.includes("localhost") ? "local" : "prod"
 
 // Create Audio context
 audio = null;
+/*
 b_sound.onclick = () => {
   audio = new AudioContext({sampleRate: 48000});
   s_sound.outerHTML = "<span style='line-height: 1.7em'>OK";
-}
+}*/
 
 // Load ROM from file input
 fileInput.onchange = (fileReader) => {

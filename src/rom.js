@@ -81,6 +81,7 @@ NES.parse = (data, i, j, offset) => {
     // 0 => vertical mirroring (bit 0 on: the game can scroll horizontally)
     // 1 => horizontal mirroring (bit 0 off: the game can scroll vertically)
     // 2 => 4-screen nametable (bit 4 on: the game can scroll horizontally and vertically)
+    // 3 => 1-screen mirroring (can be enabled by some mappers but can't be set in the iNES header)
     NES.mirroring = (data[6] & 0b00001000) ? 2 : (data[6] & 0b0000001) ? 0 : 1;
     
     // Check if the game has at least one battery-backed PRG-RAM bank (byte 6, bit 1)
@@ -113,14 +114,11 @@ NES.parse = (data, i, j, offset) => {
     // Load the CHR-ROM banks
     // The number of 8KB CHR-ROM banks is stored on byte 5 of the header
     // Each bank contains 2 banks of 256 8*8px, 4-color bitmap tiles
-    // If only one bank is present, it is copied twice
+    // If only one bank is present, it is mirrored (ignored here, no game seems to actually do that)
     NES.chr = [[]];
     for(i = 0; i < data[5]; i++){
       NES.chr[i] = [];
       for(j = 0; j < 8 * 1024; j++){
-        if(offset > data.length){
-          offset -= 4 * 1024;
-        }
         NES.chr[i][j] = data[offset++];
       }
     }

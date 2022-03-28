@@ -228,7 +228,7 @@ mirrorAddress = address => {
       address &= (0x37ff + 0x400 * NES.mirroring);
     }
     
-    else if(mirroring == 3){
+    else if(NES.mirroring == 3){
       // 3: 1-screen mirroring
       // $2400-$27FF, $2800-$2BFF and $2C00-$2FFF are mirrors of $2000-$23FF
       address &= 0x23FF;
@@ -377,6 +377,12 @@ set_PPUADDR = value => {
 
 // Write
 set_PPUDATA = value => {
+  
+  // $0000-$1FFF: CHR-ROM/RAM
+  if(PPUADDR < 0x2000){
+    NES.chr[NES.chr_bank][PPUADDR] = value;
+  }
+  
   PPU_mem[mirrorAddress(PPUADDR)] = value;
   
   // increment address (1 or 32 depending on bit 2 of PPUCTRL)
