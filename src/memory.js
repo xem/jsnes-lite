@@ -230,8 +230,10 @@ memory_write = (address, value) => {
   // Write to persistent RAM
   else if(address >= 0x6000 && address < 0x8000) NES.onBatteryRamWrite(address, value);
   
-  // Simply write in memory
-  cpu_mem[address] = value;
+  // Simply write in memory, if not in PRG-ROM (todo: simplify?)
+  else if(address < 0x8000){
+    cpu_mem[address] = value;
+  }
   
   // Inform the Mapper that a write has been made
   mapper_write(address, value);
