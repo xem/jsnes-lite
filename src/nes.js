@@ -49,8 +49,8 @@ var NES = {
   chr_bank: 0,
   mirroring_backup: 0,
   
-  // Init the emulator with the rom (binary string), the save file, the 2 canvases and the audio context
-  init: ({rom, save, frame, vram, audio}) => {
+  // Init the emulator with the rom (binary string), optional save file, and the 2 canvases
+  init: ({rom, save, frame, vram}) => {
 
     // Reset emulator
     NES.reset();
@@ -118,7 +118,7 @@ var NES = {
     // Reset CPU, PPU, APU
     cpu_reset();
     ppu_reset();
-    APU.reset();
+    apu_reset();
     
     // Send reset interrupt to the CPU
     interrupt_requested = 2;
@@ -139,13 +139,13 @@ var NES = {
     
     // Repeatedly execute CPU instructions until the frame is fully rendered
     while(!endFrame){
-      if (NES.cyclesToHalt === 0) {
+      //if (NES.cyclesToHalt === 0) {
         cycles = emulate();
-        //APU.clockFrameCounter(cycles);
-      } else {
-        //APU.clockFrameCounter(Math.min(NES.cyclesToHalt, 8));
-        NES.cyclesToHalt -= Math.min(NES.cyclesToHalt, 8);
-      }
+      //  APU.clockFrameCounter(cycles);
+      //} else {
+      //  APU.clockFrameCounter(Math.min(NES.cyclesToHalt, 8));
+      //  NES.cyclesToHalt -= Math.min(NES.cyclesToHalt, 8);
+      //}
 
       for (i = cycles; i--;) {
         cpu_tick();
@@ -161,7 +161,7 @@ var NES = {
     NES.controllers[controller].keyup(button);
   },
   
-  haltCycles: (cycles) => {
-    NES.cyclesToHalt += cycles;
-  }
+  //haltCycles: (cycles) => {
+  //  NES.cyclesToHalt += cycles;
+  //}
 }

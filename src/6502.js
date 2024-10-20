@@ -806,6 +806,7 @@ O = [...Array(255)].map((t,o) =>
 
 // If an interrupt (v = 1/2/3) is specified, it's executed
 // Otherwise, execute the next opcode at the address pointed by the PC register
+// z means BRK opcode (similar to IRQ, but with a slightly different P pushed on the stack)
 op = (v, z) => (
 
   // - Reset cycle counter

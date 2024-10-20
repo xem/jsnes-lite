@@ -421,7 +421,7 @@ set_OAMDMA = value => {
   for(i = 0; i < 513; i++){
     cpu_tick();
   }
-  NES.haltCycles(513)
+  //NES.haltCycles(513)
 },
 
 // Rendering

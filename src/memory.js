@@ -3,7 +3,7 @@
 
 // This file handles the CPU's memory accesses
 // It assumes that the memory has been initialized (see CPU_reset())
-// Reading and writing at specific addresses makes the CPU able to control other parts of the emulator (PPU, APU, controllers, mapper)
+// Reading and writing at specific addresses makes the CPU able to communicate with other parts of the emulator (PPU, APU, controllers, mapper)
 
 // Resources:
 // - https://problemkaputt.de/everynes.htm#memorymaps
@@ -109,8 +109,6 @@ memory_read = address => {
     
     // $4015: Sound channel enable, DMC Status
     if(address == 0x4015){
-      //console.log("4015");
-      return APU.readReg(address);
       return get_4015();
     }
 
@@ -169,15 +167,17 @@ memory_write = (address, value) => {
     else if(address == 0x2007) set_PPUDATA(value);
   }
   
-  // Sound registers ($4000-$4013)
+  // APU registers ($4000-$4013)
   else if(address < 0x4014) {
     //APU.storeRegister(address, value);
-    APU.writeReg(address, value);
-    /*if(address == 0x4000) set_4000(value);
+    //APU.writeReg(address, value);
+
+    if(address == 0x4000) set_4000(value);
     if(address == 0x4001) set_4001(value);
     if(address == 0x4002) set_4002(value);
     if(address == 0x4003) set_4003(value);
     
+    /*
     if(address == 0x4004) set_4004(value);
     if(address == 0x4005) set_4005(value);
     if(address == 0x4006) set_4006(value);
@@ -205,9 +205,7 @@ memory_write = (address, value) => {
 
     // $4015: Sound Channel Switch, DMC Status
     else if(address == 0x4015) {
-      //APU.storeRegister(address, value);
-      APU.writeReg(address, value);
-      //set_4015(value);
+      set_4015(value);
     }
 
     // $4016: Joystick 1 + Strobe
@@ -221,20 +219,18 @@ memory_write = (address, value) => {
 
     // $4017: Sound channel frame sequencer:
     else if(address == 0x4017){
-      // APU.storeRegister(address, value);
-      APU.writeReg(address, value);
-      //set_4017(value);
+      set_4017(value);
     }
   }
 
-  // Write to persistent RAM
+  // Write to persistent RAM (save slot)
   else if(address >= 0x6000 && address < 0x8000) NES.onBatteryRamWrite(address, value);
   
-  // Simply write in memory, if not in PRG-ROM (todo: simplify?)
+  // Simply write in memory, if not in PRG-ROM (necessary?)
   if(address < 0x8000){
     cpu_mem[address] = value;
   }
   
-  // Inform the Mapper that a write has been made
+  // Inform the Mapper that a write has been made in memory
   mapper_write(address, value);
 }

@@ -6,8 +6,6 @@
 <canvas id=frameCanvas width=256 height=240></canvas>
 <p><b>Gamepad 1</b>: arrow keys + X + C + Start + Esc
 
-<p><b>How to use:</b>
-<!--p>1) Enable sound: <span id=s_sound><button id=b_sound>🔊</button> (optional)</span-->
 <p>
 ROM: <button id=dk onclick='play("roms/commercial/dk.nes")'>DK</button>
 <button id=smb onclick='play("roms/commercial/smb.nes")'>SMB</button>
@@ -22,7 +20,7 @@ ROM: <button id=dk onclick='play("roms/commercial/dk.nes")'>DK</button>
 <p>Controls: <button id=b_play>Play</button> <button id=b_pause>Pause</button> <button id=b_frame>next frame</button> <button id=b_reset>Reset</button>
 <p>
 <details id=p_debug>
-<summary>Debug panel</summary>
+<summary>VRAM visualizer</summary>
 <canvas id=vramCanvas width=512 height=480></canvas>
 </details>
 
@@ -47,34 +45,27 @@ canvas { background: #000 }
 debug = 1;
 
 // If hostname is localhost, show ROM shortcuts
-document.body.className = location.host.includes("localhost") ? "local" : "prod";
-
-// Create Audio context
-audio = null;
-/*
-b_sound.onclick = () => {
-  audio = new AudioContext({sampleRate: 48000});
-  s_sound.outerHTML = "<span style='line-height: 1.7em'>OK";
-}*/
+document.body.className = location.host.includes("localhost") || location.host.includes("127.0.0.1") ? "local" : "prod";
 
 // Load ROM from file input
 fileInput.onchange = (fileReader) => {
   fileReader = new FileReader();
   fileReader.readAsArrayBuffer(fileInput.files[0]);
   fileReader.onload = () => {
-    NES.init({rom: new Uint8Array(fileReader.result), frame: frameCanvas, vram: vramCanvas, audio});
+    NES.init({rom: new Uint8Array(fileReader.result), frame: frameCanvas, vram: vramCanvas});
     if(i_start.checked) NES.play();
   }
 }
 
-// load ROM from disk
+// Load ROM from disk
 play = (path, file) => {
   fetch(path).then(x=>x.arrayBuffer()).then(x=>{
-    NES.init({rom: new Uint8Array(x), frame: frameCanvas, vram: vramCanvas, audio});
+    NES.init({rom: new Uint8Array(x), frame: frameCanvas, vram: vramCanvas});
     if(i_start.checked) NES.play();
   });
 }
 
+// Controls
 b_play.onclick = NES.play;
 b_pause.onclick = NES.pause;
 b_reset.onclick = () => {

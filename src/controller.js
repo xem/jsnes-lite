@@ -111,33 +111,3 @@ joy2Read = function(){
 
   return ret;
 }
-
-
-// From s.js
-  /*reset: function(){
-    this.joy1StrobeState = 0;
-    this.joy2StrobeState = 0;
-    this.joypadLastWrite = 0;
-
-    this.zapperFired = false;
-    this.zapperX = null;
-    this.zapperY = null;
-  },*/
-  
-  
-/*NES.zapperMove: function(x, y){
-  if(!NES.mmap) return;
-  zapperX = x;
-  zapperY = y;
-},
-
-NES.zapperFireDown: function(){
-  if(!NES.mmap) return;
-  zapperFired = true;
-},
-
-NES.zapperFireUp: function(){
-  if(!NES.mmap) return;
-  zapperFired = false;
-},*/
-
