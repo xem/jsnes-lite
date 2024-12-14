@@ -43,6 +43,40 @@ apu_reset = () => {
   g1 = new GainNode(a1, {gain: 0.1});
   o1.connect(g1).connect(a1.destination);
   o1.start();
+  
+  // Pulse 2
+  pulse2timer = 0;
+  pulse2volume = 0;
+  if(!a2) a2 = new AudioContext();
+  o2 = new OscillatorNode(a2, {type: "square", frequency: 0});
+  g2 = new GainNode(a2, {gain: 0.1});
+  o2.connect(g2).connect(a2.destination);
+  o2.start();
+
+  // Triangle
+  triangletimer = 0;
+  if(!a3) a3 = new AudioContext();
+  o3 = new OscillatorNode(a3, {type: "triangle", frequency: 0});
+  g3 = new GainNode(a3, {gain: 0.1});
+  o3.connect(g3).connect(a3.destination);
+  o3.start();
+
+  // Noise
+  noisetimer = 0;
+  noisevolume = 0;
+  if(!a4) a4 = new AudioContext();
+  o4 = new OscillatorNode(a4, {frequency: 0});
+  real = new Float32Array(128);
+  imag = new Float32Array(128);
+  for(var i = 128; i--;){
+    real[i] = 3;
+    imag[i] = -Math.random()/3;
+  }
+  wave = a4.createPeriodicWave(real, imag, { disableNormalization: true });
+  o4.setPeriodicWave(wave)
+  g4 = new GainNode(a4, {gain: 0.003 * 15});
+  o4.connect(g4).connect(a4.destination);
+  o4.start();
 }
 
 // 4015: Status register (read/write)
@@ -67,6 +101,7 @@ set_4017 = (value) => {
 }
 
 // 4000-4003: Pulse 1
+// ==================
 
 set_4000 = (value) => {
   //console.log("set 4000");
@@ -99,9 +134,10 @@ set_4003 = (value) => {
 }
 
 // 4004-4007: Pulse 2
+// ==================
 
 set_4004 = (value) => {
-  console.log("set 4004");
+  //console.log("set 4004");
   //pulse2duty = value >> 6;
   //pulse2loop = (value >> 5) & 0b1;
   //pulse2constant = (value >> 4) & 0b1;
@@ -110,7 +146,7 @@ set_4004 = (value) => {
 }
 
 set_4005 = (value) => {
-  console.log("set 4005");
+  //console.log("set 4005");
   //pulse2enabled = value >> 7;
   //pulse2period = (value >> 4) & 0b111;
   //pulse2negate = (value >> 3) & 0b1;
@@ -118,44 +154,63 @@ set_4005 = (value) => {
 }
 
 set_4006 = (value) => {
-  console.log("set 4006");
+  //console.log("set 4006");
   pulse2timer = (pulse2timer & 0b00000000) + value; // Timer low
   o2.frequency.setValueAtTime(pulse2timer < 8 ? 0 : (111860.8/(pulse2timer+1)),1);
 }
 
 set_4007 = (value) => {
-  console.log("set 4007");
+  //console.log("set 4007");
   //pulse2lengthload = value >> 3;
   pulse2timer = (pulse2timer & 0b00011111111) + ((value & 0b111) << 8); // Timer high
   o2.frequency.setValueAtTime(pulse2timer < 8 ? 0 : (111860.8/(pulse2timer+1)),1);
 }
 
-
-
+// 4008-400B: Triangle
+// ===================
 
 set_4008 = (value) => {
-  console.log("set 4008");
+  //console.log("set 4008");
+  //trianglecontrol = (value >> 7); // 1: play, 0: mute
+  //trianglecounter = value & 0b1111111;
 }
 
 set_400a = (value) => {
-  console.log("set 400a");
+  //console.log("set 400a");
+  triangletimer = (triangletimer & 0b00000000) + value; // Timer low
+  o3.frequency.setValueAtTime(55930.4/(triangletimer+1),1);
 }
 
 set_400b = (value) => {
-  console.log("set 400b");
+  //console.log("set 400b");
+  triangletimer = (triangletimer & 0b00011111111) + ((value & 0b111) << 8); // Timer high
+  o3.frequency.setValueAtTime(55930.4/(triangletimer+1),1);
 }
+
+// 400C-400F: Noise
+// ================
 
 set_400c = (value) => {
   console.log("set 400c");
+  // ...
+  noisevolume = value & 0b1111; // Volume
+  g4.gain.value = 0.003 * (noisevolume/15);
 }
 
 set_400e = (value) => {
   console.log("set 400e");
+  // ...
+  noiseperiod = value & 0b1111;
+  o4.frequency.setValueAtTime(111860.8/[4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068][noiseperiod],1);
 }
 
 set_400f = (value) => {
   console.log("set 400f");
+  // ...
 }
+
+
+// DMC
 
 set_4010 = (value) => {
   console.log("set 4010");

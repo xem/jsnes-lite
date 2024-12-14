@@ -177,7 +177,6 @@ memory_write = (address, value) => {
     if(address == 0x4002) set_4002(value);
     if(address == 0x4003) set_4003(value);
     
-    /*
     if(address == 0x4004) set_4004(value);
     if(address == 0x4005) set_4005(value);
     if(address == 0x4006) set_4006(value);
@@ -191,6 +190,7 @@ memory_write = (address, value) => {
     if(address == 0x400e) set_400e(value);
     if(address == 0x400f) set_400f(value);
     
+    /*
     if(address == 0x4010) set_4010(value);
     if(address == 0x4011) set_4011(value);
     if(address == 0x4012) set_4012(value);

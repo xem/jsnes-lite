@@ -61,7 +61,7 @@ fileInput.onchange = (fileReader) => {
 play = (path, file) => {
   fetch(path).then(x=>x.arrayBuffer()).then(x=>{
     NES.init({rom: new Uint8Array(x), frame: frameCanvas, vram: vramCanvas});
-    if(i_start.checked) NES.play();
+    if(i_start.checked) setTimeout(NES.play, 1000); // a ~1s warm-up time is necessary for the audio
   });
 }
 
